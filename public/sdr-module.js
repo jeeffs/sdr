@@ -513,6 +513,7 @@ window.sdrMapInit = function() {
   sdrLayers.cables = L.layerGroup().addTo(sdrMap);
   sdrLayers.olts = L.layerGroup();
   sdrLayers.heatmap = L.layerGroup();
+  sdrLayers.areas = L.layerGroup().addTo(sdrMap); // Áreas de cobertura (coverage_area)
 
   sdrMapReady = true;
   setTimeout(() => sdrMap.invalidateSize(), 200);
@@ -3171,6 +3172,255 @@ let sdrDrawPoints     = [];
 let sdrDrawPolyline   = null;
 let sdrDrawTmpMarkers = [];
 let sdrKMZLayer       = null;
+
+// ════════════════════════════════════════════════════════════════
+// MÓDULO DE DESENHO — GIS FTTH (Cabos, CTOs, Áreas de Cobertura)
+// ════════════════════════════════════════════════════════════════
+let _sdrDrawCurrentMode = null;
+let _sdrDrawPts         = [];
+let _sdrPolyPrev        = null;
+let _sdrPolyArea        = null;
+let _sdrTmpMkrs         = [];
+window._sdrPendingDrawPoints = null;
+
+window.sdrDrawModeToggle = function() {
+  if (!sdrMapReady || !sdrMap) { toast('Aguarde o mapa carregar', 'warning'); return; }
+  if (document.getElementById('sdr-draw-panel')) { window._sdrCloseDrawMode(); return; }
+  _sdrOpenDrawPanel();
+};
+
+function _sdrOpenDrawPanel() {
+  const btn = document.getElementById('btn-draw-mode');
+  if (btn) { btn.style.background = '#2563eb'; btn.innerHTML = '<i class="fas fa-times"></i> Fechar'; }
+  const mapContainer = document.getElementById('sdr-map');
+  if (!mapContainer) return;
+  const panel = document.createElement('div');
+  panel.id = 'sdr-draw-panel';
+  panel.style.cssText = 'position:absolute;top:60px;left:10px;z-index:1000;background:#1e293b;color:#f1f5f9;border-radius:10px;padding:14px;width:230px;box-shadow:0 4px 24px rgba(0,0,0,.6);font-family:sans-serif';
+  panel.innerHTML =
+    '<div style="font-weight:700;margin-bottom:12px;font-size:.88rem;color:#94a3b8"><i class="fas fa-draw-polygon"></i>&nbsp; MODO DESENHO — FTTH</div>' +
+    '<div style="display:flex;flex-direction:column;gap:8px">' +
+      '<button onclick="window._sdrStartDraw(\'cable\')" style="background:#0ea5e9;color:#fff;border:none;padding:9px 12px;border-radius:7px;cursor:pointer;text-align:left;font-size:.82rem">' +
+        '<i class="fas fa-minus"></i> <b>Cabo de Fibra Óptica</b><br><span style="font-size:.71rem;opacity:.8">Clique pontos • duplo-clique finaliza</span>' +
+      '</button>' +
+      '<button onclick="window._sdrStartDraw(\'cto\')" style="background:#7c3aed;color:#fff;border:none;padding:9px 12px;border-radius:7px;cursor:pointer;text-align:left;font-size:.82rem">' +
+        '<i class="fas fa-circle"></i> <b>CTO / Splitter</b><br><span style="font-size:.71rem;opacity:.8">Clique para posicionar no mapa</span>' +
+      '</button>' +
+      '<button onclick="window._sdrStartDraw(\'area\')" style="background:#059669;color:#fff;border:none;padding:9px 12px;border-radius:7px;cursor:pointer;text-align:left;font-size:.82rem">' +
+        '<i class="fas fa-vector-square"></i> <b>Área de Cobertura</b><br><span style="font-size:.71rem;opacity:.8">Clique pontos • duplo-clique fecha</span>' +
+      '</button>' +
+    '</div>' +
+    '<div id="sdr-draw-hint" style="margin-top:12px;font-size:.73rem;color:#64748b;min-height:28px;line-height:1.4"></div>' +
+    '<button onclick="window._sdrCloseDrawMode()" style="margin-top:10px;width:100%;background:#ef4444;color:#fff;border:none;padding:7px;border-radius:7px;cursor:pointer;font-size:.79rem">' +
+      '<i class="fas fa-times"></i> Cancelar / Fechar' +
+    '</button>';
+  mapContainer.appendChild(panel);
+}
+
+window._sdrCloseDrawMode = function() {
+  _sdrCancelCurrentDraw();
+  const panel = document.getElementById('sdr-draw-panel');
+  if (panel) panel.remove();
+  const btn = document.getElementById('btn-draw-mode');
+  if (btn) { btn.style.background = ''; btn.innerHTML = '<i class="fas fa-pencil-alt"></i> Desenhar'; }
+  sdrDrawModeActive = false;
+  _sdrDrawCurrentMode = null;
+  if (sdrMap) sdrMap.getContainer().style.cursor = '';
+};
+
+window._sdrStartDraw = function(mode) {
+  _sdrCancelCurrentDraw();
+  _sdrDrawCurrentMode = mode;
+  sdrDrawModeActive = true;
+  if (!sdrMap) return;
+  const hints = {
+    cable: '<b>Cabo:</b> Clique para adicionar pontos. <b>Duplo-clique</b> para finalizar (mín. 2 pts).',
+    cto:   '<b>CTO:</b> Clique no mapa para posicionar o splitter.',
+    area:  '<b>Área:</b> Clique para criar os vértices. <b>Duplo-clique</b> para fechar o polígono.'
+  };
+  const hint = document.getElementById('sdr-draw-hint');
+  if (hint) hint.innerHTML = hints[mode] || '';
+  sdrMap.getContainer().style.cursor = 'crosshair';
+  sdrMap.off('click', _sdrOnDrawClick);
+  sdrMap.off('dblclick', _sdrOnDrawDblClick);
+  sdrMap.on('click', _sdrOnDrawClick);
+  if (mode !== 'cto') { sdrMap.on('dblclick', _sdrOnDrawDblClick); sdrMap.doubleClickZoom.disable(); }
+  const labels = { cable: 'Cabo', cto: 'CTO', area: 'Área' };
+  toast('Ferramenta ' + (labels[mode] || mode) + ' ativa. Clique no mapa.', 'info');
+};
+
+function _sdrOnDrawClick(e) {
+  if (!_sdrDrawCurrentMode) return;
+  // Se modo de captura de coordenadas está ativo, deixa ele tratar primeiro
+  if (_sdrMapClickMode) return;
+  L.DomEvent.stop(e);
+  var lat = e.latlng.lat, lng = e.latlng.lng;
+  if (_sdrDrawCurrentMode === 'cto') { _sdrFinalizeDrawing([{lat:lat, lng:lng}]); return; }
+  _sdrDrawPts.push({lat:lat, lng:lng});
+  var fillColor = _sdrDrawCurrentMode === 'cable' ? '#0ea5e9' : '#059669';
+  var m = L.circleMarker([lat, lng], {radius:5, color:'#fff', fillColor:fillColor, fillOpacity:1, weight:2}).addTo(sdrMap);
+  _sdrTmpMkrs.push(m);
+  if (_sdrDrawCurrentMode === 'cable' && _sdrDrawPts.length >= 2) {
+    if (_sdrPolyPrev) sdrMap.removeLayer(_sdrPolyPrev);
+    _sdrPolyPrev = L.polyline(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#0ea5e9',weight:3,dashArray:'8,4',opacity:.85}).addTo(sdrMap);
+  }
+  if (_sdrDrawCurrentMode === 'area' && _sdrDrawPts.length >= 2) {
+    if (_sdrPolyArea) sdrMap.removeLayer(_sdrPolyArea);
+    _sdrPolyArea = L.polygon(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#059669',fillColor:'#059669',fillOpacity:.15,weight:2,dashArray:'6,3'}).addTo(sdrMap);
+  }
+}
+
+function _sdrOnDrawDblClick(e) {
+  L.DomEvent.stop(e);
+  if (_sdrDrawPts.length < 2) { toast('Adicione pelo menos 2 pontos para finalizar', 'warning'); return; }
+  _sdrFinalizeDrawing(_sdrDrawPts.slice());
+}
+
+function _sdrCancelCurrentDraw() {
+  _sdrTmpMkrs.forEach(function(m){ try{ if(sdrMap) sdrMap.removeLayer(m); }catch(e){} });
+  _sdrTmpMkrs = [];
+  if (_sdrPolyPrev) { try{ if(sdrMap) sdrMap.removeLayer(_sdrPolyPrev); }catch(e){} _sdrPolyPrev = null; }
+  if (_sdrPolyArea) { try{ if(sdrMap) sdrMap.removeLayer(_sdrPolyArea); }catch(e){} _sdrPolyArea = null; }
+  _sdrDrawPts = [];
+  if (sdrMap) {
+    sdrMap.off('click', _sdrOnDrawClick);
+    sdrMap.off('dblclick', _sdrOnDrawDblClick);
+    sdrMap.doubleClickZoom.enable();
+  }
+}
+
+function _sdrFinalizeDrawing(pts) {
+  _sdrCancelCurrentDraw();
+  var mode = _sdrDrawCurrentMode;
+  _sdrDrawCurrentMode = null;
+  window._sdrPendingDrawPoints = pts;
+  _sdrShowPropertiesModal(mode, pts);
+}
+
+function _sdrShowPropertiesModal(type, pts) {
+  var existing = document.getElementById('sdr-props-modal');
+  if (existing) existing.remove();
+  var lbl = 'display:block;margin:.75rem 0 .3rem;font-size:.77rem;color:#94a3b8';
+  var inp = 'width:100%;padding:7px 10px;background:#0f172a;border:1px solid #334155;border-radius:6px;color:#f1f5f9;font-size:.82rem;box-sizing:border-box';
+  var title = '', formHtml = '';
+  if (type === 'cable') {
+    title = '<i class="fas fa-minus" style="color:#0ea5e9"></i>&nbsp; Cabo de Fibra Óptica';
+    formHtml =
+      '<label style="' + lbl + '">Nome / Trecho</label>' +
+      '<input id="dp-name" style="' + inp + '" placeholder="Ex: Cabo Rua das Flores - P12"/>' +
+      '<label style="' + lbl + '">Quantidade de Fibras</label>' +
+      '<select id="dp-fibers" style="' + inp + '">' +
+        '<option value="6">6 FO</option><option value="12" selected>12 FO</option>' +
+        '<option value="24">24 FO</option><option value="36">36 FO</option>' +
+        '<option value="48">48 FO</option><option value="72">72 FO</option>' +
+        '<option value="144">144 FO</option>' +
+      '</select>' +
+      '<label style="' + lbl + '">Tipo de Instalação</label>' +
+      '<select id="dp-install" style="' + inp + '">' +
+        '<option value="aereo">Aéreo</option>' +
+        '<option value="subterraneo">Subterrâneo (tracejado no mapa)</option>' +
+      '</select>' +
+      '<label style="' + lbl + '">OLT / GPON de Origem</label>' +
+      '<input id="dp-olt" style="' + inp + '" placeholder="Ex: OLT-Centro Porta 1/1"/>' +
+      '<label style="' + lbl + '">Observações</label>' +
+      '<input id="dp-notes" style="' + inp + '" placeholder="Observações opcionais"/>';
+  } else if (type === 'cto') {
+    title = '<i class="fas fa-circle" style="color:#7c3aed"></i>&nbsp; CTO / Splitter';
+    formHtml =
+      '<label style="' + lbl + '">Nome da CTO</label>' +
+      '<input id="dp-name" style="' + inp + '" placeholder="Ex: CTO-001"/>' +
+      '<label style="' + lbl + '">Tipo de Splitter</label>' +
+      '<select id="dp-cto-type" style="' + inp + '">' +
+        '<option value="1x8">1:8 (8 portas)</option>' +
+        '<option value="1x16">1:16 (16 portas)</option>' +
+        '<option value="1x4">1:4 (4 portas)</option>' +
+        '<option value="1x2">1:2 (2 portas)</option>' +
+        '<option value="ceo">CEO</option>' +
+        '<option value="emenda">Emenda</option>' +
+      '</select>' +
+      '<label style="' + lbl + '">Cabo de Entrada</label>' +
+      '<input id="dp-cable-in" style="' + inp + '" placeholder="Nome do cabo de alimentação"/>' +
+      '<label style="' + lbl + '">Observações</label>' +
+      '<input id="dp-notes" style="' + inp + '" placeholder="Observações opcionais"/>';
+  } else {
+    title = '<i class="fas fa-vector-square" style="color:#059669"></i>&nbsp; Área de Cobertura';
+    formHtml =
+      '<label style="' + lbl + '">Nome da Área</label>' +
+      '<input id="dp-name" style="' + inp + '" placeholder="Ex: Bairro Centro - GPON 1"/>' +
+      '<label style="' + lbl + '">Cor no Mapa</label>' +
+      '<select id="dp-color" style="' + inp + '">' +
+        '<option value="#0ea5e9">Azul</option>' +
+        '<option value="#059669">Verde</option>' +
+        '<option value="#f59e0b">Amarelo</option>' +
+        '<option value="#ef4444">Vermelho</option>' +
+        '<option value="#7c3aed">Roxo</option>' +
+      '</select>' +
+      '<label style="' + lbl + '">Observações</label>' +
+      '<input id="dp-notes" style="' + inp + '" placeholder="Descrição da área de cobertura"/>';
+  }
+  var modal = document.createElement('div');
+  modal.id = 'sdr-props-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.75)';
+  modal.innerHTML =
+    '<div style="background:#1e293b;color:#f1f5f9;border-radius:12px;padding:24px;width:360px;max-width:95vw;box-shadow:0 8px 40px rgba(0,0,0,.7)">' +
+      '<div style="font-weight:700;font-size:.98rem;margin-bottom:2px">' + title + '</div>' +
+      '<div style="font-size:.73rem;color:#64748b;margin-bottom:6px">' + pts.length + ' ponto' + (pts.length !== 1 ? 's' : '') + ' definido' + (pts.length !== 1 ? 's' : '') + ' no mapa</div>' +
+      formHtml +
+      '<div style="display:flex;gap:10px;margin-top:18px">' +
+        '<button id="btn-dp-save" onclick="window._sdrSaveDrawing(\'' + type + '\')" ' +
+          'style="flex:1;background:#16a34a;color:#fff;border:none;padding:10px;border-radius:8px;cursor:pointer;font-weight:600;font-size:.87rem">' +
+          '<i class="fas fa-save"></i> Salvar no Mapa' +
+        '</button>' +
+        '<button onclick="document.getElementById(\'sdr-props-modal\').remove()" ' +
+          'style="background:#475569;color:#fff;border:none;padding:10px 16px;border-radius:8px;cursor:pointer;font-size:.9rem">✕</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(modal);
+}
+
+window._sdrSaveDrawing = async function(type) {
+  var pts = window._sdrPendingDrawPoints || [];
+  var name  = (document.getElementById('dp-name')  || {}).value || '';
+  var notes = (document.getElementById('dp-notes') || {}).value || '';
+  name = name.trim(); notes = notes.trim();
+  var btn = document.getElementById('btn-dp-save');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...'; }
+  var now = new Date().toISOString();
+  var data = { created_at: now };
+  if (name)  data.name  = name;
+  if (notes) data.notes = notes;
+  if (type === 'cable') {
+    var fibers  = parseInt((document.getElementById('dp-fibers')  || {}).value || '12');
+    var install = (document.getElementById('dp-install') || {}).value || 'aereo';
+    var olt     = ((document.getElementById('dp-olt') || {}).value || '').trim();
+    data.type = 'cable'; data.route = pts; data.fiber_count = fibers;
+    data.installation = install; data.cable_type = install;
+    if (olt) data.olt_origin = olt;
+  } else if (type === 'cto') {
+    var ctoType  = (document.getElementById('dp-cto-type')  || {}).value || '1x8';
+    var cableIn  = ((document.getElementById('dp-cable-in') || {}).value || '').trim();
+    var portMap  = {'1x8':8,'1x16':16,'1x4':4,'1x2':2,'ceo':12,'emenda':0};
+    data.type = 'cto'; data.lat = pts[0].lat; data.lng = pts[0].lng;
+    data.cto_type = ctoType; data.total_ports = portMap[ctoType] || 8; data.used_ports = 0;
+    if (cableIn) data.cable_input = cableIn;
+  } else {
+    var color = (document.getElementById('dp-color') || {}).value || '#0ea5e9';
+    data.type = 'coverage_area'; data.polygon = pts; data.color = color;
+  }
+  try {
+    await sdrRef('infrastructure').push(data);
+    var m = document.getElementById('sdr-props-modal');
+    if (m) m.remove();
+    window._sdrPendingDrawPoints = null;
+    toast('Salvo com sucesso!', 'success');
+    if (typeof sdrMapReloadData === 'function') sdrMapReloadData();
+  } catch(e) {
+    console.error('[SDR Draw]', e);
+    toast('Erro ao salvar: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Salvar no Mapa'; }
+  }
+};
+// ════════════════════════════════════════════════════════════════
 window._sdrKMZFeatures = [];
 
 // ── Cores ABNT de fibra ──
@@ -3276,6 +3526,7 @@ window.sdrMapRenderInfra = function() {
   sdrLayers.poles.clearLayers();
   sdrLayers.ctos.clearLayers();
   sdrLayers.cables.clearLayers();
+  if (sdrLayers.areas) sdrLayers.areas.clearLayers();
 
   Object.entries(sdrInfraCache).forEach(([id,item]) => {
     if (!item) return;
@@ -3346,6 +3597,18 @@ window.sdrMapRenderInfra = function() {
       marker.on('click',()=>sdrCTOPortsModal(id,{...item,cto_type:subtype}));
       marker.on('contextmenu',(e)=>{L.DomEvent.stopPropagation(e);L.DomEvent.preventDefault(e);sdrOpenInfraPanel(id,item);});
       sdrLayers.ctos.addLayer(marker);
+      return;
+    }
+
+    // ÁREAS DE COBERTURA
+    if (type === 'coverage_area' && item.polygon && item.polygon.length >= 3) {
+      var acolor = item.color || '#0ea5e9';
+      var apoly = L.polygon(item.polygon.map(function(p){return [p.lat,p.lng];}), {
+        color: acolor, fillColor: acolor, fillOpacity: 0.12, weight: 2, dashArray: '6,4'
+      });
+      apoly.bindTooltip('<b>' + (item.name || 'Área de Cobertura') + '</b>' + (item.notes ? '<br>' + item.notes : ''), {sticky: true});
+      apoly.on('contextmenu', function(e){ L.DomEvent.stopPropagation(e); L.DomEvent.preventDefault(e); sdrOpenInfraPanel(id, item); });
+      if (sdrLayers.areas) sdrLayers.areas.addLayer(apoly);
       return;
     }
 
