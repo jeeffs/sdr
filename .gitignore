@@ -1,0 +1,25 @@
+# Firebase cache
+.firebase/
+
+# Dados e planilhas (não versionar dados sensíveis)
+DADOS/
+congresso-2026/
+
+# Backups manuais (o Git faz o versionamento agora)
+BACKUP/
+
+# Arquivos temporários do sistema
+.fuse_hidden*
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Firebase auth
+.firebasetoken
+
+# Node
+node_modules/
+npm-debug.log
+
+# Logs
+*.log
