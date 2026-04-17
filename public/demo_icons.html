@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Demo Ícones — Mapa de Rede</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 20px; }
+  h1 { color: #38bdf8; font-size: 1.2rem; margin-bottom: 4px; }
+  p { color: #94a3b8; font-size: .82rem; margin: 0 0 24px; }
+  .grid { display: flex; flex-wrap: wrap; gap: 24px; }
+  .card {
+    background: #1e293b; border-radius: 16px; padding: 24px 28px;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    border: 1px solid #334155; min-width: 160px;
+  }
+  .label { font-size: .75rem; color: #94a3b8; text-align: center; }
+  .name  { font-size: .9rem; font-weight: 700; color: #f1f5f9; text-align: center; }
+  .sizes { display: flex; gap: 16px; align-items: flex-end; }
+  .sz-label { font-size: .6rem; color: #64748b; text-align: center; margin-top: 4px; }
+  hr { border: none; border-top: 1px solid #334155; margin: 8px 0; width: 100%; }
+  .section-title { color: #38bdf8; font-size: .85rem; font-weight: 600; margin: 24px 0 12px; width: 100%; }
+  .map-preview {
+    background: #e8e0d0;
+    border-radius: 12px;
+    padding: 20px;
+    display: flex; gap: 20px; flex-wrap: wrap; align-items: center;
+    border: 2px solid #334155;
+  }
+  .map-dot { position: relative; }
+</style>
+</head>
+<body>
+
+<h1>🗺️ Demo de Ícones — Mapa de Rede FTTH</h1>
+<p>Como os equipamentos vão aparecer no mapa mobile (tamanho real nos diferentes zooms)</p>
+
+<div class="section-title">▸ Tamanhos no mapa (zoom 14 / 16 / 18+)</div>
+<div class="grid">
+
+  <!-- CTO 1/16 -->
+  <div class="card">
+    <div class="name">CTO 1/16</div>
+    <div class="label">Furukawa / Fiberhome</div>
+    <div class="sizes">
+      <div>
+        <!-- Zoom 14 — 14px -->
+        <svg width="14" height="18" viewBox="0 0 14 18">
+          <rect x="1" y="1" width="12" height="16" rx="2" fill="#1d4ed8" stroke="#93c5fd" stroke-width="1"/>
+          <rect x="2.5" y="3" width="9" height="6" rx="1" fill="#dbeafe"/>
+          <rect x="3" y="10" width="8" height="2" rx=".5" fill="#93c5fd"/>
+          <rect x="3" y="13" width="8" height="2" rx=".5" fill="#93c5fd"/>
+        </svg>
+        <div class="sz-label">zoom 14</div>
+      </div>
+      <div>
+        <!-- Zoom 16 — 20px -->
+        <svg width="20" height="26" viewBox="0 0 20 26">
+          <rect x="1" y="1" width="18" height="24" rx="3" fill="#1d4ed8" stroke="#93c5fd" stroke-width="1.2"/>
+          <rect x="3" y="3.5" width="14" height="9" rx="1.5" fill="#dbeafe"/>
+          <!-- portas -->
+          <circle cx="5.5" cy="8" r="1.2" fill="#1d4ed8"/>
+          <circle cx="8.5" cy="8" r="1.2" fill="#1d4ed8"/>
+          <circle cx="11.5" cy="8" r="1.2" fill="#1d4ed8"/>
+          <circle cx="14.5" cy="8" r="1.2" fill="#1d4ed8"/>
+          <rect x="3" y="14" width="14" height="2.5" rx="1" fill="#93c5fd"/>
+          <rect x="3" y="18" width="14" height="2.5" rx="1" fill="#93c5fd"/>
+          <!-- parafuso -->
+          <circle cx="4" cy="2.5" r="1" fill="#93c5fd"/>
+          <circle cx="16" cy="2.5" r="1" fill="#93c5fd"/>
+        </svg>
+        <div class="sz-label">zoom 16</div>
+      </div>
+      <div>
+        <!-- Zoom 18 — 32px detalhado -->
+        <svg width="32" height="42" viewBox="0 0 32 42">
+          <!-- Corpo da caixa -->
+          <rect x="1" y="1" width="30" height="40" rx="4" fill="#1e40af" stroke="#60a5fa" stroke-width="1.5"/>
+          <!-- Tampa/painel frontal -->
+          <rect x="3" y="3" width="26" height="36" rx="3" fill="#1d4ed8"/>
+          <!-- Área das portas SC -->
+          <rect x="5" y="5" width="22" height="16" rx="2" fill="#dbeafe" stroke="#93c5fd" stroke-width=".5"/>
+          <!-- 16 portas SC em 4x4 -->
+          <rect x="6.5" y="6.5" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <rect x="11.5" y="6.5" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <rect x="16.5" y="6.5" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <rect x="21.5" y="6.5" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <rect x="6.5" y="13" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <rect x="11.5" y="13" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <rect x="16.5" y="13" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <rect x="21.5" y="13" width="4" height="5" rx="1" fill="#2563eb" stroke="#bfdbfe" stroke-width=".4"/>
+          <!-- Label CTO -->
+          <rect x="5" y="23" width="22" height="6" rx="1.5" fill="#1e3a8a"/>
+          <text x="16" y="27.5" font-family="monospace" font-size="4" fill="#93c5fd" text-anchor="middle" font-weight="bold">CTO 1/16</text>
+          <!-- Entrada de cabo -->
+          <rect x="5" y="31" width="22" height="4" rx="1" fill="#1e3a8a" stroke="#3b82f6" stroke-width=".5"/>
+          <circle cx="11" cy="33" r="1.2" fill="#60a5fa"/>
+          <circle cx="16" cy="33" r="1.2" fill="#60a5fa"/>
+          <circle cx="21" cy="33" r="1.2" fill="#60a5fa"/>
+          <!-- Parafusos -->
+          <circle cx="4" cy="4" r="1.5" fill="#60a5fa"/>
+          <circle cx="28" cy="4" r="1.5" fill="#60a5fa"/>
+          <circle cx="4" cy="38" r="1.5" fill="#60a5fa"/>
+          <circle cx="28" cy="38" r="1.5" fill="#60a5fa"/>
+        </svg>
+        <div class="sz-label">zoom 18+</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CEO FOSC -->
+  <div class="card">
+    <div class="name">CEO / FOSC</div>
+    <div class="label">Caixa de Emenda Óptica</div>
+    <div class="sizes">
+      <div>
+        <svg width="18" height="12" viewBox="0 0 18 12">
+          <ellipse cx="9" cy="6" rx="8" ry="5" fill="#0e7490" stroke="#67e8f9" stroke-width="1"/>
+          <ellipse cx="9" cy="6" rx="5" ry="3" fill="#cffafe"/>
+        </svg>
+        <div class="sz-label">zoom 14</div>
+      </div>
+      <div>
+        <svg width="28" height="18" viewBox="0 0 28 18">
+          <ellipse cx="14" cy="9" rx="13" ry="8" fill="#0e7490" stroke="#67e8f9" stroke-width="1.2"/>
+          <ellipse cx="14" cy="9" rx="9" ry="5" fill="#cffafe"/>
+          <line x1="5" y1="9" x2="23" y2="9" stroke="#0891b2" stroke-width=".8"/>
+          <circle cx="14" cy="9" r="2" fill="#0891b2"/>
+        </svg>
+        <div class="sz-label">zoom 16</div>
+      </div>
+      <div>
+        <svg width="44" height="28" viewBox="0 0 44 28">
+          <!-- Corpo oval (domo) -->
+          <ellipse cx="22" cy="14" rx="21" ry="13" fill="#164e63" stroke="#67e8f9" stroke-width="1.5"/>
+          <ellipse cx="22" cy="14" rx="18" ry="10" fill="#0e7490"/>
+          <!-- Detalhe interior -->
+          <ellipse cx="22" cy="14" rx="13" ry="7" fill="#cffafe" stroke="#a5f3fc" stroke-width=".5"/>
+          <!-- Linha central (eixo da emenda) -->
+          <line x1="8" y1="14" x2="36" y2="14" stroke="#0891b2" stroke-width="1.2"/>
+          <!-- Bandejas de splice -->
+          <rect x="13" y="10" width="18" height="2" rx="1" fill="#0891b2"/>
+          <rect x="13" y="13" width="18" height="2" rx="1" fill="#0891b2"/>
+          <rect x="13" y="16" width="18" height="2" rx="1" fill="#0891b2"/>
+          <!-- Parafusos do domo -->
+          <circle cx="5" cy="14" r="2" fill="#67e8f9"/>
+          <circle cx="39" cy="14" r="2" fill="#67e8f9"/>
+          <!-- Label -->
+          <text x="22" y="26.5" font-family="monospace" font-size="4.5" fill="#a5f3fc" text-anchor="middle" font-weight="bold">CEO</text>
+        </svg>
+        <div class="sz-label">zoom 18+</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Poste -->
+  <div class="card">
+    <div class="name">Poste</div>
+    <div class="label">Poste de energia / telecom</div>
+    <div class="sizes">
+      <div>
+        <svg width="8" height="20" viewBox="0 0 8 20">
+          <rect x="3" y="0" width="2" height="20" fill="#d97706"/>
+          <rect x="1" y="4" width="6" height="1.5" fill="#b45309"/>
+        </svg>
+        <div class="sz-label">zoom 14</div>
+      </div>
+      <div>
+        <svg width="12" height="30" viewBox="0 0 12 30">
+          <rect x="4.5" y="0" width="3" height="30" rx="1.5" fill="#d97706"/>
+          <rect x="1" y="6" width="10" height="2" rx="1" fill="#b45309"/>
+          <circle cx="6" cy="30" r="3" fill="#92400e"/>
+        </svg>
+        <div class="sz-label">zoom 16</div>
+      </div>
+      <div>
+        <svg width="18" height="46" viewBox="0 0 18 46">
+          <!-- Mastro -->
+          <rect x="7" y="4" width="4" height="38" rx="2" fill="#d97706"/>
+          <!-- Travessa superior -->
+          <rect x="2" y="8" width="14" height="3" rx="1.5" fill="#b45309"/>
+          <!-- Isoladores -->
+          <circle cx="3" cy="8" r="2" fill="#fef3c7" stroke="#b45309" stroke-width=".5"/>
+          <circle cx="9" cy="8" r="2" fill="#fef3c7" stroke="#b45309" stroke-width=".5"/>
+          <circle cx="15" cy="8" r="2" fill="#fef3c7" stroke="#b45309" stroke-width=".5"/>
+          <!-- Base -->
+          <ellipse cx="9" cy="42" rx="7" ry="3" fill="#92400e"/>
+          <!-- Numeração -->
+          <rect x="5" y="20" width="8" height="5" rx="1" fill="#92400e"/>
+          <text x="9" y="24" font-family="monospace" font-size="3.5" fill="#fef3c7" text-anchor="middle">P</text>
+        </svg>
+        <div class="sz-label">zoom 18+</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Splitter -->
+  <div class="card">
+    <div class="name">Splitter / CTO c/ Splitter</div>
+    <div class="label">Divisor óptico passivo</div>
+    <div class="sizes">
+      <div>
+        <svg width="14" height="14" viewBox="0 0 14 14">
+          <rect x="1" y="1" width="12" height="12" rx="2" fill="#7c3aed" stroke="#c4b5fd" stroke-width="1"/>
+          <line x1="4" y1="7" x2="7" y2="7" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="7" y1="7" x2="11" y2="4" stroke="#ddd6fe" stroke-width="1"/>
+          <line x1="7" y1="7" x2="11" y2="7" stroke="#ddd6fe" stroke-width="1"/>
+          <line x1="7" y1="7" x2="11" y2="10" stroke="#ddd6fe" stroke-width="1"/>
+        </svg>
+        <div class="sz-label">zoom 14</div>
+      </div>
+      <div>
+        <svg width="22" height="22" viewBox="0 0 22 22">
+          <rect x="1" y="1" width="20" height="20" rx="3" fill="#7c3aed" stroke="#c4b5fd" stroke-width="1.2"/>
+          <circle cx="4" cy="11" r="2" fill="#ddd6fe"/>
+          <line x1="6" y1="11" x2="11" y2="11" stroke="#ddd6fe" stroke-width="1.5"/>
+          <line x1="11" y1="11" x2="17" y2="5" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="11" y1="11" x2="17" y2="9" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="11" y1="11" x2="17" y2="13" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="11" y1="11" x2="17" y2="17" stroke="#ddd6fe" stroke-width="1.2"/>
+          <circle cx="18" cy="5" r="1.5" fill="#ddd6fe"/>
+          <circle cx="18" cy="9" r="1.5" fill="#ddd6fe"/>
+          <circle cx="18" cy="13" r="1.5" fill="#ddd6fe"/>
+          <circle cx="18" cy="17" r="1.5" fill="#ddd6fe"/>
+        </svg>
+        <div class="sz-label">zoom 16</div>
+      </div>
+      <div>
+        <svg width="36" height="36" viewBox="0 0 36 36">
+          <rect x="1" y="1" width="34" height="34" rx="5" fill="#5b21b6" stroke="#c4b5fd" stroke-width="1.5"/>
+          <rect x="3" y="3" width="30" height="30" rx="4" fill="#7c3aed"/>
+          <!-- Label -->
+          <rect x="5" y="5" width="26" height="8" rx="2" fill="#5b21b6"/>
+          <text x="18" y="11" font-family="monospace" font-size="5" fill="#ddd6fe" text-anchor="middle" font-weight="bold">1:8</text>
+          <!-- Entrada -->
+          <circle cx="5" cy="18" r="2.5" fill="#ddd6fe"/>
+          <line x1="7.5" y1="18" x2="14" y2="18" stroke="#ddd6fe" stroke-width="1.5"/>
+          <!-- Saídas -->
+          <line x1="14" y1="18" x2="26" y2="8" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="14" y1="18" x2="26" y2="12" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="14" y1="18" x2="26" y2="16" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="14" y1="18" x2="26" y2="20" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="14" y1="18" x2="26" y2="24" stroke="#ddd6fe" stroke-width="1.2"/>
+          <line x1="14" y1="18" x2="26" y2="28" stroke="#ddd6fe" stroke-width="1.2"/>
+          <circle cx="28" cy="8"  r="2" fill="#ddd6fe"/>
+          <circle cx="28" cy="12" r="2" fill="#ddd6fe"/>
+          <circle cx="28" cy="16" r="2" fill="#ddd6fe"/>
+          <circle cx="28" cy="20" r="2" fill="#ddd6fe"/>
+          <circle cx="28" cy="24" r="2" fill="#ddd6fe"/>
+          <circle cx="28" cy="28" r="2" fill="#ddd6fe"/>
+        </svg>
+        <div class="sz-label">zoom 18+</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Preview no mapa -->
+<div class="section-title">▸ Preview simulado no mapa (fundo de rua)</div>
+<div class="map-preview">
+
+  <!-- CTO cluster -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <div style="width:34px;height:34px;border-radius:50%;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)">47</div>
+    <div style="font-size:.6rem;color:#334155;font-weight:600">cluster zoom 13</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <div style="width:28px;height:28px;border-radius:50%;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)">8</div>
+    <div style="font-size:.6rem;color:#334155;font-weight:600">cluster zoom 15</div>
+  </div>
+
+  <!-- CTO individual zoom 16 -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <svg width="20" height="26" viewBox="0 0 20 26">
+      <rect x="1" y="1" width="18" height="24" rx="3" fill="#1d4ed8" stroke="#93c5fd" stroke-width="1.2"/>
+      <rect x="3" y="3.5" width="14" height="9" rx="1.5" fill="#dbeafe"/>
+      <circle cx="5.5" cy="8" r="1.2" fill="#1d4ed8"/>
+      <circle cx="8.5" cy="8" r="1.2" fill="#1d4ed8"/>
+      <circle cx="11.5" cy="8" r="1.2" fill="#1d4ed8"/>
+      <circle cx="14.5" cy="8" r="1.2" fill="#1d4ed8"/>
+      <rect x="3" y="14" width="14" height="2.5" rx="1" fill="#93c5fd"/>
+      <rect x="3" y="18" width="14" height="2.5" rx="1" fill="#93c5fd"/>
+      <circle cx="4" cy="2.5" r="1" fill="#93c5fd"/>
+      <circle cx="16" cy="2.5" r="1" fill="#93c5fd"/>
+    </svg>
+    <div style="font-size:.6rem;color:#334155;font-weight:600">CTO zoom 16</div>
+  </div>
+
+  <!-- CEO individual -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <svg width="28" height="18" viewBox="0 0 28 18">
+      <ellipse cx="14" cy="9" rx="13" ry="8" fill="#164e63" stroke="#67e8f9" stroke-width="1.2"/>
+      <ellipse cx="14" cy="9" rx="9" ry="5" fill="#0e7490"/>
+      <ellipse cx="14" cy="9" rx="6" ry="3.5" fill="#cffafe"/>
+      <line x1="5" y1="9" x2="23" y2="9" stroke="#0891b2" stroke-width=".8"/>
+      <circle cx="14" cy="9" r="1.5" fill="#0891b2"/>
+      <circle cx="4" cy="9" r="1.5" fill="#67e8f9"/>
+      <circle cx="24" cy="9" r="1.5" fill="#67e8f9"/>
+    </svg>
+    <div style="font-size:.6rem;color:#334155;font-weight:600">CEO zoom 16</div>
+  </div>
+
+  <!-- Cabo distribuição -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <svg width="80" height="8" viewBox="0 0 80 8">
+      <line x1="0" y1="4" x2="80" y2="4" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <div style="font-size:.6rem;color:#334155;font-weight:600">Cabo distribuição</div>
+  </div>
+
+  <!-- Cabo backbone -->
+  <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+    <svg width="80" height="8" viewBox="0 0 80 8">
+      <line x1="0" y1="4" x2="80" y2="4" stroke="#dc2626" stroke-width="3" stroke-linecap="round"/>
+    </svg>
+    <div style="font-size:.6rem;color:#334155;font-weight:600">Cabo backbone</div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;background:#1e293b;border-radius:12px;padding:16px;border:1px solid #334155;font-size:.8rem;color:#94a3b8">
+  💡 <b style="color:#38bdf8">Como funciona:</b>
+  No zoom 13–15 os CTOs agrupam em <b style="color:#60a5fa">clusters numerados</b> (azul).
+  No zoom 16 aparecem as <b style="color:#60a5fa">caixinhas individuais</b>.
+  No zoom 18+ aparecem <b style="color:#60a5fa">totalmente detalhadas</b> com portas, parafusos e label.
+  Os cabos aparecem em todas as distâncias com cor por tipo.
+</div>
+
+</body>
+</html>

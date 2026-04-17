@@ -1,0 +1,53 @@
+﻿{
+  "hosting": {
+    "site": "solucaoderua",
+    "public": ".",
+    "ignore": [
+      "firebase.json",
+      ".firebaserc",
+      "database.rules.json",
+      "*.xlsx",
+      "*.xlsm",
+      "*.csv",
+      "*.py",
+      "*.bat",
+      "*.sh",
+      "*.exe",
+      "*.backup",
+      "*.AFTER_CRITICAL_FIX",
+      ".~lock.*",
+      "node_modules/**",
+      "APP/**",
+      "BACKUP/**",
+      "CONTRATOS/**",
+      "DADOS/**",
+      "DOCUMENTACAO/**",
+      "congresso-2026/**",
+      "validador/**",
+      "public/**",
+      ".firebase/**",
+      ".claude/**",
+      ".planning/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ]
+  },
+  "database": {
+    "rules": "database.rules.json"
+  }
+}

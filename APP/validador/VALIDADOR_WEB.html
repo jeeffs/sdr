@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Validador de Planilhas — Prestadores</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:'Segoe UI',Tahoma,sans-serif;background:#1E1E2E;color:#F8F8F2;font-size:14px}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* header */
+.header{background:#2A2A3E;padding:10px 20px;border-bottom:1px solid #44446A;display:flex;align-items:center;gap:12px;flex-shrink:0}
+.h-title{font-size:17px;font-weight:700;color:#7C83FD}
+.h-sub{font-size:11px;color:#9999BB}
+
+/* body */
+.body{display:flex;flex:1;overflow:hidden}
+
+/* left panel */
+.left{width:295px;min-width:270px;background:#2A2A3E;border-right:1px solid #44446A;overflow-y:auto;flex-shrink:0}
+.sec-lbl{font-size:11px;font-weight:700;color:#7C83FD;padding:14px 16px 4px;letter-spacing:.5px}
+.path-row{display:flex;gap:5px;padding:4px 16px}
+.path-inp{flex:1;background:#313145;border:none;color:#F8F8F2;padding:5px 7px;font-size:11px;font-family:inherit;border-radius:3px;outline:none;min-width:0;cursor:default}
+.btn-sm{background:#7C83FD;color:#1E1E2E;border:none;padding:5px 9px;font-weight:700;cursor:pointer;border-radius:3px;font-size:12px;white-space:nowrap}
+.btn-sm:hover{background:#9B9FFF}
+.info{font-size:11px;color:#9999BB;padding:2px 16px 6px;line-height:1.5;white-space:pre-line}
+.info.warn{color:#FFB86C}.info.ok{color:#50FA7B}.info.err{color:#FF5555}
+.sep{height:1px;background:#44446A;margin:9px 16px}
+.sel-prov{width:calc(100% - 32px);margin:4px 16px;background:#313145;border:none;color:#F8F8F2;padding:7px;font-size:14px;font-weight:700;font-family:inherit;border-radius:3px;outline:none;cursor:pointer}
+.btn-main{display:block;width:calc(100% - 32px);margin:4px 16px;border:none;padding:10px;font-size:15px;font-weight:700;cursor:pointer;border-radius:4px;font-family:inherit}
+.btn-main.green{background:#50FA7B;color:#1E1E2E}
+.btn-main.green:hover:not(:disabled){background:#70FFAA}
+.btn-main.orange{background:#FFB86C;color:#1E1E2E}
+.btn-main.orange:hover:not(:disabled){background:#FFD080}
+.btn-main:disabled{background:#44446A;color:#9999BB;cursor:not-allowed}
+.btn-sec{display:block;width:calc(100% - 32px);margin:4px 16px;background:#313145;color:#9999BB;border:none;padding:7px;font-size:13px;cursor:pointer;border-radius:4px;font-family:inherit}
+.btn-sec:hover:not(:disabled){color:#F8F8F2;background:#44446A}
+.btn-sec:disabled{cursor:not-allowed;opacity:.5}
+.prog{height:4px;background:#44446A;margin:4px 16px;border-radius:2px;overflow:hidden;display:none}
+.prog.on{display:block}
+.prog-inner{height:100%;background:#7C83FD;animation:ind 1.4s infinite}
+@keyframes ind{0%{width:0;margin-left:0}50%{width:55%;margin-left:25%}100%{width:0;margin-left:100%}}
+.qs{padding:0 16px 8px}
+.qs-row{font-size:11px;padding:2px 0}
+.hint{font-size:10px;color:#9999BB;padding:1px 16px;font-style:italic}
+
+/* right panel */
+.right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.banner{background:#313145;padding:12px 20px;text-align:center;border-bottom:1px solid #44446A;flex-shrink:0}
+.ban-title{font-size:16px;font-weight:700;color:#9999BB}
+.ban-sub{font-size:11px;color:#9999BB;margin-top:2px}
+
+/* tabs */
+.tab-nav{display:flex;background:#2A2A3E;border-bottom:1px solid #44446A;flex-shrink:0;overflow-x:auto}
+.tab-btn{padding:9px 14px;background:none;border:none;color:#9999BB;cursor:pointer;font-family:inherit;font-size:12px;border-bottom:2px solid transparent;white-space:nowrap}
+.tab-btn.active{color:#7C83FD;border-bottom-color:#7C83FD;background:#1E1E2E}
+.tab-btn:hover:not(.active){color:#F8F8F2}
+.tab-body{flex:1;overflow-y:auto}
+.tab-pane{display:none}
+.tab-pane.active{display:block}
+
+/* frente content */
+.fr-hdr{background:#2A2A3E;padding:9px 16px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #44446A}
+.fr-title{font-size:13px;font-weight:700}
+
+/* version cards */
+.cards-row{display:flex;gap:10px;padding:12px 16px}
+.vcard{flex:1;background:#313145;border-radius:5px;padding:10px 12px;border:2px solid #44446A;min-width:0;position:relative}
+.vcard.ok{border-color:#50FA7B}.vcard.fail{border-color:#FF5555}.vcard.warnref{border-color:#FFB86C}
+.vc-lbl{font-size:11px;font-weight:700;color:#7C83FD;margin-bottom:3px}
+.vc-stat{font-size:13px;font-weight:700;margin:3px 0}
+.vc-tot{font-size:11px;color:#9999BB}
+.vc-ref{font-size:11px;font-weight:700;margin-top:3px}
+.vc-file{font-size:10px;color:#44446A;margin-top:3px;word-break:break-all}
+.vc-fixbtn{margin-top:6px;background:#FFB86C;color:#1E1E2E;border:none;padding:4px 8px;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;width:100%}
+.vc-fixbtn:hover{background:#FFD080}
+.vc-fixbtn.done{background:#50FA7B;cursor:default}
+
+/* error table */
+.err-lbl{font-size:11px;font-weight:700;color:#FFB86C;padding:4px 16px 2px}
+.tbl-wrap{margin:0 16px 6px;overflow:auto;max-height:260px;border-radius:4px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{background:#2A2A3E;color:#7C83FD;padding:5px 7px;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:1}
+td{padding:4px 7px;border-bottom:1px solid #252535;cursor:pointer}
+tr.fixable td:first-child::after{content:' 🔧';font-size:10px;opacity:.6}
+tr:hover td{background:#3A3A58}
+tr.sel td{background:#44446A}
+tr.rerro td{background:#3A1A1A}
+tr.rhard td{background:#2A1500}
+tr.rwarn td{background:#1E1E05}
+.fix-lbl{font-size:11px;font-weight:700;color:#7C83FD;padding:3px 16px 1px}
+.fix-box{background:#313145;border-radius:4px;padding:9px 13px;font-size:11px;color:#9999BB;margin:0 16px 10px;white-space:pre-wrap;line-height:1.6;min-height:40px}
+.fix-box.has{color:#F1FA8C}
+.all-ok{text-align:center;color:#50FA7B;font-size:13px;padding:28px}
+.idle-msg{text-align:center;color:#9999BB;font-size:12px;padding:40px 20px}
+
+/* fix result modal */
+.fix-toast{position:fixed;bottom:40px;left:50%;transform:translateX(-50%);background:#313145;border:1px solid #50FA7B;border-radius:8px;padding:14px 22px;font-size:13px;color:#F8F8F2;z-index:999;box-shadow:0 4px 20px #00000088;display:none;max-width:500px;text-align:center}
+.fix-toast.show{display:block}
+
+/* status bar */
+.statusbar{background:#2A2A3E;border-top:1px solid #44446A;padding:3px 12px;font-size:11px;color:#9999BB;display:flex;justify-content:space-between;flex-shrink:0}
+
+#inp-folder,#inp-ref{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <span class="h-title">✦ Validador de Planilhas</span>
+    <span class="h-sub">Prestadores · 4 Frentes · V1 / V2 / V3 · Versão Web</span>
+  </div>
+
+  <div class="body">
+
+    <!-- Left panel -->
+    <div class="left">
+      <div class="sec-lbl">📁 PASTA DO MÊS</div>
+      <div class="path-row">
+        <input type="text" class="path-inp" id="disp-folder" readonly placeholder="Nenhuma pasta selecionada">
+        <button class="btn-sm" onclick="document.getElementById('inp-folder').click()">...</button>
+      </div>
+      <div class="hint">Selecione a pasta do mês (inclui V2/ e V3/)</div>
+      <div class="info" id="info-folder"></div>
+      <input type="file" id="inp-folder" webkitdirectory multiple>
+
+      <div class="sep"></div>
+
+      <div class="sec-lbl">👷 PRESTADOR</div>
+      <select class="sel-prov" id="sel-prov" disabled onchange="onProviderChange()">
+        <option value="">— selecione —</option>
+      </select>
+      <div class="info warn" id="info-warns"></div>
+
+      <div class="sep"></div>
+
+      <div class="sec-lbl">📊 PLANILHA DE REFERÊNCIA</div>
+      <div class="path-row">
+        <input type="text" class="path-inp" id="disp-ref" readonly placeholder="Opcional">
+        <button class="btn-sm" onclick="document.getElementById('inp-ref').click()">...</button>
+      </div>
+      <div class="info" id="info-ref">Opcional — compara totais com IMPOSTO</div>
+      <input type="file" id="inp-ref" accept=".xlsx,.xlsm">
+
+      <div class="sep"></div>
+
+      <button class="btn-main green" id="btn-val" disabled onclick="runValidation()">▶  VALIDAR</button>
+      <div class="prog" id="prog"><div class="prog-inner"></div></div>
+
+      <div class="sep"></div>
+
+      <button class="btn-main orange" id="btn-fix" disabled onclick="fixAllAndDownload()">🔧  Corrigir e Baixar Arquivos</button>
+      <div class="info" id="info-fix" style="padding-top:2px"></div>
+
+      <div class="sep"></div>
+
+      <button class="btn-sec" id="btn-exp" disabled onclick="exportReport()">💾  Exportar Relatório Excel</button>
+
+      <div class="sep"></div>
+      <div class="qs" id="quick-sum"></div>
+    </div>
+
+    <!-- Right panel -->
+    <div class="right">
+      <div class="banner" id="banner">
+        <div class="ban-title" id="ban-title">Aguardando validação...</div>
+        <div class="ban-sub"  id="ban-sub"></div>
+      </div>
+      <div class="tab-nav" id="tab-nav">
+        <button class="tab-btn active" onclick="showTab(0)">🔧 Filial — Manutenção</button>
+        <button class="tab-btn"        onclick="showTab(1)">📐 Filial — Projeto</button>
+        <button class="tab-btn"        onclick="showTab(2)">🔧 Matriz — Manutenção</button>
+        <button class="tab-btn"        onclick="showTab(3)">📐 Matriz — Projeto</button>
+      </div>
+      <div class="tab-body">
+        <div class="tab-pane active" id="tp-0"><div class="idle-msg">Nenhuma validação realizada ainda.</div></div>
+        <div class="tab-pane"        id="tp-1"><div class="idle-msg">Nenhuma validação realizada ainda.</div></div>
+        <div class="tab-pane"        id="tp-2"><div class="idle-msg">Nenhuma validação realizada ainda.</div></div>
+        <div class="tab-pane"        id="tp-3"><div class="idle-msg">Nenhuma validação realizada ainda.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span id="status-msg">Selecione a pasta do mês para começar</span>
+    <span>Validador v3.0 · Web · Abre no navegador, sem instalar nada</span>
+  </div>
+</div>
+
+<!-- Toast de resultado do fix -->
+<div class="fix-toast" id="fix-toast"></div>
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════════════════
+//  CONSTANTES
+// ════════════════════════════════════════════════════
+const FRENTES = ['FILIAL_MANUTENÇÃO','FILIAL_PROJETO','MATRIZ_MANUTENÇÃO','MATRIZ_PROJETO'];
+const FRENTE_LABELS = {
+  'FILIAL_MANUTENÇÃO':'🔧 Filial — Manutenção','FILIAL_PROJETO':'📐 Filial — Projeto',
+  'MATRIZ_MANUTENÇÃO':'🔧 Matriz — Manutenção','MATRIZ_PROJETO':'📐 Matriz — Projeto'
+};
+const VER_LABELS = {V1:'V1 · Prestador',V2:'V2 · Supervisor',V3:'V3 · Admin'};
+const EXCELERR   = {0:'#NULL!',7:'#DIV/0!',15:'#VALUE!',23:'#REF!',29:'#NAME?',36:'#NUM!',42:'#N/A'};
+const MESES_PT   = {
+  JAN:'JANEIRO',FEV:'FEVEREIRO',MAR:'MARÇO',ABR:'ABRIL',MAI:'MAIO',JUN:'JUNHO',
+  JUL:'JULHO',AGO:'AGOSTO',SET:'SETEMBRO',OUT:'OUTUBRO',NOV:'NOVEMBRO',DEZ:'DEZEMBRO',
+  '01':'JANEIRO','02':'FEVEREIRO','03':'MARÇO','04':'ABRIL','05':'MAIO','06':'JUNHO',
+  '07':'JULHO','08':'AGOSTO','09':'SETEMBRO','10':'OUTUBRO','11':'NOVEMBRO','12':'DEZEMBRO'
+};
+
+// ════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════
+let gScan = null, gResult = null, gRefComps = {}, gRefFile = null, gFolderName = '';
+
+// ════════════════════════════════════════════════════
+//  UTILS
+// ════════════════════════════════════════════════════
+const norm = v => v==null?'':String(v).trim().replace(/\s+/g,' ').toUpperCase();
+const r2   = v => Math.round(v*100)/100;
+const r4   = v => Math.round(v*10000)/10000;
+const brl  = v => v==null||isNaN(v)?'':
+  `R$${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+const setStatus = m => { document.getElementById('status-msg').textContent=m; };
+
+// ════════════════════════════════════════════════════
+//  SHEETJS HELPERS  (row/col 1-based como openpyxl)
+// ════════════════════════════════════════════════════
+function wc(ws,row,col){return ws[XLSX.utils.encode_cell({r:row-1,c:col-1})]||null;}
+function wcv(ws,row,col){
+  const c=wc(ws,row,col); if(!c) return null;
+  if(c.t==='e') return EXCELERR[c.v]||'#ERR!';
+  return c.v!==undefined?c.v:null;
+}
+function isErr(ws,row,col){const c=wc(ws,row,col);return c&&c.t==='e';}
+function maxRow(ws){if(!ws['!ref'])return 0;return XLSX.utils.decode_range(ws['!ref']).e.r+1;}
+function maxCol(ws){if(!ws['!ref'])return 0;return XLSX.utils.decode_range(ws['!ref']).e.c+1;}
+function colLtr(col){return XLSX.utils.encode_col(col-1);}
+
+// ════════════════════════════════════════════════════
+//  MOTOR DE VALIDAÇÃO
+// ════════════════════════════════════════════════════
+function loadDepara(wsDp){
+  const p={};
+  for(let r=1;r<=maxRow(wsDp);r++){
+    const s=wcv(wsDp,r,1), v=wcv(wsDp,r,2);
+    if(s&&typeof v==='number') p[norm(s)]=v;
+  }
+  return p;
+}
+function getCols(ws){
+  let hc=false;
+  for(let c=1;c<=maxCol(ws);c++){const v=norm(wcv(ws,2,c));if(v.includes('C')&&v.includes('DIGO')&&v.length<12){hc=true;break;}}
+  if(hc) return{svcs:[[7,8,9],[10,11,12],[13,14,15],[16,17,18],[19,20,21]],tot:22,ds:3};
+  return      {svcs:[[6,7,8],[9,10,11],[12,13,14],[15,16,17],[18,19,20]],tot:21,ds:3};
+}
+
+async function validateFile(file){
+  const erros=[]; let tg=0;
+  try{
+    const buf=await file.arrayBuffer();
+    const wbV=XLSX.read(new Uint8Array(buf),{type:'array',cellFormula:false});
+    const wbF=XLSX.read(new Uint8Array(buf),{type:'array',cellFormula:true});
+    if(!wbV.SheetNames.includes('base'))
+      return{ok:false,total_geral:0,erros:[{linha:'-',celula:'-',tipo:'❌ Aba "base" não encontrada',
+        encontrado:'Aba ausente',esperado:'Aba "base"',
+        como_corrigir:'Arquivo não contém a aba "base". Verifique se é o arquivo correto.'}]};
+    const wsV=wbV.Sheets['base'], wsF=wbF.Sheets['base'], wsDp=wbV.Sheets['de_para'];
+    if(!wsDp)
+      return{ok:false,total_geral:0,erros:[{linha:'-',celula:'-',tipo:'❌ Aba "de_para" não encontrada',
+        encontrado:'Aba ausente',esperado:'Aba "de_para"',
+        como_corrigir:'Arquivo não contém a aba "de_para" com a tabela de preços.'}]};
+
+    const prices=loadDepara(wsDp), cols=getCols(wsV);
+    const mr=maxRow(wsV), mc=maxCol(wsV);
+
+    // Buscar TOTAL GERAL: percorre todas as linhas procurando "TOTAL" na col A-E
+    // e lê o valor da coluna de totais nessa linha.
+    for(let r=cols.ds;r<=mr;r++){
+      for(let c=1;c<=5;c++){
+        const v=norm(wcv(wsV,r,c));
+        if(v==='TOTAL GERAL'||v==='TOTAL'){
+          const tv=wcv(wsV,r,cols.tot);
+          if(typeof tv==='number'&&tv>0){tg=tv;break;}
+        }
+      }
+      if(tg>0) break;
+    }
+
+    for(let ri=cols.ds;ri<=mr;ri++){
+      let allNull=true;
+      for(let c=1;c<=Math.min(mc,24);c++) if(wcv(wsV,ri,c)!=null){allNull=false;break;}
+      if(allNull) continue;
+
+      // Pular linhas de rodapé (TOTAL, TOTAL GERAL)
+      let isFooter=false;
+      for(let c=1;c<=5;c++){const v=norm(wcv(wsV,ri,c));if(v.includes('TOTAL')){isFooter=true;break;}}
+      if(isFooter) continue;
+
+      let soma=0;
+      for(const[sC,qC,vC]of cols.svcs){
+        const srvV=wcv(wsV,ri,sC), qtdV=wcv(wsV,ri,qC), valV=wcv(wsV,ri,vC);
+        const cel=`${colLtr(vC)}${ri}`;
+
+        if(isErr(wsV,ri,vC)||(typeof valV==='string'&&valV.startsWith('#'))){
+          erros.push({linha:ri,celula:cel,tipo:'❌ Erro de fórmula Excel',
+            encontrado:String(valV),esperado:'Valor numérico',
+            como_corrigir:`Célula ${cel} contém '${valV}'. Verifique a fórmula VLOOKUP e se a aba 'de_para' existe.`});
+          continue;
+        }
+        const valNum=typeof valV==='number'?valV:0;
+        if(srvV&&norm(String(srvV))){
+          const sN=norm(String(srvV)), prc=prices[sN];
+          if(prc===undefined){
+            erros.push({linha:ri,celula:`${colLtr(sC)}${ri}`,tipo:'⚠️ Serviço não encontrado',
+              encontrado:sN,esperado:'Serviço na aba de_para',
+              como_corrigir:`Serviço '${sN}' não existe na aba 'de_para'. Corrija o nome ou adicione à tabela.`});
+            soma+=valNum; continue;
+          }
+          const qtdNum=typeof qtdV==='number'?qtdV:0;
+          const esp=r4(prc*qtdNum), real=r4(valNum);
+          const cf=wc(wsF,ri,vC);
+          const isHard=cf&&cf.t==='n'&&!cf.f;
+          // Fórmula correta para qualquer caso: VLOOKUP × QTD
+          const formula=`IF(${colLtr(sC)}${ri}<>"",VLOOKUP(${colLtr(sC)}${ri},de_para!$A:$B,2,0)*${colLtr(qC)}${ri},0)`;
+          if(isHard){
+            const d=r2(Math.abs(esp-real));
+            erros.push({linha:ri,celula:cel,tipo:'🔒 Valor fixo (sem fórmula)',
+              encontrado:`R$${real} (fixo)`,esperado:`R$${esp} (via fórmula)`,
+              como_corrigir:`Célula ${cel} tem R$${real} digitado diretamente.\nCorreção: =${formula}`+(d>0?`\n↳ Diferença R$${d}`:''),
+              _fix:{type:'formula',cell:cel,formula}});
+          }else if(Math.abs(esp-real)>0.01){
+            // Valor errado mesmo com fórmula — corrige substituindo pela fórmula correta
+            const d=r2(Math.abs(esp-real));
+            erros.push({linha:ri,celula:cel,tipo:'🔢 Valor errado',
+              encontrado:`R$${real}`,esperado:`R$${esp} (${qtdNum} × R$${prc})`,
+              como_corrigir:`Valor R$${real} em ${cel} ≠ ${qtdNum} × R$${prc} = R$${esp}.\nDiferença: R$${d}\nCorreção automática: =${formula}`,
+              _fix:{type:'formula',cell:cel,formula}});
+          }
+          soma+=real;
+        }else{
+          if(typeof valV==='number'&&Math.abs(valV)>0.01)
+            erros.push({linha:ri,celula:cel,tipo:'🔢 Valor sem serviço',
+              encontrado:`R$${valV}`,esperado:'R$0',
+              como_corrigir:`Célula ${cel} tem R$${valV} mas sem serviço em ${colLtr(sC)}${ri}. Limpe o valor.`});
+        }
+      }
+      // Total linha
+      const tV=wcv(wsV,ri,cols.tot);
+      if(typeof tV==='number'){
+        const totR=r4(tV), somaE=r4(soma);
+        if(Math.abs(totR-somaE)>0.01){
+          const sumFormula=cols.svcs.map(([,,vC2])=>`${colLtr(vC2)}${ri}`).join('+');
+          erros.push({linha:ri,celula:`${colLtr(cols.tot)}${ri}`,tipo:'➕ Total divergente',
+            encontrado:`R$${totR}`,esperado:`R$${somaE}`,
+            como_corrigir:`TOTAL linha ${ri} = R$${totR}, soma = R$${somaE}.\nA fórmula em ${colLtr(cols.tot)} deve ser: =${sumFormula}`,
+            _fix:{type:'formula',cell:`${colLtr(cols.tot)}${ri}`,formula:sumFormula}});
+        }
+      }
+    }
+    // Fallback: se não havia linha TOTAL explícita, somar totais das linhas de dados
+    if(tg===0){
+      for(let r=cols.ds;r<=mr;r++){
+        const tv=wcv(wsV,r,cols.tot);
+        if(typeof tv==='number'&&tv>0){
+          let isFoot=false;
+          for(let c=1;c<=5;c++){const v=norm(wcv(wsV,r,c));if(v.includes('TOTAL')){isFoot=true;break;}}
+          if(!isFoot) tg+=tv;
+        }
+      }
+    }
+  }catch(e){
+    return{ok:false,total_geral:0,erros:[{linha:'-',celula:'-',tipo:'❌ Erro ao abrir',
+      encontrado:String(e),esperado:'Arquivo válido',
+      como_corrigir:'Arquivo pode estar corrompido ou protegido por senha.'}]};
+  }
+  return{ok:erros.length===0,total_geral:tg,erros};
+}
+
+// ════════════════════════════════════════════════════
+//  SCAN DA PASTA
+// ════════════════════════════════════════════════════
+const FRENTE_PAT={
+  'FILIAL_MANUTENÇÃO':/FILIAL[\s_-]*MANUTEN/i,'FILIAL_PROJETO':/FILIAL[\s_-]*PROJ/i,
+  'MATRIZ_MANUTENÇÃO':/MATRIZ[\s_-]*MANUTEN/i,'MATRIZ_PROJETO':/MATRIZ[\s_-]*PROJ/i
+};
+function detectFrente(n){for(const[f,p]of Object.entries(FRENTE_PAT))if(p.test(n))return f;return null;}
+function extractProv(n){
+  const base=n.replace(/\.[^.]+$/,'');
+  const m=base.match(/[_\s-]+(FILIAL|MATRIZ)[_\s-]/i);
+  if(m){const p=base.slice(0,m.index).replace(/^[_\s-]+|[_\s-]+$/g,'');return p.toUpperCase()||'?';}
+  return base.toUpperCase();
+}
+function verFromPath(rp){
+  const up=rp.replace(/\\/g,'/').toUpperCase(), pts=rp.replace(/\\/g,'/').split('/');
+  if(up.includes('/V3/')&&up.includes('/GERAL')) return null;
+  if(up.includes('/V3/')) return 'V3';
+  if(up.includes('/V2/')) return 'V2';
+  if(pts.length===2)      return 'V1';
+  return null;
+}
+function scanFiles(files){
+  const r={providers:[],files:{},warnings:[]};
+  gFolderName='';
+  for(const f of files){
+    if(!/\.(xlsm|xlsx)$/i.test(f.name)) continue;
+    const rp=(f.webkitRelativePath||f.name).replace(/\\/g,'/');
+    if(!gFolderName&&rp.includes('/')) gFolderName=rp.split('/')[0];
+    const ver=verFromPath(rp); if(!ver) continue;
+    const fr=detectFrente(f.name); if(!fr) continue;
+    const pv=extractProv(f.name); if(!pv||pv==='?') continue;
+    if(!r.files[pv]) r.files[pv]={V1:{},V2:{},V3:{}};
+    r.files[pv][ver][fr]=f;
+  }
+  r.providers=Object.keys(r.files).sort();
+  for(const[pv,vs]of Object.entries(r.files))
+    for(const v of['V1','V2','V3'])
+      for(const fr of FRENTES)
+        if(!vs[v][fr]) r.warnings.push(`⚠️ Ausente: ${pv} / ${v} / ${fr}`);
+  return r;
+}
+
+// ════════════════════════════════════════════════════
+//  VALIDATE PROVIDER
+// ════════════════════════════════════════════════════
+async function validateProvider(prov,scan){
+  const files=scan.files[prov]||{};
+  const res={provider:prov,folder:gFolderName,timestamp:new Date().toLocaleString('pt-BR'),
+    frentes:{},ok_global:true,total_erros:0};
+  for(const fr of FRENTES){
+    res.frentes[fr]={V1:null,V2:null,V3:null,ok:true,erros_total:0};
+    for(const ver of['V1','V2','V3']){
+      const file=files[ver]?.[fr];
+      let vr;
+      if(!file){
+        vr={ok:false,total_geral:0,erros:[{linha:'-',celula:'-',tipo:'📁 Arquivo não encontrado',
+          encontrado:'Ausente',esperado:`${ver} / ${fr}`,
+          como_corrigir:`Adicione o arquivo de ${ver} para ${fr}:\n• V1: raiz\n• V2: pasta V2/\n• V3: pasta V3/Projeto/`}]};
+      }else{
+        vr=await validateFile(file);
+        vr.filename=file.name;
+      }
+      res.frentes[fr][ver]=vr;
+      if(!vr.ok){res.frentes[fr].ok=false;res.frentes[fr].erros_total+=vr.erros.length;
+        res.ok_global=false;res.total_erros+=vr.erros.length;}
+    }
+  }
+  return res;
+}
+
+// ════════════════════════════════════════════════════
+//  AUTO-CORREÇÃO
+// ════════════════════════════════════════════════════
+async function fixFile(file, erros){
+  // Conta quantos erros são corrigíveis
+  const fixable = erros.filter(e=>e._fix);
+  if(!fixable.length) return null;
+
+  const buf=await file.arrayBuffer();
+  // Lê preservando fórmulas, estilos, largura de colunas e todas as abas
+  const wb=XLSX.read(new Uint8Array(buf),{
+    type:'array',
+    cellFormula:true,
+    cellStyles:true,    // preserva cores, bordas, fontes
+    cellNF:true,        // preserva formatos de número (R$, %, datas)
+    cellDates:true,     // preserva datas
+    sheetStubs:true     // preserva células vazias com formatação
+  });
+  const ws=wb.Sheets['base'];
+  if(!ws) return null;
+
+  for(const err of fixable){
+    const fix=err._fix;
+    const existing=ws[fix.cell]||{};
+    // Aplica a fórmula corrigida, mantendo o estilo e formato numérico da célula original
+    ws[fix.cell]={
+      t:'f',
+      f:fix.formula,
+      v:0,
+      s: existing.s||undefined,   // preserva estilo (cor, borda, fonte)
+      z: existing.z||undefined    // preserva formato numérico (R$, etc.)
+    };
+  }
+
+  // Determina o tipo de saída: mantém .xlsm se possível, senão .xlsx
+  const isXlsm=/\.xlsm$/i.test(file.name);
+  const bookType=isXlsm?'xlsm':'xlsx';
+  const outBuf=XLSX.write(wb,{type:'array', bookType, cellStyles:true});
+  return{buf:outBuf, fixedCount:fixable.length,
+    unfixableCount:erros.length-fixable.length, isXlsm};
+}
+
+async function fixAllAndDownload(){
+  if(!gResult) return;
+  const prov=gResult.provider;
+  setStatus('Corrigindo arquivos...');
+  document.getElementById('btn-fix').disabled=true;
+  document.getElementById('prog').classList.add('on');
+
+  try{
+    let totalFixed=0, totalFiles=0, totalUnfixable=0;
+    const toDownload=[];
+
+    // 1. Gerar todos os arquivos corrigidos
+    for(const fr of FRENTES){
+      const fd=gResult.frentes[fr];
+      for(const ver of['V1','V2','V3']){
+        const vd=fd[ver]||{};
+        const erros=vd.erros||[];
+        if(!erros.filter(e=>e._fix).length) continue;
+
+        const file=gScan.files[prov]?.[ver]?.[fr];
+        if(!file) continue;
+
+        setStatus(`Corrigindo: ${file.name}...`);
+        const result=await fixFile(file, erros);
+        if(!result) continue;
+
+        const baseName=file.name.replace(/\.(xlsm|xlsx)$/i,'');
+        // Mantém a mesma extensão do arquivo original
+        const ext=result.isXlsm?'xlsm':'xlsx';
+        toDownload.push({name:`${baseName}_CORRIGIDO.${ext}`, buf:result.buf,
+          fixedCount:result.fixedCount, unfixableCount:result.unfixableCount, ext});
+        totalFixed+=result.fixedCount;
+        totalUnfixable+=result.unfixableCount;
+        totalFiles++;
+      }
+    }
+
+    if(totalFiles===0){
+      showToast('✅ Nenhum erro automático para corrigir!<br>Todos os erros encontrados requerem correção manual no Excel.');
+      return;
+    }
+
+    // 2. Baixar cada arquivo individualmente (evita bloqueio do Windows com .zip)
+    for(let i=0;i<toDownload.length;i++){
+      const d=toDownload[i];
+      const mime=d.ext==='xlsm'
+        ?'application/vnd.ms-excel.sheet.macroEnabled.12'
+        :'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      const blob=new Blob([d.buf],{type:mime});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download=d.name; a.click();
+      URL.revokeObjectURL(url);
+      // Pequeno intervalo para o navegador processar cada download
+      if(i<toDownload.length-1) await new Promise(r=>setTimeout(r,400));
+      setStatus(`Baixando arquivo ${i+1} de ${toDownload.length}: ${d.name}`);
+    }
+
+    let msg=`✅ ${totalFiles} arquivo(s) corrigido(s) e baixado(s)!<br><b>${totalFixed} erro(s)</b> corrigidos automaticamente.`;
+    if(totalUnfixable>0)
+      msg+=`<br><span style="color:#FFB86C">⚠️ ${totalUnfixable} erro(s) requerem correção manual no Excel.</span>`;
+    msg+=`<br><small style="color:#9999BB">Mesmo formato do original · Abra no Excel e pressione Ctrl+Alt+F9 para recalcular</small>`;
+    showToast(msg);
+    setStatus(`Correção concluída: ${totalFixed} erro(s) em ${totalFiles} arquivo(s) baixados.`);
+  }finally{
+    document.getElementById('btn-fix').disabled=false;
+    document.getElementById('prog').classList.remove('on');
+  }
+}
+
+function showToast(html){
+  const t=document.getElementById('fix-toast');
+  t.innerHTML=html; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 7000);
+  t.onclick=()=>t.classList.remove('show');
+}
+
+// ════════════════════════════════════════════════════
+//  LEITURA DA PLANILHA DE REFERÊNCIA
+// ════════════════════════════════════════════════════
+function encontrarAbaMes(wb,folderName){
+  const nome=folderName.toUpperCase().replace(/[-/]/g,'_');
+  const parts=nome.split(/[_\s]+/);
+  let mes=null, ano=null;
+  for(const p of parts){
+    if(/^20\d{2}$/.test(p)){ano=p.slice(-2);continue;}
+    if(MESES_PT[p]){mes=MESES_PT[p];continue;}
+    if(/^\d{1,2}$/.test(p)&&+p>=1&&+p<=12){mes=MESES_PT[String(+p).padStart(2,'0')];continue;}
+    for(const[abbr,full]of Object.entries(MESES_PT))
+      if(p.startsWith(abbr)||full.startsWith(p.slice(0,3))){mes=full;break;}
+  }
+  if(!mes||!ano) return null;
+  const cands=[`${mes} ${ano}`,`${mes.slice(0,3)} ${ano}`,`${mes} 20${ano}`];
+  for(const tab of wb.SheetNames){
+    const tu=tab.trim().toUpperCase();
+    if(cands.some(c=>tu===c||tu.includes(c))) return tab;
+  }
+  return null;
+}
+function detectarColunas(ws){
+  let cM=null, cT=null;
+  for(let c=1;c<=30;c++){
+    const s=String(wcv(ws,1,c)||'').toUpperCase();
+    if(s.includes('MEGALINK')&&cM===null) cM=c;
+    if(s.includes('VALORES')&&s.includes('TERCEIROS')&&cT===null) cT=c;
+  }
+  let v3p=null, v3m=null, v1p=null, v1m=null;
+  for(let c=1;c<=30;c++){
+    const v=String(wcv(ws,4,c)||'').toUpperCase().trim();
+    if(cM!==null&&c>=cM&&c<cM+5){if(v==='PROJETO'&&v3p===null)v3p=c;if(v.includes('MANU')&&v3m===null)v3m=c;}
+    if(cT!==null&&c>=cT&&c<cT+8){if(v==='PROJETO'&&v1p===null)v1p=c;if(v.includes('MANU')&&v1m===null)v1m=c;}
+  }
+  return{v3p,v3m,v1p,v1m};
+}
+function encontrarSecao(ws,label,maxR=120){
+  for(let r=1;r<=maxR;r++)for(let c=1;c<=5;c++)if(norm(wcv(ws,r,c))===label.toUpperCase())return r;
+  return null;
+}
+function lerValorPrest(ws,lI,lF,prov,cP,cM2){
+  const pn=norm(prov);
+  for(let r=lI;r<=lF;r++)for(let c=1;c<=8;c++)if(norm(wcv(ws,r,c))===pn){
+    const p=wcv(ws,r,cP), m=wcv(ws,r,cM2);
+    return{projeto:typeof p==='number'?p:0, manutencao:typeof m==='number'?m:0};
+  }
+  return null;
+}
+function encontrarSecaoV2(ws,maxR=120){
+  const res={MATRIZ:{},FILIAL:{}};
+  let v2PC=null, v2MC=null, v2VC=null, v2Ini=null;
+  for(let r=20;r<=maxR;r++){
+    const row=[];for(let c=1;c<=12;c++)row.push(norm(wcv(ws,r,c)));
+    if(row.includes('PROJETO')&&(row.includes('MANU')||row.some(v=>v.includes('MANU')))&&r>25){
+      for(let c=1;c<=12;c++){
+        const v=norm(wcv(ws,r,c));
+        if(v==='PROJETO'&&v2PC===null)v2PC=c;
+        if(v.includes('MANU')&&v2MC===null)v2MC=c;
+        if(v==='PRESTADOR')v2VC=c;
+      }
+      v2Ini=r+1; break;
+    }
+  }
+  if(!v2Ini||!v2PC) return res;
+  let sec='MATRIZ';
+  for(let r=v2Ini;r<=Math.min(v2Ini+30,maxR);r++){
+    for(let c=1;c<=8;c++){const v=norm(wcv(ws,r,c));if(v==='MATRIZ'){sec='MATRIZ';break;}if(v==='FILIAL'){sec='FILIAL';break;}}
+    let prov=null;
+    for(const cc of[9,v2VC,1,2,3].filter(x=>x!=null)){
+      const v=norm(wcv(ws,r,cc));
+      if(v&&v.length>2&&!['TOTAL','MATRIZ','FILIAL','PRESTADOR','PROJETO','MANU','MANUTENÇÃO',''].includes(v)&&!/^\d/.test(v)){prov=v;break;}
+    }
+    if(prov){
+      const pv=wcv(ws,r,v2PC), mv=v2MC?wcv(ws,r,v2MC):null;
+      if(typeof pv==='number'||typeof mv==='number')
+        res[sec][prov]={projeto:typeof pv==='number'?pv:0, manutencao:typeof mv==='number'?mv:0};
+    }
+  }
+  return res;
+}
+function lerReferencia(wb,folderName,provider,frente){
+  const nulo={aba:null,V1:null,V2:null,V3:null,erro:null};
+  const aba=encontrarAbaMes(wb,folderName);
+  if(!aba) return{...nulo,erro:`Aba não encontrada para "${folderName}"`};
+  const ws=wb.Sheets[aba], cols=detectarColunas(ws);
+  const isMat=frente.includes('MATRIZ');
+  const lMat=encontrarSecao(ws,'MATRIZ'), lFil=encontrarSecao(ws,'FILIAL');
+  if(!lMat) return{...nulo,aba,erro:'Seção MATRIZ não encontrada'};
+  let lIni,lFim;
+  if(isMat){lIni=lMat+1;lFim=lFil?lFil-1:lMat+15;}
+  else{if(!lFil)return{...nulo,aba,erro:'Seção FILIAL não encontrada'};lIni=lFil+1;lFim=lFil+15;}
+  const res={aba,V1:null,V2:null,V3:null,erro:null};
+  if(cols.v3p&&cols.v3m) res.V3=lerValorPrest(ws,lIni,lFim,provider,cols.v3p,cols.v3m);
+  if(cols.v1p&&cols.v1m) res.V1=lerValorPrest(ws,lIni,lFim,provider,cols.v1p,cols.v1m);
+  const v2d=encontrarSecaoV2(ws), prof=isMat?'MATRIZ':'FILIAL', pn=norm(provider);
+  if(v2d[prof][pn]) res.V2=v2d[prof][pn];
+  else for(const[k,v]of Object.entries(v2d[prof]))if(pn.includes(k)||k.includes(pn)){res.V2=v;break;}
+  return res;
+}
+async function compararComRef(refFile,folderName,provider,rv){
+  if(!refFile) return{};
+  const buf=await refFile.arrayBuffer();
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array',cellFormula:false});
+  const comps={};
+  for(const fr of FRENTES){
+    const fd=rv.frentes[fr];
+    let ref;
+    try{ref=lerReferencia(wb,folderName,provider,fr);}
+    catch(e){ref={aba:null,V1:null,V2:null,V3:null,erro:String(e)};}
+    comps[fr]={aba_referencia:ref.aba,referencia_ok:true,comparacoes:[]};
+    const isProj=fr.includes('PROJETO');
+    for(const ver of['V1','V2','V3']){
+      const vd=fd?.[ver]||{}, rv2=ref[ver];
+      const tga=vd.total_geral??null;
+      const c={versao:ver,total_arquivo:tga,referencia:null,match:null,diferenca:null,erro:ref.erro||null};
+      if(!ref.erro&&rv2){
+        const val=isProj?rv2.projeto:rv2.manutencao; c.referencia=val;
+        if(val!==null&&tga!==null){c.diferenca=r2(Math.abs(tga-val));c.match=c.diferenca<=0.02;if(!c.match)comps[fr].referencia_ok=false;}
+      }
+      comps[fr].comparacoes.push(c);
+    }
+  }
+  return comps;
+}
+
+// ════════════════════════════════════════════════════
+//  EVENT HANDLERS
+// ════════════════════════════════════════════════════
+document.getElementById('inp-folder').addEventListener('change',function(e){
+  const files=Array.from(e.target.files).filter(f=>/\.(xlsm|xlsx)$/i.test(f.name));
+  if(!files.length) return;
+  const first=files[0].webkitRelativePath||files[0].name;
+  document.getElementById('disp-folder').value=first.includes('/')?first.split('/')[0]:'Arquivos';
+  setStatus('Escaneando arquivos...');
+  gScan=scanFiles(files);
+  const provs=gScan.providers, sel=document.getElementById('sel-prov');
+  sel.innerHTML='<option value="">— selecione —</option>';
+  provs.forEach(p=>{const o=document.createElement('option');o.value=o.textContent=p;sel.appendChild(o);});
+  sel.disabled=provs.length===0;
+  if(provs.length===1){sel.value=provs[0];document.getElementById('btn-val').disabled=false;}
+  else document.getElementById('btn-val').disabled=true;
+  const nf=Object.values(gScan.files).reduce((s,v)=>s+Object.values(v).reduce((s2,vv)=>s2+Object.keys(vv).length,0),0);
+  document.getElementById('info-folder').textContent=`📂 ${gFolderName||'Pasta'}\n👷 ${provs.length} prestador(es) · 📄 ${nf} arquivo(s)`;
+  document.getElementById('info-warns').textContent=gScan.warnings.slice(0,5).join('\n')+(gScan.warnings.length>5?'\n...':'');
+  setStatus(`Pasta carregada: ${provs.length} prestador(es).`);
+});
+document.getElementById('inp-ref').addEventListener('change',function(e){
+  const f=e.target.files[0]; if(!f) return; gRefFile=f;
+  document.getElementById('disp-ref').value=f.name;
+  const el=document.getElementById('info-ref'); el.textContent=`✅ ${f.name}`; el.className='info ok';
+});
+function onProviderChange(){document.getElementById('btn-val').disabled=!document.getElementById('sel-prov').value;}
+
+async function runValidation(){
+  const prov=document.getElementById('sel-prov').value;
+  if(!prov||!gScan) return;
+  document.getElementById('btn-val').disabled=true;
+  document.getElementById('btn-fix').disabled=true;
+  document.getElementById('btn-exp').disabled=true;
+  document.getElementById('prog').classList.add('on');
+  setStatus(`Validando ${prov}...`);
+  try{
+    gResult=await validateProvider(prov,gScan);
+    gRefComps={};
+    if(gRefFile){setStatus('Comparando com referência...');gRefComps=await compararComRef(gRefFile,gFolderName,prov,gResult);}
+    renderResults();
+  }finally{
+    document.getElementById('btn-val').disabled=false;
+    document.getElementById('btn-exp').disabled=false;
+    document.getElementById('prog').classList.remove('on');
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  UI — RENDER
+// ════════════════════════════════════════════════════
+function showTab(i){
+  document.querySelectorAll('.tab-btn').forEach((b,j)=>b.classList.toggle('active',i===j));
+  document.querySelectorAll('.tab-pane').forEach((p,j)=>p.classList.toggle('active',i===j));
+}
+
+function renderResults(){
+  const r=gResult; if(!r) return;
+  const{ok_global:ok,total_erros:ne,provider:pv}=r;
+
+  // Contar erros corrigíveis
+  let totalFixable=0;
+  for(const fr of FRENTES) for(const ver of['V1','V2','V3'])
+    totalFixable+=(r.frentes[fr][ver]?.erros||[]).filter(e=>e._fix).length;
+
+  const refDivs=Object.values(gRefComps).reduce((s,fd)=>s+(fd.comparacoes||[]).filter(c=>c.match===false).length,0);
+  const banner=document.getElementById('banner');
+  const btitle=document.getElementById('ban-title'), bsub=document.getElementById('ban-sub');
+
+  if(ok&&refDivs===0){
+    banner.style.background='#0A2A0A'; btitle.style.color='#50FA7B';
+    btitle.textContent=`✅  ${pv}  —  APROVADO`;
+    bsub.textContent='Todas as 4 frentes passaram.'+(Object.keys(gRefComps).length?'  ·  Totais conferem com a referência.':'');
+  }else if(ok&&refDivs>0){
+    banner.style.background='#2A1A00'; btitle.style.color='#FFB86C';
+    btitle.textContent=`⚠️  ${pv}  —  APROVADO COM DIVERGÊNCIAS`;
+    bsub.textContent=`Fórmulas OK, mas ${refDivs} total(is) divergem da referência.`;
+  }else{
+    banner.style.background='#2A0A0A'; btitle.style.color='#FF5555';
+    btitle.textContent=`❌  ${pv}  —  REPROVADO`;
+    bsub.textContent=`${ne} erro(s) encontrado(s).`+(refDivs>0?`  ·  ${refDivs} divergência(s) de referência.`:'');
+  }
+
+  // Botão de correção
+  const btnFix=document.getElementById('btn-fix');
+  const infoFix=document.getElementById('info-fix');
+  if(totalFixable>0){
+    btnFix.disabled=false;
+    btnFix.textContent=`🔧  Corrigir ${totalFixable} erro(s) e Baixar`;
+    infoFix.textContent=`${totalFixable} erro(s) corrigíveis automaticamente.\nBaixa cada arquivo .xlsx separado (sem ZIP)`;
+    infoFix.className='info';
+  }else if(!ok){
+    btnFix.disabled=true;
+    infoFix.textContent='Os erros encontrados requerem\ncorreção manual no Excel.';
+    infoFix.className='info warn';
+  }else{
+    btnFix.disabled=true;
+    infoFix.textContent='';
+  }
+
+  // Tabs
+  const tbns=document.querySelectorAll('.tab-btn');
+  FRENTES.forEach((fr,i)=>{
+    const fd=r.frentes[fr], icon=fd.ok?'✅':'❌';
+    const sh=fr.replace('FILIAL_','F·').replace('MATRIZ_','M·').replace('MANUTENÇÃO','Manu').replace('PROJETO','Proj');
+    tbns[i].textContent=`${icon} ${sh}`;
+    renderFrenteTab(document.getElementById(`tp-${i}`),fr,fd);
+  });
+
+  // Quick summary
+  const qs=document.getElementById('quick-sum');
+  qs.innerHTML='<div style="font-size:11px;font-weight:700;color:#7C83FD;margin-bottom:4px">RESUMO</div>';
+  FRENTES.forEach(fr=>{
+    const fd=r.frentes[fr], col=fd.ok?'#50FA7B':'#FF5555', ico=fd.ok?'✅':'❌';
+    const sh=fr.replace('FILIAL_','Filial·').replace('MATRIZ_','Matriz·');
+    qs.innerHTML+=`<div class="qs-row" style="color:${col}">${ico} ${sh}${fd.ok?'':` (${fd.erros_total})`}</div>`;
+  });
+  setStatus(`Validação: ${pv} — ${ok?'APROVADO ✅':`REPROVADO ❌ (${ne} erros)`}${totalFixable>0?` · ${totalFixable} corrigíveis automaticamente`:''}`);
+}
+
+function renderFrenteTab(cont,frente,fd){
+  cont.innerHTML='';
+  const col=fd.ok?'#50FA7B':'#FF5555', dot=fd.ok?'✅':'❌';
+  const stxt=fd.ok?'APROVADO':`REPROVADO — ${fd.erros_total} erro(s)`;
+  const hdr=document.createElement('div'); hdr.className='fr-hdr';
+  hdr.innerHTML=`<span class="fr-title" style="color:${col}">${dot}  ${FRENTE_LABELS[frente]}</span><span class="fr-stat" style="color:${col}">${stxt}</span>`;
+  cont.appendChild(hdr);
+
+  const refFd=gRefComps[frente]||{}, refByV={};
+  (refFd.comparacoes||[]).forEach(c=>{refByV[c.versao]=c;});
+
+  const crow=document.createElement('div'); crow.className='cards-row';
+  ['V1','V2','V3'].forEach(ver=>{
+    const vd=fd[ver]||{}, rc=refByV[ver]||{};
+    const vok=vd.ok!==false, ne2=(vd.erros||[]).length;
+    const tg=vd.total_geral??0, rm=rc.match;
+    const fixable=(vd.erros||[]).filter(e=>e._fix).length;
+    let cls='vcard';
+    if(rm===false)cls+=' warnref'; else if(vok)cls+=' ok'; else cls+=' fail';
+
+    let refHtml='';
+    if(rc.referencia!=null){
+      if(rm===true)  refHtml=`<div class="vc-ref" style="color:#50FA7B">Ref: ${brl(rc.referencia)} ✅</div>`;
+      else if(rm===false) refHtml=`<div class="vc-ref" style="color:#FFB86C">Ref: ${brl(rc.referencia)} ⚠️ Δ ${brl(rc.diferenca)}</div>`;
+    }else if(rc.erro) refHtml=`<div class="vc-ref" style="font-size:10px;color:#9999BB">${rc.erro.slice(0,50)}</div>`;
+
+    const fixHtml=fixable>0
+      ?`<div style="font-size:10px;color:#FFB86C;margin-top:4px">🔧 ${fixable} erro(s) corrigíveis</div>`:'';
+
+    const card=document.createElement('div'); card.className=cls;
+    card.innerHTML=`<div class="vc-lbl">${VER_LABELS[ver]}</div>`+
+      `<div class="vc-stat" style="color:${vok?'#50FA7B':'#FF5555'}">${vok?'✅ OK':`❌ ${ne2} erro(s)`}</div>`+
+      (tg?`<div class="vc-tot">Total Geral: ${brl(tg)}</div>`:'')+refHtml+fixHtml+
+      (vd.filename?`<div class="vc-file">${vd.filename}</div>`:'');
+    crow.appendChild(card);
+  });
+  cont.appendChild(crow);
+
+  // Tabela de erros
+  if(fd.erros_total>0){
+    const el=document.createElement('div'); el.className='err-lbl';
+    el.textContent='  DETALHES DOS ERROS  (🔧 = corrigível automaticamente)';
+    cont.appendChild(el);
+
+    const allErrs=[];
+    ['V1','V2','V3'].forEach(ver=>(fd[ver]?.erros||[]).forEach(e=>allErrs.push({...e,_v:ver})));
+
+    const tw=document.createElement('div'); tw.className='tbl-wrap';
+    const tbl=document.createElement('table');
+    tbl.innerHTML='<thead><tr><th>Versão</th><th>Linha</th><th>Célula</th><th>Tipo de Erro</th><th>Encontrado</th><th>Esperado</th></tr></thead>';
+    const tbody=document.createElement('tbody');
+    const fixBox=document.createElement('div'); fixBox.className='fix-box';
+    fixBox.textContent='Selecione um erro acima para ver como corrigir.';
+
+    allErrs.forEach(e=>{
+      const tr=document.createElement('tr');
+      const tl=e.tipo.toLowerCase();
+      tr.className=tl.includes('fórmula')||tl.includes('excel')?'rerro':
+        (tl.includes('fixo')||tl.includes('hard')||tl.includes('errado'))?'rhard':'rwarn';
+      if(e._fix) tr.classList.add('fixable');
+      tr.innerHTML=`<td>${VER_LABELS[e._v]}</td><td>${e.linha}</td><td>${e.celula}</td>`+
+        `<td>${e.tipo}</td><td>${e.encontrado}</td><td>${e.esperado}</td>`;
+      tr.addEventListener('click',()=>{
+        tbody.querySelectorAll('tr').forEach(r=>r.classList.remove('sel'));
+        tr.classList.add('sel');
+        fixBox.textContent=e.como_corrigir||'Sem detalhes.';
+        fixBox.className='fix-box has';
+      });
+      tbody.appendChild(tr);
+    });
+    tbl.appendChild(tbody); tw.appendChild(tbl); cont.appendChild(tw);
+    const fl=document.createElement('div'); fl.className='fix-lbl'; fl.textContent='  🔧  COMO CORRIGIR';
+    cont.appendChild(fl); cont.appendChild(fixBox);
+  }else{
+    const ok2=document.createElement('div'); ok2.className='all-ok';
+    ok2.textContent='✅  Nenhum erro nesta frente.';
+    cont.appendChild(ok2);
+  }
+}
+
+// ════════════════════════════════════════════════════
+//  EXPORT RELATÓRIO
+// ════════════════════════════════════════════════════
+function exportReport(){
+  if(!gResult) return;
+  const r=gResult, wb2=XLSX.utils.book_new(), ws={};
+  ws['A1']={v:`VALIDAÇÃO — ${r.provider}  —  ${r.ok_global?'✅ APROVADO':'❌ REPROVADO'}`,t:'s'};
+  ws['A2']={v:`Pasta: ${r.folder}  ·  Gerado em: ${r.timestamp}`,t:'s'};
+  ['FRENTE','VERSÃO','LINHA','CÉLULA','TIPO DE ERRO','ENCONTRADO','ESPERADO','COMO CORRIGIR','CORRIGÍVEL AUTO','TOTAL GERAL','REFERÊNCIA','DIFERENÇA','CONF. REF.']
+    .forEach((h,i)=>{ws[XLSX.utils.encode_cell({r:3,c:i})]={v:h,t:'s'};});
+  let row=4;
+  FRENTES.forEach(fr=>{
+    const fd=r.frentes[fr], rfd=gRefComps[fr]||{}, rbv={};
+    (rfd.comparacoes||[]).forEach(c=>{rbv[c.versao]=c;});
+    ['V1','V2','V3'].forEach(ver=>{
+      const vd=fd[ver]||{}, rc=rbv[ver]||{};
+      const tgs=vd.total_geral??'', rs=rc.referencia??rc.erro??'', ds=rc.diferenca??'';
+      const cs=rc.match===true?'✅':rc.match===false?'❌':'';
+      const errs=vd.erros||[];
+      if(!errs.length){
+        [FRENTE_LABELS[fr],VER_LABELS[ver],'','','✅ Aprovado','','','','',tgs,rs,ds,cs].forEach((v,i)=>{
+          ws[XLSX.utils.encode_cell({r:row,c:i})]={v:v??'',t:typeof v==='number'?'n':'s'};});
+        row++;
+      }else{
+        errs.forEach(e=>{
+          const auto=e._fix?'✅ Sim':'❌ Manual';
+          [FRENTE_LABELS[fr],VER_LABELS[ver],e.linha,e.celula,e.tipo,e.encontrado,e.esperado,e.como_corrigir,auto,tgs,rs,ds,cs].forEach((v,i)=>{
+            ws[XLSX.utils.encode_cell({r:row,c:i})]={v:v??'',t:typeof v==='number'?'n':'s'};});
+          row++;
+        });
+      }
+    });
+  });
+  ws['!ref']=XLSX.utils.encode_range({s:{r:0,c:0},e:{r:row-1,c:12}});
+  ws['!cols']=[30,14,8,8,28,18,22,50,12,14,14,12,10].map(w=>({wch:w}));
+  XLSX.utils.book_append_sheet(wb2,ws,'RELATÓRIO');
+  XLSX.writeFile(wb2,`RELATORIO_${r.provider}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+</script>
+</body>
+</html>

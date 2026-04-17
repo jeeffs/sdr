@@ -1,0 +1,102 @@
+╔══════════════════════════════════════════════════════════════╗
+║   VALIDADOR DE PLANILHAS — PRESTADORES v3.0                 ║
+╚══════════════════════════════════════════════════════════════╝
+
+COMO USAR
+─────────
+1. Clique duas vezes em: INICIAR_VALIDADOR.bat
+2. Selecione a pasta do mês (ex: 2026 > FEV)
+3. Clique em "Carregar Pasta"
+4. Escolha o prestador no menu suspenso
+5. (Opcional) Selecione a Planilha de Referência (IMPOSTO_XXXX.xlsx)
+6. Clique em "▶ VALIDAR"
+7. Veja o resultado por frente (4 abas)
+8. Clique em qualquer erro para ver COMO CORRIGIR
+9. Use "Exportar Relatório" para salvar em Excel
+
+
+PLANILHA DE REFERÊNCIA (NOVIDADE v3.0)
+────────────────────────────────────────
+A planilha de referência é o arquivo IMPOSTO com os totais
+aprovados por prestador (V1, V2, V3).
+
+Ao selecioná-la, o validador compara automaticamente:
+  • TOTAL GERAL de cada arquivo  vs  valor da referência
+  • Exibe ✅ (confere) ou ⚠️ Δ R$xx,xx (divergência)
+  • Cards com borda laranja indicam divergência de referência
+  • O banner mostra "APROVADO COM DIVERGÊNCIAS" quando as
+    fórmulas estão corretas mas o total difere da referência
+
+A aba na planilha é detectada automaticamente pelo nome
+da pasta do mês (ex: pasta "FEV_2026" → aba "FEVEREIRO 26").
+
+
+ESTRUTURA DE PASTA ESPERADA
+────────────────────────────
+[Ano]
+  └── [Mês]
+       ├── PRESTADOR_FILIAL_MANUTENÇÃO.xlsm   ← V1 (solto)
+       ├── PRESTADOR_FILIAL_PROJETO.xlsm
+       ├── PRESTADOR_MATRIZ_MANUTENÇÃO.xlsm
+       ├── PRESTADOR_MATRIZ_PROJETO.xlsm
+       ├── V2\
+       │    ├── PRESTADOR_FILIAL_MANUTENÇÃO.xlsm
+       │    ├── PRESTADOR_FILIAL_PROJETO.xlsm
+       │    ├── PRESTADOR_MATRIZ_MANUTENÇÃO.xlsm
+       │    └── PRESTADOR_MATRIZ_PROJETO.xlsm
+       └── V3\
+            └── Projeto\
+                 ├── PRESTADOR_FILIAL_MANUTENÇÃO.xlsm
+                 ├── PRESTADOR_FILIAL_PROJETO.xlsm
+                 ├── PRESTADOR_MATRIZ_MANUTENÇÃO.xlsm
+                 └── PRESTADOR_MATRIZ_PROJETO.xlsm
+            └── Geral\  ← IGNORADO AUTOMATICAMENTE
+
+
+O QUE É VALIDADO
+─────────────────
+✅ V1 = Tabela Prestador  (menor preço)
+✅ V2 = Tabela Supervisor
+✅ V3 = Tabela Admin      (maior preço)
+
+Para cada arquivo (frente × versão):
+  • Erros de fórmula Excel (#REF!, #DIV/0!, etc.)
+  • Valores hardcoded (número fixo sem VLOOKUP)
+  • Valor ≠ QTD × Preço da tabela de_para
+  • Total ≠ Soma dos valores
+  • Serviço não encontrado na tabela de_para
+  • Total Geral ≠ valor na planilha de referência (IMPOSTO)
+
+
+ARQUIVO DE REFERÊNCIA — ESTRUTURA ESPERADA
+───────────────────────────────────────────
+  • Arquivo Excel com abas nomeadas por mês+ano
+    (ex: "JANEIRO 25", "FEVEREIRO 26", "MARÇO 25")
+  • Cada aba contém:
+    - Linha 1: cabeçalhos VALORES MEGALINK (=V3) e VALORES TERCEIROS (=V1)
+    - Seção MATRIZ: prestadores com PROJETO e MANUTENÇÃO por versão
+    - Seção FILIAL: idem para filial
+    - Seção V2: abaixo das seções principais
+
+
+REQUISITOS
+──────────
+• Python 3.8 ou superior (https://python.org)
+• Biblioteca openpyxl (instalada automaticamente pelo .bat)
+
+
+ARQUIVOS INCLUÍDOS
+───────────────────
+  validador_app.py  — aplicativo principal
+  referencia.py     — módulo de leitura da planilha de referência
+  INICIAR_VALIDADOR.bat — iniciador Windows
+  LEIA-ME.txt       — este arquivo
+
+
+SUPORTE
+────────
+Em caso de dúvidas, verifique:
+  • Se o Python está instalado e no PATH
+  • Se os arquivos seguem o padrão de nome
+  • Se a estrutura de pastas está correta
+  • Se a planilha de referência tem abas com nome mês + 2 dígitos do ano
