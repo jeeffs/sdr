@@ -4,7 +4,7 @@
 # Uso: .\BACKUP_E_DEPLOY.ps1
 # ============================================================
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $DATA = Get-Date -Format "yyyy-MM-dd_HH-mm"
 $PASTA_BACKUP = "BACKUP\deploy-$DATA"
 
@@ -19,7 +19,7 @@ $branch = git rev-parse --abbrev-ref HEAD
 if ($branch -ne "main") {
     Write-Host "[ERRO] Você está no branch '$branch'." -ForegroundColor Red
     Write-Host "       Só é permitido fazer deploy a partir do branch 'main'." -ForegroundColor Red
-    Write-Host "       Rode: git checkout main && git merge develop" -ForegroundColor Yellow
+    Write-Host "       Rode: git checkout main; git merge develop" -ForegroundColor Yellow
     exit 1
 }
 
@@ -38,12 +38,12 @@ Write-Host "    Backup salvo em: $PASTA_BACKUP" -ForegroundColor Green
 
 # --- 3. Backup do Firebase Realtime Database ---
 Write-Host "[3/4] Exportando banco Firebase..." -ForegroundColor Yellow
-try {
-    firebase database:get / --output "$PASTA_BACKUP\firebase-db-backup.json" --project solucaoderua
+$backupResult = firebase database:get / --output "$PASTA_BACKUP\firebase-db-backup.json" --project solucaoderua 2>&1
+if ($LASTEXITCODE -eq 0) {
     Write-Host "    Banco exportado: firebase-db-backup.json ✓" -ForegroundColor Green
-} catch {
+} else {
     Write-Host "    [AVISO] Backup do banco falhou — continuando mesmo assim." -ForegroundColor Yellow
-    Write-Host "    Motivo: $_" -ForegroundColor DarkYellow
+    Write-Host "    Motivo: $backupResult" -ForegroundColor DarkYellow
 }
 
 # --- 4. Deploy no Firebase Hosting ---
