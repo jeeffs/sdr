@@ -1436,6 +1436,19 @@ window.sdrClienteSave = async function(editId) {
   }
 };
 
+window.sdrClienteDelete = async function(id) {
+  const c = sdrClientesCache[id];
+  const nome = c ? c.name : id;
+  if (!confirm('Excluir cliente "' + nome + '"?\nEsta ação não pode ser desfeita.')) return;
+  try {
+    await sdrRef('clients/' + id).remove();
+    delete sdrClientesCache[id];
+    toast('Cliente excluído', 'success');
+    sdrCloseSidePanel();
+    sdrClientesRender();
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+};
+
 // ════════════════════════════════════════════════════
 // PÁGINA OLTs
 // ════════════════════════════════════════════════════
