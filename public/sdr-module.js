@@ -61,7 +61,7 @@
   }
 
   // Injetar paginas SDR no #main
-  var _sdrPageList = ['dash-rede','clientes','olts','onus','alertas','tickets'];
+  var _sdrPageList = ['dash-rede','clientes','olts','onus','alertas','tickets','mk-config'];
   _sdrPageList.forEach(function(pgId) {
     if (!document.getElementById('page-' + pgId)) {
       var d = document.createElement('div');
@@ -81,7 +81,8 @@
       {id:'olts',      icon:'fa-server',        label:'OLTs'},
       {id:'onus',      icon:'fa-router',        label:'ONUs'},
       {id:'alertas',   icon:'fa-bell',          label:'Alertas'},
-      {id:'tickets',   icon:'fa-ticket-alt',    label:'Chamados'}
+      {id:'tickets',   icon:'fa-ticket-alt',    label:'Chamados'},
+      {id:'mk-config', icon:'fa-plug',          label:'Integração MK'}
     ];
     _sdrMenuItems.forEach(function(item) {
       if (!PAGES.master.find(function(p){ return p.id === item.id; })) {
@@ -104,6 +105,7 @@
     PAGE_TITLES['onus']      = 'ONUs \u2014 Terminais de Cliente';
     PAGE_TITLES['alertas']   = 'Alertas de Rede';
     PAGE_TITLES['tickets']   = 'Chamados de Suporte';
+    PAGE_TITLES['mk-config'] = 'Integração MK Solutions';
   }
   if (typeof showPage === 'function' && !showPage._sdrPatched) {
     var _origShowPage = showPage;
@@ -120,6 +122,7 @@
       if (name === 'onus'      && typeof sdrOnusRender     === 'function') sdrOnusRender();
       if (name === 'alertas'   && typeof sdrAlertasRender  === 'function') sdrAlertasRender();
       if (name === 'tickets'   && typeof sdrTicketsRender  === 'function') sdrTicketsRender();
+      if (name === 'mk-config' && typeof sdrMkConfigRender === 'function') sdrMkConfigRender();
     };
     window.showPage._sdrPatched = true;
   }
@@ -4017,10 +4020,324 @@ window.sdrClientesFiltrar = function(q) {
     '#page-olts{display:none!important}#page-olts.active{display:block!important}',
     '#page-onus{display:none!important}#page-onus.active{display:block!important}',
     '#page-alertas{display:none!important}#page-alertas.active{display:block!important}',
-    '#page-tickets{display:none!important}#page-tickets.active{display:block!important}'
+    '#page-tickets{display:none!important}#page-tickets.active{display:block!important}',
+    '#page-mk-config{display:none!important}#page-mk-config.active{display:block!important}'
   ].join('');
   document.head.appendChild(st);
 })();
+
+// ============================================================
+// MK SOLUTIONS — Página de Configuração e Integração
+// ============================================================
+
+window._sdrHtml_mk_config = function() {
+  return '<div style="max-width:900px;margin:0 auto">'
+    // Cabeçalho
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:24px;flex-wrap:wrap">'
+    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-plug" style="color:var(--primary)"></i> Integração MK Solutions</h2>'
+    +'<span id="mk-status-badge" style="display:none;padding:4px 12px;border-radius:20px;font-size:.75rem;font-weight:600"></span>'
+    +'</div>'
+
+    // Card de Configuração
+    +'<div class="infra-card" style="margin-bottom:20px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">'
+    +'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center">'
+    +'<i class="fas fa-server" style="color:#fff;font-size:.9rem"></i>'
+    +'</div>'
+    +'<div><div style="font-weight:600;color:#1e293b;font-size:.9rem">Servidor MK</div>'
+    +'<div style="font-size:.75rem;color:#64748b">Configurações de conexão com a API</div></div>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
+    +'<div>'
+    +'<label style="font-size:.78rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">Servidor (IP:PORTA)</label>'
+    +'<input id="mk-server-url" type="text" placeholder="Ex: 192.168.1.10:8080" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;box-sizing:border-box" />'
+    +'</div>'
+    +'<div>'
+    +'<label style="font-size:.78rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">Token do Usuário</label>'
+    +'<input id="mk-token" type="text" placeholder="Token cadastrado no MK" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;box-sizing:border-box" />'
+    +'</div>'
+    +'<div>'
+    +'<label style="font-size:.78rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">Contra-senha do Perfil</label>'
+    +'<input id="mk-password" type="password" placeholder="Contra-senha do Webservice" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;box-sizing:border-box" />'
+    +'</div>'
+    +'<div>'
+    +'<label style="font-size:.78rem;font-weight:600;color:#374151;display:block;margin-bottom:4px">Código de Serviço</label>'
+    +'<input id="mk-cd-servico" type="text" placeholder="Ex: 9999 (todos)" value="9999" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;box-sizing:border-box" />'
+    +'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">'
+    +'<button class="btn-map" onclick="sdrMkSaveConfig()" style="padding:8px 20px;font-size:.82rem;background:var(--primary);color:#fff"><i class="fas fa-save"></i> Salvar Configuração</button>'
+    +'<button class="btn-map" onclick="sdrMkTestarConexao()" style="padding:8px 20px;font-size:.82rem"><i class="fas fa-wifi"></i> Testar Conexão</button>'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:.82rem;color:#374151;cursor:pointer;margin-left:auto">'
+    +'<input id="mk-enabled" type="checkbox" style="width:16px;height:16px" /> Integração ativa'
+    +'</label>'
+    +'</div>'
+    +'<div id="mk-test-result" style="margin-top:10px;font-size:.82rem"></div>'
+    +'</div>'
+
+    // Card Modo Demo
+    +'<div class="infra-card" style="margin-bottom:20px;border-left:3px solid #f59e0b">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
+    +'<i class="fas fa-flask" style="color:#f59e0b;font-size:1.1rem"></i>'
+    +'<div style="font-weight:600;color:#1e293b;font-size:.9rem">Modo Demo / Simulação</div>'
+    +'</div>'
+    +'<p style="margin:0 0 12px;font-size:.82rem;color:#64748b">Enquanto o IP do servidor MK não está disponível, use dados simulados para testar as telas.</p>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+    +'<button class="btn-map" onclick="sdrMkDemoOlts()" style="padding:7px 16px;font-size:.82rem"><i class="fas fa-server"></i> Simular OLTs</button>'
+    +'<button class="btn-map" onclick="sdrMkDemoOnus()" style="padding:7px 16px;font-size:.82rem"><i class="fas fa-router"></i> Simular ONUs</button>'
+    +'<button class="btn-map" onclick="sdrMkDemoClientes()" style="padding:7px 16px;font-size:.82rem"><i class="fas fa-users"></i> Simular Clientes</button>'
+    +'</div>'
+    +'</div>'
+
+    // Card Status Sync
+    +'<div class="infra-card" style="margin-bottom:20px">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">'
+    +'<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#10b981,#059669);display:flex;align-items:center;justify-content:center">'
+    +'<i class="fas fa-sync-alt" style="color:#fff;font-size:.9rem"></i>'
+    +'</div>'
+    +'<div><div style="font-weight:600;color:#1e293b;font-size:.9rem">Sincronização de Dados</div>'
+    +'<div style="font-size:.75rem;color:#64748b">Última sync: <span id="mk-last-sync">—</span></div></div>'
+    +'<button class="btn-map" onclick="sdrMkSyncAll()" style="margin-left:auto;padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Sincronizar Agora</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px" id="mk-sync-stats">'
+    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#eff6ff"><i class="fas fa-server" style="color:#3b82f6"></i></div>'
+    +'<div class="sdr-kpi-val" id="mk-count-olts">—</div><div class="sdr-kpi-lbl">OLTs</div></div>'
+    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#f0fdf4"><i class="fas fa-network-wired" style="color:#10b981"></i></div>'
+    +'<div class="sdr-kpi-val" id="mk-count-pops">—</div><div class="sdr-kpi-lbl">POPs</div></div>'
+    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#fef3c7"><i class="fas fa-box" style="color:#f59e0b"></i></div>'
+    +'<div class="sdr-kpi-val" id="mk-count-ctos">—</div><div class="sdr-kpi-lbl">CTOs/NAPs</div></div>'
+    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#fdf2f8"><i class="fas fa-users" style="color:#a855f7"></i></div>'
+    +'<div class="sdr-kpi-val" id="mk-count-clientes">—</div><div class="sdr-kpi-lbl">Clientes</div></div>'
+    +'</div>'
+    +'</div>'
+
+    // Log de Atividade
+    +'<div class="infra-card">'
+    +'<div style="font-weight:600;color:#1e293b;font-size:.9rem;margin-bottom:12px"><i class="fas fa-list-alt" style="color:var(--primary)"></i> Log de Atividade</div>'
+    +'<div id="mk-log" style="max-height:220px;overflow-y:auto;font-size:.78rem;font-family:monospace;color:#374151;background:#f8fafc;border-radius:8px;padding:10px;line-height:1.7">'
+    +'<span style="color:#94a3b8">Aguardando atividade...</span>'
+    +'</div>'
+    +'</div>'
+    +'</div>';
+};
+
+// ---- MK: Render (carrega config salva do Firebase) ----
+window.sdrMkConfigRender = function() {
+  sdrRef('mk_config').once('value').then(function(snap) {
+    var cfg = snap.val() || {};
+    var su = document.getElementById('mk-server-url');
+    var tk = document.getElementById('mk-token');
+    var pw = document.getElementById('mk-password');
+    var cs = document.getElementById('mk-cd-servico');
+    var en = document.getElementById('mk-enabled');
+    if (su) su.value = cfg.server_url || '';
+    if (tk) tk.value = cfg.token || '';
+    if (pw) pw.value = cfg.password || '';
+    if (cs) cs.value = cfg.cd_servico || '9999';
+    if (en) en.checked = !!cfg.enabled;
+    _sdrMkUpdateBadge(cfg.enabled);
+    _sdrMkLog('Config carregada do Firebase.');
+    // Atualizar contadores se existirem dados
+    _sdrMkRefreshCounts();
+  }).catch(function(e) {
+    _sdrMkLog('Erro ao carregar config: ' + e.message, 'error');
+  });
+};
+
+// ---- MK: Salvar Configuração ----
+window.sdrMkSaveConfig = function() {
+  var cfg = {
+    server_url: (document.getElementById('mk-server-url')||{}).value || '',
+    token:      (document.getElementById('mk-token')||{}).value || '',
+    password:   (document.getElementById('mk-password')||{}).value || '',
+    cd_servico: (document.getElementById('mk-cd-servico')||{}).value || '9999',
+    enabled:    !!(document.getElementById('mk-enabled')||{}).checked,
+    updated_at: new Date().toISOString()
+  };
+  sdrRef('mk_config').set(cfg).then(function() {
+    _sdrMkLog('✅ Configuração salva com sucesso.', 'ok');
+    _sdrMkUpdateBadge(cfg.enabled);
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({icon:'success', title:'Salvo!', text:'Configuração MK atualizada.', timer:1800, showConfirmButton:false});
+    }
+  }).catch(function(e) {
+    _sdrMkLog('❌ Erro ao salvar: ' + e.message, 'error');
+  });
+};
+
+// ---- MK: Testar Conexão ----
+window.sdrMkTestarConexao = function() {
+  var url   = (document.getElementById('mk-server-url')||{}).value || '';
+  var token = (document.getElementById('mk-token')||{}).value || '';
+  var pass  = (document.getElementById('mk-password')||{}).value || '';
+  var cdSvc = (document.getElementById('mk-cd-servico')||{}).value || '9999';
+  var res   = document.getElementById('mk-test-result');
+
+  if (!url || !token || !pass) {
+    if (res) res.innerHTML = '<span style="color:#ef4444">⚠️ Preencha servidor, token e contra-senha antes de testar.</span>';
+    return;
+  }
+  if (res) res.innerHTML = '<span style="color:#3b82f6"><i class="fas fa-spinner fa-spin"></i> Testando conexão...</span>';
+  _sdrMkLog('Testando conexão com ' + url + ' ...');
+
+  var authUrl = 'http://' + url + '/mk/WSAutenticacao.rule?sys=MK0'
+    + '&token=' + encodeURIComponent(token)
+    + '&password=' + encodeURIComponent(pass)
+    + '&cd_servico=' + encodeURIComponent(cdSvc);
+
+  fetch(authUrl, {mode:'cors', signal: AbortSignal.timeout(8000)})
+    .then(function(r) { return r.text(); })
+    .then(function(txt) {
+      if (txt && txt.toLowerCase().includes('token')) {
+        if (res) res.innerHTML = '<span style="color:#10b981">✅ Conexão bem-sucedida! Token retornado.</span>';
+        _sdrMkLog('✅ Autenticação OK. Resposta: ' + txt.substring(0,120), 'ok');
+        // Salvar token de sessão
+        window._sdrMkSessionToken = txt.replace(/\s/g,'');
+      } else {
+        if (res) res.innerHTML = '<span style="color:#f59e0b">⚠️ Resposta inesperada do servidor. Verifique as credenciais.</span>';
+        _sdrMkLog('⚠️ Resposta: ' + txt.substring(0,200), 'warn');
+      }
+    })
+    .catch(function(e) {
+      var msg = e.name === 'TimeoutError' ? 'Timeout (servidor não respondeu em 8s)' : e.message;
+      if (res) res.innerHTML = '<span style="color:#ef4444">❌ Erro: ' + msg + '</span>';
+      _sdrMkLog('❌ Falha na conexão: ' + msg, 'error');
+    });
+};
+
+// ---- MK: Sincronizar Tudo ----
+window.sdrMkSyncAll = function() {
+  _sdrMkLog('⏳ Iniciando sincronização completa...');
+  var cfg = {};
+  sdrRef('mk_config').once('value').then(function(snap) {
+    cfg = snap.val() || {};
+    if (!cfg.enabled || !cfg.server_url) {
+      _sdrMkLog('⚠️ Integração desativada ou servidor não configurado. Use Modo Demo para simulação.', 'warn');
+      return;
+    }
+    // Futuro: chamar WSMKConsultaLocalManutencao local=4 (OLTs), local=1 (POPs), local=6 (CTOs)
+    _sdrMkLog('🔄 Sincronização via API real será ativada quando o IP do servidor estiver disponível.', 'warn');
+    _sdrMkLog('💡 Por enquanto, use os botões "Simular" para testar as telas.', 'ok');
+  });
+};
+
+// ---- MK: Demo — OLTs ----
+window.sdrMkDemoOlts = function() {
+  var demoOlts = [
+    {id:'olt-01', nome:'OLT-MATRIZ-01', modelo:'ZTE C320', ip:'10.0.0.1', pons:8, onus_ativas:32, onus_total:64, status:'online'},
+    {id:'olt-02', nome:'OLT-FILIAL-01', modelo:'Huawei MA5608T', ip:'10.0.0.2', pons:4, onus_ativas:18, onus_total:32, status:'online'},
+    {id:'olt-03', nome:'OLT-FILIAL-02', modelo:'ZTE C300', ip:'10.0.0.3', pons:2, onus_ativas:5, onus_total:16, status:'alerta'}
+  ];
+  var saves = demoOlts.map(function(o) {
+    return sdrRef('olts/' + o.id).set(Object.assign({}, o, {sync_at: new Date().toISOString(), source:'demo'}));
+  });
+  Promise.all(saves).then(function() {
+    _sdrMkLog('✅ ' + demoOlts.length + ' OLTs demo inseridas no Firebase.', 'ok');
+    document.getElementById('mk-count-olts').textContent = demoOlts.length;
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'Demo OLTs', text:demoOlts.length + ' OLTs simuladas salvas. Acesse a aba OLTs para ver.', timer:2500, showConfirmButton:false});
+  }).catch(function(e) { _sdrMkLog('❌ Erro ao salvar OLTs demo: ' + e.message, 'error'); });
+};
+
+// ---- MK: Demo — ONUs ----
+window.sdrMkDemoOnus = function() {
+  var demoOnus = [];
+  var modelos = ['ZTE F660','Huawei HG8245H','Intelbras 110A','ZTE F620','Multilaser RE160'];
+  for (var i = 1; i <= 20; i++) {
+    var oltIdx = (i % 3) === 0 ? 'olt-03' : (i % 2 === 0 ? 'olt-02' : 'olt-01');
+    demoOnus.push({
+      id: 'onu-' + String(i).padStart(3,'0'),
+      serial: 'ZTEG' + String(Math.floor(Math.random()*99999999)).padStart(8,'0'),
+      modelo: modelos[i % modelos.length],
+      olt_id: oltIdx,
+      pon: (i % 4) + 1,
+      status: i % 7 === 0 ? 'offline' : 'online',
+      signal_rx: -(Math.floor(Math.random()*15) + 10),
+      client_id: 'cli-' + String(i).padStart(3,'0'),
+      sync_at: new Date().toISOString(),
+      source: 'demo'
+    });
+  }
+  var saves = demoOnus.map(function(o) { return sdrRef('onus/' + o.id).set(o); });
+  Promise.all(saves).then(function() {
+    _sdrMkLog('✅ ' + demoOnus.length + ' ONUs demo inseridas no Firebase.', 'ok');
+    document.getElementById('mk-count-olts'); // triggers refresh
+    _sdrMkRefreshCounts();
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'Demo ONUs', text:demoOnus.length + ' ONUs simuladas salvas. Acesse a aba ONUs para ver.', timer:2500, showConfirmButton:false});
+  }).catch(function(e) { _sdrMkLog('❌ Erro ao salvar ONUs demo: ' + e.message, 'error'); });
+};
+
+// ---- MK: Demo — Clientes ----
+window.sdrMkDemoClientes = function() {
+  var nomes = ['Ana Silva','Bruno Souza','Carlos Lima','Diana Costa','Eduardo Pereira',
+               'Fernanda Oliveira','Gabriel Santos','Helena Rocha','Igor Martins','Julia Ferreira'];
+  var demo = nomes.map(function(n, i) {
+    return {
+      id: 'cli-' + String(i+1).padStart(3,'0'),
+      nome: n,
+      documento: '000.' + String(i*111+100).padStart(3,'0') + '.00' + i + '-00',
+      contrato: 'CON-202' + i,
+      plano: ['50MB','100MB','200MB','500MB'][i%4],
+      status: i % 5 === 0 ? 'inadimplente' : 'ativo',
+      onu_id: 'onu-' + String(i+1).padStart(3,'0'),
+      sync_at: new Date().toISOString(),
+      source: 'demo'
+    };
+  });
+  var saves = demo.map(function(c) { return sdrRef('clients/' + c.id).set(c); });
+  Promise.all(saves).then(function() {
+    _sdrMkLog('✅ ' + demo.length + ' clientes demo inseridos no Firebase.', 'ok');
+    _sdrMkRefreshCounts();
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'Demo Clientes', text:demo.length + ' clientes simulados salvos. Acesse a aba Clientes.', timer:2500, showConfirmButton:false});
+  }).catch(function(e) { _sdrMkLog('❌ Erro ao salvar clientes demo: ' + e.message, 'error'); });
+};
+
+// ---- Helpers internos MK ----
+function _sdrMkLog(msg, type) {
+  var el = document.getElementById('mk-log');
+  if (!el) return;
+  var color = type === 'error' ? '#ef4444' : type === 'warn' ? '#f59e0b' : type === 'ok' ? '#10b981' : '#475569';
+  var ts = new Date().toLocaleTimeString('pt-BR');
+  var line = '<div><span style="color:#94a3b8">[' + ts + ']</span> <span style="color:' + color + '">' + msg + '</span></div>';
+  el.innerHTML = el.innerHTML.replace('<span style="color:#94a3b8">Aguardando atividade...</span>', '');
+  el.innerHTML += line;
+  el.scrollTop = el.scrollHeight;
+}
+
+function _sdrMkUpdateBadge(enabled) {
+  var badge = document.getElementById('mk-status-badge');
+  if (!badge) return;
+  badge.style.display = 'inline-block';
+  if (enabled) {
+    badge.style.background = '#d1fae5'; badge.style.color = '#065f46';
+    badge.textContent = '● Integração Ativa';
+  } else {
+    badge.style.background = '#fee2e2'; badge.style.color = '#991b1b';
+    badge.textContent = '○ Integração Inativa';
+  }
+}
+
+function _sdrMkRefreshCounts() {
+  sdrRef('olts').once('value').then(function(s) {
+    var el = document.getElementById('mk-count-olts');
+    if (el) el.textContent = s.numChildren ? s.numChildren() : (Object.keys(s.val()||{}).length || '0');
+  });
+  sdrRef('clients').once('value').then(function(s) {
+    var el = document.getElementById('mk-count-clientes');
+    if (el) el.textContent = s.numChildren ? s.numChildren() : (Object.keys(s.val()||{}).length || '0');
+  });
+  sdrRef('onus').once('value').then(function(s) {
+    var el = document.getElementById('mk-count-ctos'); // reuse CTO slot for ONUs until POPs are sync'd
+    if (el) el.textContent = s.numChildren ? s.numChildren() : (Object.keys(s.val()||{}).length || '0');
+  });
+  // last sync
+  sdrRef('mk_config/updated_at').once('value').then(function(s) {
+    var el = document.getElementById('mk-last-sync');
+    if (el && s.val()) {
+      var d = new Date(s.val());
+      el.textContent = d.toLocaleString('pt-BR');
+    }
+  });
+}
 
 // Fecha a IIFE (function(){"use strict"; ...}) que envolve todo o codigo SDR
 }());
