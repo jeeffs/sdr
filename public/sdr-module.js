@@ -214,12 +214,78 @@
   padding:8px 12px; display:flex; gap:6px; align-items:center; flex-wrap:wrap;
   background:#f8fafc; border-bottom:1px solid #e2e8f0; min-height:44px;
 }
-.sdr-toolbar .tb-group {
-  display:flex; gap:4px; align-items:center;
+.sdr-toolbar .tb-group { display:flex; gap:4px; align-items:center; }
+.sdr-toolbar .tb-sep { width:1px; height:24px; background:#cbd5e1; margin:0 4px; }
+
+/* ── Btn-map (botões da toolbar do mapa) ── */
+.btn-map {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:5px 10px; font-size:.78rem; border-radius:7px;
+  border:1px solid #e2e8f0; background:#fff; color:#374151;
+  cursor:pointer; transition:background .12s,border-color .12s;
+  white-space:nowrap; font-family:inherit;
 }
-.sdr-toolbar .tb-sep {
-  width:1px; height:24px; background:#cbd5e1; margin:0 4px;
+.btn-map:hover { background:#f1f5f9; border-color:#cbd5e1; }
+.btn-map.active { background:#eff6ff; border-color:#bfdbfe; color:#2563eb; }
+
+/* ── Infra grid e cards ── */
+.infra-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+  gap:14px; padding:4px 0;
 }
+.infra-card {
+  background:#fff; border-radius:12px; padding:14px 16px;
+  border:1px solid #e5e7eb; box-shadow:0 1px 4px rgba(0,0,0,.06);
+  transition:box-shadow .15s,border-color .15s;
+}
+.infra-card:hover { box-shadow:0 4px 16px rgba(0,0,0,.10); border-color:#c7d2fe; }
+.ic-top { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.ic-icon {
+  width:36px; height:36px; border-radius:9px; display:flex; align-items:center;
+  justify-content:center; font-size:.95rem; flex-shrink:0;
+}
+.ic-icon.pole    { background:#fef3c7; color:#d97706; }
+.ic-icon.cto     { background:#dbeafe; color:#2563eb; }
+.ic-icon.cable   { background:#d1fae5; color:#16a34a; }
+.ic-icon.splitter{ background:#ede9fe; color:#7c3aed; }
+.ic-icon.olt     { background:#fee2e2; color:#dc2626; }
+.ic-name  { font-weight:700; font-size:.88rem; color:#1e293b; }
+.ic-type  { font-size:.72rem; color:#64748b; margin-top:1px; }
+.ic-detail{ font-size:.75rem; color:#64748b; margin-top:2px; }
+
+/* ── Infra stats ── */
+.infra-stats {
+  display:flex; gap:12px; flex-wrap:wrap; margin-bottom:16px;
+}
+.infra-stat {
+  background:#fff; border-radius:10px; padding:12px 16px; text-align:center;
+  border:1px solid #e5e7eb; min-width:80px; box-shadow:0 1px 3px rgba(0,0,0,.06);
+}
+.is-num   { font-size:1.6rem; font-weight:800; color:#1e293b; line-height:1; }
+.is-label { font-size:.7rem; color:#64748b; font-weight:600; text-transform:uppercase; margin-top:3px; }
+
+/* ── Signal badges ── */
+.signal-badge {
+  padding:2px 8px; border-radius:20px; font-size:.7rem; font-weight:700;
+  display:inline-block; text-transform:uppercase; letter-spacing:.04em;
+}
+.signal-badge.good { background:#d1fae5; color:#065f46; }
+.signal-badge.warn { background:#fef3c7; color:#92400e; }
+.signal-badge.bad  { background:#fee2e2; color:#991b1b; }
+.signal-badge.off  { background:#f1f5f9; color:#64748b; }
+
+/* ── Side panel (painel lateral de detalhes) ── */
+.sp-section { margin-bottom:16px; }
+.sp-section-title {
+  font-size:.73rem; font-weight:700; color:#64748b; text-transform:uppercase;
+  letter-spacing:.06em; margin-bottom:8px; display:flex; align-items:center; gap:6px;
+}
+.sp-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:5px 0; border-bottom:1px solid #f8fafc; font-size:.8rem;
+}
+.sp-label { color:#64748b; flex-shrink:0; margin-right:8px; }
+.sp-val   { color:#1e293b; font-weight:500; text-align:right; word-break:break-all; }
 `;
   document.head.appendChild(style);
 })();
@@ -2318,7 +2384,7 @@ window.sdrOltVisualModal = function(oltId) {
       + '<span><span style="display:inline-block;width:9px;height:9px;background:#dc2626;border-radius:2px;margin-right:3px"></span>Alarme</span>'
       + '</div>';
 
-    var html = '<div class="modal-overlay" id="sdr-modal-olt-visual" onclick="if(event.target===this)this.remove()">'
+    var html = '<div class="modal-overlay open" id="sdr-modal-olt-visual" onclick="if(event.target===this)this.remove()">'
       + '<div class="modal-box" style="max-width:740px;width:96vw">'
       + '<div class="modal-header">'
       + '<h3><i class="fas fa-server" style="color:#dc2626;margin-right:8px"></i>Chassis — ' + (olt.name || oltId) + '</h3>'
@@ -2366,7 +2432,7 @@ window.sdrPonConfig = function(oltId, slot, port) {
           + '<button onclick="sdrPonSelectFiber(\'' + oltId + '\',' + slot + ',' + port + ')" style="width:100%;padding:7px;font-size:.8rem;border:1px solid #d97706;border-radius:6px;background:#fef3c7;color:#92400e;cursor:pointer"><i class="fas fa-link"></i> Selecionar fibra no DGO</button>'
           + '</div>';
 
-      var html = '<div class="modal-overlay" id="sdr-pon-modal" onclick="if(event.target===this)this.remove()">'
+      var html = '<div class="modal-overlay open" id="sdr-pon-modal" onclick="if(event.target===this)this.remove()">'
         + '<div class="modal-box" style="max-width:460px">'
         + '<div class="modal-header">'
         + '<h3><i class="fas fa-plug" style="color:#7c3aed;margin-right:8px"></i>Slot ' + slot + ' — PON ' + port + '</h3>'
@@ -2470,7 +2536,7 @@ window.sdrDgo144Modal = function(dgoId, oltId, slot, port) {
     }
 
     var selMode = oltId != null; // true=selection mode, false=view only
-    var html = '<div class="modal-overlay" id="sdr-dgo-fiber-modal" onclick="if(event.target===this)this.remove()">'
+    var html = '<div class="modal-overlay open" id="sdr-dgo-fiber-modal" onclick="if(event.target===this)this.remove()">'
       + '<div class="modal-box" style="max-width:660px;width:96vw">'
       + '<div class="modal-header">'
       + '<h3><i class="fas fa-project-diagram" style="color:#16a34a;margin-right:8px"></i>' + (dgo.nome || dgoId) + ' — ' + (tCount * fpt) + ' fibras</h3>'
@@ -2523,7 +2589,7 @@ window.sdrFiberSelect = function(oltId, slot, port, dgoId, fiberKey) {
 
 // ── Criar novo DGO ─────────────────────────────────────────────────
 window.sdrDgoCriarModal = function(oltId) {
-  var html = '<div class="modal-overlay" id="sdr-dgo-criar-modal" onclick="if(event.target===this)this.remove()">'
+  var html = '<div class="modal-overlay open" id="sdr-dgo-criar-modal" onclick="if(event.target===this)this.remove()">'
     + '<div class="modal-box" style="max-width:460px">'
     + '<div class="modal-header">'
     + '<h3><i class="fas fa-network-wired" style="color:#3b82f6;margin-right:8px"></i>Novo DGO</h3>'
@@ -2996,13 +3062,14 @@ function sdrRenderHeatmap() {
   }
 }
 
-// Hook heatmap render into map reload
+// Hook heatmap render into map reload + expor para window
 const _origMapReload = sdrMapReloadData;
 sdrMapReloadData = function() {
   _origMapReload();
   // Render heatmap after clients load
   setTimeout(sdrRenderHeatmap, 500);
 };
+window.sdrMapReloadData = sdrMapReloadData;
 
 // ── 4B: DASHBOARD REDE COM GRÁFICOS ──
 let sdrChartInstances = {};
@@ -3334,57 +3401,60 @@ window.sdrTicketAdd = function(editId) {
     clientOpts += `<option value="${cid}" ${sel}>${c.name || cid}</option>`;
   });
 
-  const modal = document.getElementById('sdr-modal');
-  modal.innerHTML = `<div style="background:#fff;border-radius:12px;padding:24px;width:520px;max-height:85vh;overflow-y:auto;position:relative">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h3 style="margin:0;font-size:1rem"><i class="fas fa-headset" style="color:var(--primary);margin-right:6px"></i>${isEdit ? 'Editar' : 'Novo'} Ticket</h3>
-      <button onclick="document.getElementById('sdr-modal').style.display='none'" style="border:none;background:none;font-size:1.3rem;cursor:pointer;color:var(--muted)">&times;</button>
-    </div>
-    <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin-bottom:4px">Título</label>
-    <input id="tk-title" value="${d.title||''}" placeholder="Ex: ONU offline no cliente X" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:12px;font-size:.85rem">
-    <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin-bottom:4px">Descrição</label>
-    <textarea id="tk-desc" rows="3" placeholder="Detalhes do problema..." style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:12px;font-size:.85rem;resize:vertical">${d.description||''}</textarea>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-      <div>
-        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin-bottom:4px">Prioridade</label>
-        <select id="tk-priority" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:.85rem">
-          <option value="low" ${d.priority==='low'?'selected':''}>Baixa</option>
-          <option value="medium" ${d.priority==='medium'||!d.priority?'selected':''}>Média</option>
-          <option value="high" ${d.priority==='high'?'selected':''}>Alta</option>
-          <option value="critical" ${d.priority==='critical'?'selected':''}>Crítica</option>
-        </select>
+  // Remover modal anterior se existir
+  const prev = document.getElementById('sdr-ticket-modal');
+  if (prev) prev.remove();
+
+  const html = `<div class="modal-overlay open" id="sdr-ticket-modal" onclick="if(event.target===this)this.remove()">
+    <div class="modal-box" style="max-width:520px">
+      <div class="modal-header">
+        <h3><i class="fas fa-headset" style="color:var(--primary);margin-right:8px"></i>${isEdit ? 'Editar' : 'Novo'} Ticket</h3>
+        <button onclick="document.getElementById('sdr-ticket-modal').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">&times;</button>
       </div>
-      <div>
-        <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin-bottom:4px">Status</label>
-        <select id="tk-status" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:.85rem">
-          <option value="aberto" ${d.status==='aberto'||!d.status?'selected':''}>Aberto</option>
-          <option value="em_andamento" ${d.status==='em_andamento'?'selected':''}>Em Andamento</option>
-          <option value="aguardando" ${d.status==='aguardando'?'selected':''}>Aguardando</option>
-          <option value="resolvido" ${d.status==='resolvido'?'selected':''}>Resolvido</option>
-        </select>
+      <div class="modal-body">
+        <div class="form-group"><label>Título</label>
+          <input id="tk-title" value="${d.title||''}" placeholder="Ex: ONU offline no cliente X"></div>
+        <div class="form-group"><label>Descrição</label>
+          <textarea id="tk-desc" rows="3" placeholder="Detalhes do problema..." style="resize:vertical">${d.description||''}</textarea></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="form-group"><label>Prioridade</label>
+            <select id="tk-priority">
+              <option value="low" ${d.priority==='low'?'selected':''}>Baixa</option>
+              <option value="medium" ${d.priority==='medium'||!d.priority?'selected':''}>Média</option>
+              <option value="high" ${d.priority==='high'?'selected':''}>Alta</option>
+              <option value="critical" ${d.priority==='critical'?'selected':''}>Crítica</option>
+            </select></div>
+          <div class="form-group"><label>Status</label>
+            <select id="tk-status">
+              <option value="aberto" ${d.status==='aberto'||!d.status?'selected':''}>Aberto</option>
+              <option value="em_andamento" ${d.status==='em_andamento'?'selected':''}>Em Andamento</option>
+              <option value="aguardando" ${d.status==='aguardando'?'selected':''}>Aguardando</option>
+              <option value="resolvido" ${d.status==='resolvido'?'selected':''}>Resolvido</option>
+            </select></div>
+        </div>
+        <div class="form-group"><label>Cliente</label>
+          <select id="tk-client">${clientOpts}</select></div>
+        <div class="form-group"><label>Tipo</label>
+          <select id="tk-type">
+            <option value="sem_sinal" ${d.type==='sem_sinal'?'selected':''}>Sem Sinal / ONU Offline</option>
+            <option value="sinal_baixo" ${d.type==='sinal_baixo'?'selected':''}>Sinal Baixo / Degradado</option>
+            <option value="lentidao" ${d.type==='lentidao'?'selected':''}>Lentidão</option>
+            <option value="queda_frequente" ${d.type==='queda_frequente'?'selected':''}>Quedas Frequentes</option>
+            <option value="instalacao" ${d.type==='instalacao'?'selected':''}>Instalação</option>
+            <option value="mudanca_endereco" ${d.type==='mudanca_endereco'?'selected':''}>Mudança de Endereço</option>
+            <option value="infra" ${d.type==='infra'?'selected':''}>Infraestrutura</option>
+            <option value="outro" ${d.type==='outro'||!d.type?'selected':''}>Outro</option>
+          </select></div>
+        <div class="form-group"><label>Observações</label>
+          <textarea id="tk-notes" rows="2" placeholder="Notas internas..." style="resize:vertical">${d.notes||''}</textarea></div>
       </div>
-    </div>
-    <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin:12px 0 4px">Cliente</label>
-    <select id="tk-client" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:.85rem">${clientOpts}</select>
-    <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin:12px 0 4px">Tipo</label>
-    <select id="tk-type" style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:.85rem">
-      <option value="sem_sinal" ${d.type==='sem_sinal'?'selected':''}>Sem Sinal / ONU Offline</option>
-      <option value="sinal_baixo" ${d.type==='sinal_baixo'?'selected':''}>Sinal Baixo / Degradado</option>
-      <option value="lentidao" ${d.type==='lentidao'?'selected':''}>Lentidão</option>
-      <option value="queda_frequente" ${d.type==='queda_frequente'?'selected':''}>Quedas Frequentes</option>
-      <option value="instalacao" ${d.type==='instalacao'?'selected':''}>Instalação</option>
-      <option value="mudanca_endereco" ${d.type==='mudanca_endereco'?'selected':''}>Mudança de Endereço</option>
-      <option value="infra" ${d.type==='infra'?'selected':''}>Infraestrutura</option>
-      <option value="outro" ${d.type==='outro'||!d.type?'selected':''}>Outro</option>
-    </select>
-    <label style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#64748b;display:block;margin:12px 0 4px">Observações</label>
-    <textarea id="tk-notes" rows="2" placeholder="Notas internas..." style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:6px;margin-bottom:16px;font-size:.85rem;resize:vertical">${d.notes||''}</textarea>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="document.getElementById('sdr-modal').style.display='none'" style="padding:8px 16px;border:1px solid #e2e8f0;background:#fff;border-radius:6px;cursor:pointer;font-size:.85rem">Cancelar</button>
-      <button onclick="sdrTicketSave('${editId||''}')" class="btn-primary" style="padding:8px 20px;font-size:.85rem"><i class="fas fa-save" style="margin-right:4px"></i>${isEdit ? 'Salvar' : 'Criar Ticket'}</button>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="document.getElementById('sdr-ticket-modal').remove()">Cancelar</button>
+        <button class="btn-primary" onclick="sdrTicketSave('${editId||''}')"><i class="fas fa-save" style="margin-right:4px"></i>${isEdit ? 'Salvar' : 'Criar Ticket'}</button>
+      </div>
     </div>
   </div>`;
-  modal.style.display = 'flex';
+  document.body.insertAdjacentHTML('beforeend', html);
 };
 
 window.sdrTicketEdit = function(id) { window.sdrTicketAdd(id); };
@@ -3417,7 +3487,8 @@ window.sdrTicketSave = async function(editId) {
       await sdrRef('tickets').push(data);
       toast('Ticket criado!', 'success');
     }
-    document.getElementById('sdr-modal').style.display = 'none';
+    const tm = document.getElementById('sdr-ticket-modal');
+    if (tm) tm.remove();
     sdrTicketsRender();
   } catch (e) {
     toast('Erro ao salvar ticket: ' + e.message, 'error');
