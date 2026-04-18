@@ -576,8 +576,9 @@ function sdrMapRenderClients() {
         iconSize: [28, 28], iconAnchor: [14, 14]
       })
     });
-    marker.bindPopup(`<b>${c.name||'Cliente'}</b><br>${c.plan_name||''}<br>${c.financial_status||''}`);
+    marker.bindTooltip(`<b>${c.name||'Cliente'}</b><br>${c.plan_name||''} · ${c.onu_status||''}`, {direction:'top', offset:[0,-14]});
     marker.on('click', () => window.sdrOpenClientePanel(id, c));
+    marker.on('contextmenu', (e) => { L.DomEvent.preventDefault(e); L.DomEvent.stopPropagation(e); sdrCtxMenu(e.originalEvent, _sdrCtxCliente(id)); });
     sdrLayers.clients.addLayer(marker);
   });
 }
@@ -593,7 +594,9 @@ function sdrMapRenderOlts() {
         iconSize: [28, 28], iconAnchor: [14, 14]
       })
     });
-    marker.bindPopup(`<b>${o.name||'OLT'}</b><br>${o.model||''}<br>IP: ${o.ip_address||''}`);
+    marker.bindTooltip(`<b>${o.name||'OLT'}</b><br>${o.model||''} · ${o.ip_address||''}`, {direction:'top', offset:[0,-14]});
+    marker.on('click', () => sdrOpenOltPanel(id));
+    marker.on('contextmenu', (e) => { L.DomEvent.preventDefault(e); L.DomEvent.stopPropagation(e); sdrCtxMenu(e.originalEvent, _sdrCtxOlt(id)); });
     sdrLayers.olts.addLayer(marker);
   });
 }
@@ -1121,15 +1124,20 @@ function _renderInfraGrid() {
     else if (item.model) detail = item.model;
     else if (item.ip_address) detail = `IP: ${item.ip_address}`;
 
-    return `<div class="infra-card" onclick="sdrOpenInfraPanel('${id}',sdrInfraCache['${id}'])">
+    return `<div class="infra-card" style="cursor:pointer;position:relative" onclick="sdrOpenInfraPanel('${id}',sdrInfraCache['${id}'])" oncontextmenu="sdrCtxMenu(event,_sdrCtxInfra('${id}'))">
       <div class="ic-top">
         <div class="ic-icon ${cfg.iconClass}"><i class="fas ${cfg.icon}"></i></div>
-        <div>
+        <div style="flex:1">
           <div class="ic-name">${item.name||item.code||id}</div>
           <div class="ic-type">${cfg.label}${item.code?' | '+item.code:''}</div>
         </div>
+        <button class="sdr-row-menu" onclick="event.stopPropagation();sdrCtxMenu(event,_sdrCtxInfra('${id}'))" title="Ações" style="align-self:flex-start"><i class="fas fa-ellipsis-v"></i></button>
       </div>
       ${detail?`<div class="ic-detail">${detail}</div>`:''}
+      <div class="sdr-card-actions" style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="event.stopPropagation();sdrOpenInfraPanel('${id}',sdrInfraCache['${id}'])" style="padding:3px 8px;font-size:.72rem;border:1px solid #e5e7eb;border-radius:5px;background:#f8fafc;cursor:pointer"><i class="fas fa-eye"></i> Ver</button>
+        <button onclick="event.stopPropagation();sdrInfraEdit('${id}')" style="padding:3px 8px;font-size:.72rem;border:1px solid #e5e7eb;border-radius:5px;background:#f8fafc;cursor:pointer"><i class="fas fa-edit"></i> Editar</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1209,13 +1217,16 @@ function _renderClientesLista() {
       const rxBadge = c.rx_power != null
         ? `<span class="signal-badge ${c.rx_power>-25?'good':c.rx_power>-28?'warn':'bad'}">${c.rx_power} dBm</span>`
         : '-';
-      return `<tr style="border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="sdrOpenClientePanel('${id}',sdrClientesCache['${id}'])">
+      return `<tr style="border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="sdrOpenClientePanel('${id}',sdrClientesCache['${id}'])" oncontextmenu="sdrCtxMenu(event,_sdrCtxCliente('${id}'))">
         <td style="padding:8px 10px;font-weight:600">${c.name||'-'}</td>
         <td style="padding:8px 10px">${c.plan_name||'-'} ${c.plan_speed_down?c.plan_speed_down+'M':''}</td>
         <td style="padding:8px 10px">${fBadge}</td>
         <td style="padding:8px 10px">${onuBadge}</td>
         <td style="padding:8px 10px">${rxBadge}</td>
-        <td style="padding:8px 10px"><button class="btn-map" onclick="event.stopPropagation();sdrMapFlyToClient('${id}')" style="padding:4px 8px;font-size:.75rem"><i class="fas fa-map-pin"></i></button></td>
+        <td style="padding:8px 10px;text-align:right;white-space:nowrap">
+          <button class="btn-map" onclick="event.stopPropagation();sdrMapFlyToClient('${id}')" style="padding:4px 8px;font-size:.75rem" title="Ver no mapa"><i class="fas fa-map-pin"></i></button>
+          <button class="sdr-row-menu" onclick="event.stopPropagation();sdrCtxMenu(event,_sdrCtxCliente('${id}'))" title="Mais ações"><i class="fas fa-ellipsis-v"></i></button>
+        </td>
       </tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -2043,23 +2054,24 @@ window.sdrOltsRender = function() {
       const online = onusThisOlt.filter(u => u.status === 'online').length;
       const total = onusThisOlt.length;
       return `
-      <div class="infra-card" style="cursor:pointer" onclick="sdrOpenOltPanel('${id}')">
+      <div class="infra-card" style="cursor:pointer;position:relative" onclick="sdrOpenOltPanel('${id}')" oncontextmenu="sdrCtxMenu(event,_sdrCtxOlt('${id}'))">
         <div class="ic-top">
           <div class="ic-icon olt"><i class="fas fa-server"></i></div>
           <div>
             <div class="ic-name">${o.name || id}</div>
-            <div class="ic-type">${o.model || 'OLT Fiberhome'}</div>
+            <div class="ic-type">${o.model || 'OLT'}</div>
           </div>
-          <span style="margin-left:auto">
+          <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
             <span class="signal-badge ${o.is_active ? 'good' : 'off'}">${o.is_active ? 'Ativa' : 'Inativa'}</span>
+            <button class="sdr-row-menu" onclick="event.stopPropagation();sdrCtxMenu(event,_sdrCtxOlt('${id}'))" title="Ações"><i class="fas fa-ellipsis-v"></i></button>
           </span>
         </div>
-        <div class="ic-detail">IP: <b>${o.ip_address || '-'}</b> | SNMP: ${o.snmp_community || '-'} | PON: ${o.total_pon_ports || '-'}</div>
-        <div style="display:flex;gap:12px;margin-top:8px;font-size:.78rem;align-items:center">
-          <span><i class="fas fa-wifi" style="color:#7c3aed"></i> ${total} ONUs</span>
-          <span><i class="fas fa-circle" style="color:#16a34a;font-size:.5rem;vertical-align:middle"></i> ${online} online</span>
-          ${o.last_poll_at ? `<span style="color:var(--muted)"><i class="fas fa-clock"></i> ${new Date(o.last_poll_at).toLocaleString('pt-BR')}</span>` : ''}
-          <button onclick="event.stopPropagation();sdrOltVisualModal('${id}')" style="margin-left:auto;padding:3px 10px;font-size:.72rem;border:1px solid #1d4ed8;border-radius:6px;background:#eff6ff;color:#1d4ed8;cursor:pointer"><i class="fas fa-th"></i> Chassis</button>
+        <div class="ic-detail">IP: <b>${o.ip_address || '-'}</b> &nbsp;·&nbsp; PON: ${o.total_pon_ports || '-'} portas</div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap" class="sdr-card-actions">
+          <button onclick="event.stopPropagation();sdrOltVisualModal('${id}')" style="padding:4px 10px;font-size:.73rem;border:1px solid #1d4ed8;border-radius:6px;background:#eff6ff;color:#1d4ed8;cursor:pointer"><i class="fas fa-th"></i> Chassis</button>
+          <button onclick="event.stopPropagation();sdrOltAddModal('${id}')" style="padding:4px 10px;font-size:.73rem;border:1px solid #e5e7eb;border-radius:6px;background:#f8fafc;color:#374151;cursor:pointer"><i class="fas fa-edit"></i> Editar</button>
+          <button onclick="event.stopPropagation();sdrDgoCriarModal('${id}')" style="padding:4px 10px;font-size:.73rem;border:1px solid #e5e7eb;border-radius:6px;background:#f8fafc;color:#374151;cursor:pointer"><i class="fas fa-plus"></i> DGO</button>
+          <span style="margin-left:auto;font-size:.75rem;color:var(--muted);align-self:center"><i class="fas fa-wifi" style="color:#7c3aed"></i> ${total} ONUs &nbsp;<i class="fas fa-circle" style="color:#16a34a;font-size:.45rem;vertical-align:middle"></i> ${online} online</span>
         </div>
       </div>`;
     }).join('')}</div>`;
@@ -2665,14 +2677,17 @@ function _renderOnusLista() {
       const rxBadge = u.rx_power != null ? (u.rx_power > -25 ? 'good' : u.rx_power > -28 ? 'warn' : 'bad') : '';
       const client = u.serial_number ? clientBySerial[u.serial_number.toLowerCase()] : null;
       const olt = u.olt_id ? sdrOltsCache[u.olt_id] : null;
-      return `<tr style="border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="sdrOpenOnuPanel('${id}')">
+      return `<tr style="border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="sdrOpenOnuPanel('${id}')" oncontextmenu="sdrCtxMenu(event,_sdrCtxOnu('${id}'))">
         <td style="padding:8px 10px;font-family:monospace;font-weight:600">${u.serial_number || '-'}</td>
         <td style="padding:8px 10px"><span class="signal-badge ${statusBadge}">${u.status || '?'}</span></td>
         <td style="padding:8px 10px">${u.rx_power != null ? `<span class="signal-badge ${rxBadge}">${u.rx_power} dBm</span>` : '-'}</td>
-        <td style="padding:8px 10px">${client ? client.name : '<span style="color:var(--muted)">sem vínculo</span>'}</td>
+        <td style="padding:8px 10px">${client ? client.name : '<span style="color:var(--muted)">—</span>'}</td>
         <td style="padding:8px 10px">${olt ? olt.name : '-'}</td>
         <td style="padding:8px 10px">${u.pon_port || '-'}</td>
-        <td style="padding:8px 10px"><button class="btn-map" onclick="event.stopPropagation();sdrOnuEdit('${id}')" style="padding:4px 8px;font-size:.75rem"><i class="fas fa-edit"></i></button></td>
+        <td style="padding:8px 10px;text-align:right">
+          <button class="btn-map" onclick="event.stopPropagation();sdrOnuEdit('${id}')" style="padding:4px 8px;font-size:.75rem" title="Editar"><i class="fas fa-edit"></i></button>
+          <button class="sdr-row-menu" onclick="event.stopPropagation();sdrCtxMenu(event,_sdrCtxOnu('${id}'))" title="Mais ações"><i class="fas fa-ellipsis-v"></i></button>
+        </td>
       </tr>`;
     }).join('')}</tbody></table>`;
 }
@@ -4378,7 +4393,22 @@ window.sdrClientesFiltrar = function(q) {
     '#page-onus{display:none!important}#page-onus.active{display:block!important}',
     '#page-alertas{display:none!important}#page-alertas.active{display:block!important}',
     '#page-tickets{display:none!important}#page-tickets.active{display:block!important}',
-    '#page-mk-config{display:none!important}#page-mk-config.active{display:block!important}'
+    '#page-mk-config{display:none!important}#page-mk-config.active{display:block!important}',
+    /* ── Context Menu (padrão IQGeo/OSPInsight) ── */
+    '#sdr-ctx-wrap{position:fixed;z-index:99999}',
+    '#sdr-ctx-menu{background:#fff;border:1px solid #e2e8f0;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.14),0 1px 4px rgba(0,0,0,.06);padding:5px;min-width:200px}',
+    '.sdr-ctx-item{padding:8px 14px;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:10px;font-size:.83rem;transition:background .1s;white-space:nowrap}',
+    '.sdr-ctx-item:hover{background:#f1f5f9}',
+    '.sdr-ctx-item i{width:15px;text-align:center;flex-shrink:0}',
+    '.sdr-ctx-sep{height:1px;background:#f1f5f9;margin:4px 0}',
+    '.sdr-ctx-label{font-size:.7rem;font-weight:700;color:#94a3b8;padding:8px 14px 2px;text-transform:uppercase;letter-spacing:.04em}',
+    /* ── Botão ⋮ nas linhas de tabela ── */
+    '.sdr-row-menu{opacity:.35;transition:opacity .15s;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;font-size:1rem;color:#374151}',
+    '.sdr-row-menu:hover{opacity:1;background:#f1f5f9}',
+    'tr:hover .sdr-row-menu{opacity:.7}',
+    /* ── Card hover-reveal ── */
+    '.sdr-card-actions{opacity:.4;transition:opacity .15s}',
+    '.infra-card:hover .sdr-card-actions{opacity:1}'
   ].join('');
   document.head.appendChild(st);
 })();
@@ -4970,6 +5000,114 @@ function _sdrMkRefreshCounts() {
     if (el && s.val()) el.textContent = new Date(s.val()).toLocaleString('pt-BR');
   });
 }
+
+// ============================================================
+// CONTEXT MENU ENGINE — Padrão IQGeo/OSPInsight
+// Esquerdo = seleciona/painel · Direito = menu ações · ⋮ = mesmo menu
+// ============================================================
+window._sdrCtxReg = {}; // registro de handlers por sessão
+
+window.sdrCtxMenu = function(e, items) {
+  window.sdrCtxClose();
+  if (e && e.preventDefault) e.preventDefault();
+  if (e && e.stopPropagation) e.stopPropagation();
+
+  var x = (e && e.clientX) ? e.clientX : (e && e.target ? e.target.getBoundingClientRect().right : 100);
+  var y = (e && e.clientY) ? e.clientY : (e && e.target ? e.target.getBoundingClientRect().bottom : 100);
+  var sid = 'ctx_' + Date.now();
+  window._sdrCtxReg[sid] = items;
+
+  var html = '<div id="sdr-ctx-menu">';
+  items.forEach(function(item, i) {
+    if (item === '---') { html += '<div class="sdr-ctx-sep"></div>'; return; }
+    if (item._label) { html += '<div class="sdr-ctx-label">' + item._label + '</div>'; return; }
+    var col   = item.color   || '#1e293b';
+    var icCol = item.color   || '#64748b';
+    html += '<div class="sdr-ctx-item" style="color:' + col + '" '
+      + 'onclick="(window._sdrCtxReg[\'' + sid + '\'][' + i + '].fn)();window.sdrCtxClose()">'
+      + '<i class="fas ' + (item.icon || 'fa-circle') + '" style="color:' + icCol + '"></i>'
+      + item.label + '</div>';
+  });
+  html += '</div>';
+
+  var wrap = document.createElement('div');
+  wrap.id = 'sdr-ctx-wrap';
+  wrap.style.cssText = 'left:' + x + 'px;top:' + y + 'px';
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap);
+
+  // Ajuste de borda de tela
+  var rect = wrap.getBoundingClientRect();
+  if (rect.right  > window.innerWidth)  wrap.style.left = (x - rect.width)  + 'px';
+  if (rect.bottom > window.innerHeight) wrap.style.top  = (y - rect.height) + 'px';
+
+  // Fechar ao clicar fora ou Escape
+  setTimeout(function() {
+    function away(ev) {
+      if (!document.getElementById('sdr-ctx-wrap') || !document.getElementById('sdr-ctx-wrap').contains(ev.target)) {
+        window.sdrCtxClose(); cleanup();
+      }
+    }
+    function esc(ev) { if (ev.key === 'Escape') { window.sdrCtxClose(); cleanup(); } }
+    function cleanup() { document.removeEventListener('click', away); document.removeEventListener('keydown', esc); }
+    document.addEventListener('click', away);
+    document.addEventListener('keydown', esc);
+  }, 60);
+};
+
+window.sdrCtxClose = function() {
+  var w = document.getElementById('sdr-ctx-wrap');
+  if (w) w.remove();
+};
+
+// Helpers de itens de contexto por tipo
+window._sdrCtxOlt = function(id) {
+  return [
+    {_label: 'OLT'},
+    {icon:'fa-th',          label:'Chassis Visual',   fn:function(){ sdrOltVisualModal(id); }},
+    {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrOltAddModal(id); }},
+    {icon:'fa-sitemap',     label:'Ver Topologia',    fn:function(){ showPage && showPage('olts'); setTimeout(function(){ var p=document.getElementById('topologia-tree'); if(p&&p.style.display==='none') sdrTopologiaToggle(); else sdrTopologiaRender(); },200); }},
+    '---',
+    {icon:'fa-router',      label:'Nova ONU',         fn:function(){ sdrOnuAdd(); }},
+    {icon:'fa-network-wired',label:'Novo DGO',        fn:function(){ sdrDgoCriarModal(id); }},
+    '---',
+    {icon:'fa-trash',       label:'Excluir OLT',      color:'#dc2626', fn:function(){ sdrOltDelete(id); }}
+  ];
+};
+
+window._sdrCtxOnu = function(id) {
+  return [
+    {_label: 'ONU'},
+    {icon:'fa-eye',         label:'Ver Detalhes',     fn:function(){ sdrOpenOnuPanel(id); }},
+    {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrOnuEdit(id); }},
+    '---',
+    {icon:'fa-trash',       label:'Excluir ONU',      color:'#dc2626', fn:function(){ sdrOnuDelete && sdrOnuDelete(id); }}
+  ];
+};
+
+window._sdrCtxCliente = function(id) {
+  return [
+    {_label: 'Cliente'},
+    {icon:'fa-eye',         label:'Ver Detalhes',     fn:function(){ sdrOpenClientePanel(id, sdrClientesCache[id]); }},
+    {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrClienteEdit && sdrClienteEdit(id); }},
+    {icon:'fa-map-pin',     label:'Ver no Mapa',      fn:function(){ sdrMapFlyToClient(id); }},
+    {icon:'fa-ticket-alt',  label:'Abrir Chamado',    fn:function(){ sdrTicketAdd && sdrTicketAdd(id); }},
+    '---',
+    {icon:'fa-trash',       label:'Excluir Cliente',  color:'#dc2626', fn:function(){ sdrClienteDelete && sdrClienteDelete(id); }}
+  ];
+};
+
+window._sdrCtxInfra = function(id) {
+  var item = sdrInfraCache[id] || {};
+  return [
+    {_label: 'Infraestrutura'},
+    {icon:'fa-eye',         label:'Ver Detalhes',     fn:function(){ sdrOpenInfraPanel(id, sdrInfraCache[id]); }},
+    {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrInfraEdit(id); }},
+    {icon:'fa-map-marker-alt',label:'Ir ao Mapa',     fn:function(){ var it=sdrInfraCache[id]; if(it&&it.lat) { showPage&&showPage('mapa'); setTimeout(function(){ sdrMapFlyTo(it.lat,it.lng); },300); } }},
+    '---',
+    {icon:'fa-trash',       label:'Excluir',          color:'#dc2626', fn:function(){ sdrInfraDelete && sdrInfraDelete(id); }}
+  ];
+};
 
 // Fecha a IIFE (function(){"use strict"; ...}) que envolve todo o codigo SDR
 }());
