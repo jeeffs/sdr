@@ -3949,10 +3949,16 @@ window._sdrHtml_clientes = function() {
 
 window._sdrHtml_olts = function() {
   return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">'
-    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-server" style="color:var(--primary)"></i> OLTs</h2>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
+    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-server" style="color:var(--primary)"></i> OLTs — Equipamentos</h2>'
+    +'<button class="btn-map" id="btn-topo-toggle" onclick="sdrTopologiaToggle()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sitemap"></i> Topologia</button>'
     +'<button class="btn-map" onclick="sdrOltsRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
     +'<button class="btn-map" onclick="sdrOltAddModal(null)" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Nova OLT</button>'
+    +'</div>'
+    +'<div id="olts-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
+    +'<div id="topologia-tree" style="display:none;margin-bottom:20px;background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e5e7eb">'
+    +'<div style="font-weight:600;color:#1e293b;margin-bottom:12px;font-size:.9rem"><i class="fas fa-sitemap" style="color:var(--primary)"></i> Topologia FTTH — OLT → DGO → Splitter → CTO → ONU/Cliente</div>'
+    +'<div id="topologia-content"><div style="text-align:center;padding:20px;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> Carregando topologia...</div></div>'
     +'</div>'
     +'<div id="olts-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
     +'</div>';
@@ -4081,11 +4087,14 @@ window._sdrHtml_mk_config = function() {
     +'<i class="fas fa-flask" style="color:#f59e0b;font-size:1.1rem"></i>'
     +'<div style="font-weight:600;color:#1e293b;font-size:.9rem">Modo Demo / Simulação</div>'
     +'</div>'
-    +'<p style="margin:0 0 12px;font-size:.82rem;color:#64748b">Enquanto o IP do servidor MK não está disponível, use dados simulados para testar as telas.</p>'
-    +'<div style="display:flex;gap:10px;flex-wrap:wrap">'
-    +'<button class="btn-map" onclick="sdrMkDemoOlts()" style="padding:7px 16px;font-size:.82rem"><i class="fas fa-server"></i> Simular OLTs</button>'
-    +'<button class="btn-map" onclick="sdrMkDemoOnus()" style="padding:7px 16px;font-size:.82rem"><i class="fas fa-router"></i> Simular ONUs</button>'
-    +'<button class="btn-map" onclick="sdrMkDemoClientes()" style="padding:7px 16px;font-size:.82rem"><i class="fas fa-users"></i> Simular Clientes</button>'
+    +'<p style="margin:0 0 14px;font-size:.82rem;color:#64748b">Gera a topologia FTTH completa no Firebase para testar todas as telas sem precisar do IP do MK.</p>'
+    +'<button class="btn-map" onclick="sdrMkDemoTopologia()" style="padding:9px 22px;font-size:.85rem;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border-color:#d97706;font-weight:600;width:100%;margin-bottom:12px">'
+    +'<i class="fas fa-project-diagram"></i> Simular Topologia Completa (OLT → DGO → Splitters → CTO → ONU → Cliente)</button>'
+    +'<p style="margin:0 0 8px;font-size:.75rem;color:#94a3b8">Ou simule partes individuais:</p>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+    +'<button class="btn-map" onclick="sdrMkDemoOlts()" style="padding:6px 12px;font-size:.78rem"><i class="fas fa-server"></i> Só OLTs</button>'
+    +'<button class="btn-map" onclick="sdrMkDemoOnus()" style="padding:6px 12px;font-size:.78rem"><i class="fas fa-router"></i> Só ONUs</button>'
+    +'<button class="btn-map" onclick="sdrMkDemoClientes()" style="padding:6px 12px;font-size:.78rem"><i class="fas fa-users"></i> Só Clientes</button>'
     +'</div>'
     +'</div>'
 
@@ -4221,74 +4230,345 @@ window.sdrMkSyncAll = function() {
   });
 };
 
-// ---- MK: Demo — OLTs ----
-window.sdrMkDemoOlts = function() {
-  var demoOlts = [
-    {id:'olt-01', nome:'OLT-MATRIZ-01', modelo:'ZTE C320', ip:'10.0.0.1', pons:8, onus_ativas:32, onus_total:64, status:'online'},
-    {id:'olt-02', nome:'OLT-FILIAL-01', modelo:'Huawei MA5608T', ip:'10.0.0.2', pons:4, onus_ativas:18, onus_total:32, status:'online'},
-    {id:'olt-03', nome:'OLT-FILIAL-02', modelo:'ZTE C300', ip:'10.0.0.3', pons:2, onus_ativas:5, onus_total:16, status:'alerta'}
+// ---- MK: Demo — Topologia COMPLETA (OLT→DGO→Sp1→Sp2→Sp3→CTO→ONU→Cliente) ----
+window.sdrMkDemoTopologia = function() {
+  _sdrMkLog('⏳ Gerando topologia FTTH completa...', 'ok');
+  var saves = [];
+  var ts = new Date().toISOString();
+
+  // ── OLTs ──────────────────────────────────────────────────────
+  var olts = [
+    {id:'olt-demo-01', name:'OLT-CENTRAL-01', model:'ZTE C320',          ip_address:'10.0.0.1', total_pon_ports:8, snmp_community:'public', is_active:true,  lat:-20.316, lng:-40.338},
+    {id:'olt-demo-02', name:'OLT-FILIAL-01',  model:'Huawei MA5608T',    ip_address:'10.0.0.2', total_pon_ports:4, snmp_community:'public', is_active:true,  lat:-20.320, lng:-40.342},
   ];
-  var saves = demoOlts.map(function(o) {
-    return sdrRef('olts/' + o.id).set(Object.assign({}, o, {sync_at: new Date().toISOString(), source:'demo'}));
+  olts.forEach(function(o) {
+    var id = o.id; delete o.id;
+    saves.push(sdrRef('olt_connections/' + id).set(Object.assign({}, o, {source:'demo', created_at:ts})));
+    o.id = id;
   });
-  Promise.all(saves).then(function() {
-    _sdrMkLog('✅ ' + demoOlts.length + ' OLTs demo inseridas no Firebase.', 'ok');
-    document.getElementById('mk-count-olts').textContent = demoOlts.length;
-    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'Demo OLTs', text:demoOlts.length + ' OLTs simuladas salvas. Acesse a aba OLTs para ver.', timer:2500, showConfirmButton:false});
-  }).catch(function(e) { _sdrMkLog('❌ Erro ao salvar OLTs demo: ' + e.message, 'error'); });
-};
 
-// ---- MK: Demo — ONUs ----
-window.sdrMkDemoOnus = function() {
-  var demoOnus = [];
+  // ── DGOs ──────────────────────────────────────────────────────
+  var dgos = [
+    {id:'dgo-demo-01', type:'dgo', nome:'DGO-CENTRAL-01', olt_id:'olt-demo-01', pon_port:'1/0/1', capacidade_fibras:24, endereco:'Rua das Flores, 100'},
+    {id:'dgo-demo-02', type:'dgo', nome:'DGO-FILIAL-01',  olt_id:'olt-demo-02', pon_port:'1/0/1', capacidade_fibras:12, endereco:'Av. Principal, 500'},
+  ];
+  dgos.forEach(function(d) {
+    var id = d.id; delete d.id;
+    saves.push(sdrRef('infrastructure/' + id).set(Object.assign({}, d, {source:'demo', created_at:ts})));
+    d.id = id;
+  });
+
+  // ── Splitters 1º grau (1:8) ────────────────────────────────────
+  var sp1list = [
+    {id:'sp1-demo-01', type:'splitter', grau:1, ratio:'1:8', nome:'SP1-CENTRAL-01', parent_id:'dgo-demo-01', parent_type:'dgo', pon_port:'1/0/1'},
+    {id:'sp1-demo-02', type:'splitter', grau:1, ratio:'1:8', nome:'SP1-CENTRAL-02', parent_id:'dgo-demo-01', parent_type:'dgo', pon_port:'1/0/2'},
+    {id:'sp1-demo-03', type:'splitter', grau:1, ratio:'1:8', nome:'SP1-FILIAL-01',  parent_id:'dgo-demo-02', parent_type:'dgo', pon_port:'1/0/1'},
+  ];
+  sp1list.forEach(function(s) {
+    var id = s.id; delete s.id;
+    saves.push(sdrRef('infrastructure/' + id).set(Object.assign({}, s, {source:'demo', created_at:ts})));
+    s.id = id;
+  });
+
+  // ── Splitters 2º grau (1:4) ────────────────────────────────────
+  var sp2list = [
+    {id:'sp2-demo-01', type:'splitter', grau:2, ratio:'1:4', nome:'SP2-C01-A', parent_id:'sp1-demo-01', parent_type:'splitter'},
+    {id:'sp2-demo-02', type:'splitter', grau:2, ratio:'1:4', nome:'SP2-C01-B', parent_id:'sp1-demo-01', parent_type:'splitter'},
+    {id:'sp2-demo-03', type:'splitter', grau:2, ratio:'1:4', nome:'SP2-C02-A', parent_id:'sp1-demo-02', parent_type:'splitter'},
+    {id:'sp2-demo-04', type:'splitter', grau:2, ratio:'1:4', nome:'SP2-F01-A', parent_id:'sp1-demo-03', parent_type:'splitter'},
+  ];
+  sp2list.forEach(function(s) {
+    var id = s.id; delete s.id;
+    saves.push(sdrRef('infrastructure/' + id).set(Object.assign({}, s, {source:'demo', created_at:ts})));
+    s.id = id;
+  });
+
+  // ── Splitters 3º grau (1:2) — apenas para alguns ramos ─────────
+  var sp3list = [
+    {id:'sp3-demo-01', type:'splitter', grau:3, ratio:'1:2', nome:'SP3-C01-A1', parent_id:'sp2-demo-01', parent_type:'splitter'},
+    {id:'sp3-demo-02', type:'splitter', grau:3, ratio:'1:2', nome:'SP3-C01-A2', parent_id:'sp2-demo-01', parent_type:'splitter'},
+  ];
+  sp3list.forEach(function(s) {
+    var id = s.id; delete s.id;
+    saves.push(sdrRef('infrastructure/' + id).set(Object.assign({}, s, {source:'demo', created_at:ts})));
+    s.id = id;
+  });
+
+  // ── CTOs ──────────────────────────────────────────────────────
+  // Mapa: parent_id → lista de CTOs
+  var ctosDefs = [
+    // via Sp3
+    {id:'cto-demo-01', nome:'CTO-01', parent_id:'sp3-demo-01', total_ports:8, used_ports:4, endereco:'Rua A, poste 10', lat:-20.316, lng:-40.337},
+    {id:'cto-demo-02', nome:'CTO-02', parent_id:'sp3-demo-02', total_ports:8, used_ports:3, endereco:'Rua A, poste 15', lat:-20.317, lng:-40.336},
+    // via Sp2 direto (sem Sp3)
+    {id:'cto-demo-03', nome:'CTO-03', parent_id:'sp2-demo-02', total_ports:8, used_ports:6, endereco:'Rua B, poste 5',  lat:-20.318, lng:-40.339},
+    {id:'cto-demo-04', nome:'CTO-04', parent_id:'sp2-demo-03', total_ports:8, used_ports:5, endereco:'Rua C, poste 8',  lat:-20.319, lng:-40.340},
+    {id:'cto-demo-05', nome:'CTO-05', parent_id:'sp2-demo-04', total_ports:8, used_ports:4, endereco:'Av. Principal, poste 20', lat:-20.321, lng:-40.341},
+  ];
+  ctosDefs.forEach(function(c) {
+    var id = c.id; delete c.id;
+    saves.push(sdrRef('infrastructure/' + id).set(Object.assign({}, c, {type:'cto', source:'demo', created_at:ts})));
+    c.id = id;
+  });
+
+  // ── ONUs + Clientes ──────────────────────────────────────────
   var modelos = ['ZTE F660','Huawei HG8245H','Intelbras 110A','ZTE F620','Multilaser RE160'];
-  for (var i = 1; i <= 20; i++) {
-    var oltIdx = (i % 3) === 0 ? 'olt-03' : (i % 2 === 0 ? 'olt-02' : 'olt-01');
-    demoOnus.push({
-      id: 'onu-' + String(i).padStart(3,'0'),
-      serial: 'ZTEG' + String(Math.floor(Math.random()*99999999)).padStart(8,'0'),
-      modelo: modelos[i % modelos.length],
-      olt_id: oltIdx,
-      pon: (i % 4) + 1,
-      status: i % 7 === 0 ? 'offline' : 'online',
-      signal_rx: -(Math.floor(Math.random()*15) + 10),
-      client_id: 'cli-' + String(i).padStart(3,'0'),
-      sync_at: new Date().toISOString(),
-      source: 'demo'
-    });
-  }
-  var saves = demoOnus.map(function(o) { return sdrRef('onus/' + o.id).set(o); });
+  var nomes   = ['Ana Silva','Bruno Souza','Carlos Lima','Diana Costa','Eduardo Pereira',
+                 'Fernanda Oliveira','Gabriel Santos','Helena Rocha','Igor Martins','Julia Ferreira',
+                 'Kleber Matos','Larissa Dias','Marcos Viana','Nathalia Cruz','Otto Leal',
+                 'Patricia Mendes','Rafael Gomes','Sandra Lima','Thiago Costa','Valeria Reis'];
+  var planos = ['50MB','100MB','200MB','500MB'];
+
+  // Cada CTO ganha 4 ONUs
+  var onuIdx = 0;
+  ctosDefs.forEach(function(cto, ci) {
+    var oltId = (ci < 2) ? 'olt-demo-01' : (ci < 4) ? 'olt-demo-01' : 'olt-demo-02';
+    for (var p = 0; p < 4; p++) {
+      onuIdx++;
+      var serial = 'ZTEG' + String(onuIdx * 111111).padStart(8,'0');
+      var onuId  = 'onu-demo-' + String(onuIdx).padStart(2,'0');
+      var cliId  = 'cli-demo-' + String(onuIdx).padStart(2,'0');
+      var nome   = nomes[(onuIdx - 1) % nomes.length];
+      var status = (onuIdx % 6 === 0) ? 'offline' : (onuIdx % 8 === 0) ? 'degraded' : 'online';
+      var rxPow  = status === 'offline' ? null : -(Math.floor(Math.random()*12) + 14);
+
+      saves.push(sdrRef('onus/' + onuId).set({
+        serial_number: serial,
+        model:         modelos[onuIdx % modelos.length],
+        status:        status,
+        olt_id:        oltId,
+        cto_id:        cto.id,
+        cto_nome:      cto.nome,
+        rx_power:      rxPow,
+        ip_address:    '192.168.' + ci + '.' + (100 + p),
+        pon_port:      '1/0/' + (ci + 1),
+        source:'demo', created_at:ts
+      }));
+
+      saves.push(sdrRef('clients/' + cliId).set({
+        name:           nome,
+        onu_serial:     serial,
+        onu_status:     status,
+        rx_power:       rxPow,
+        plan_name:      planos[onuIdx % planos.length],
+        financial_status: (onuIdx % 7 === 0) ? 'inadimplente' : 'adimplente',
+        cto_id:         cto.id,
+        cto_nome:       cto.nome,
+        olt_id:         oltId,
+        lat:            cto.lat + (Math.random() - 0.5) * 0.002,
+        lng:            cto.lng + (Math.random() - 0.5) * 0.002,
+        source:'demo', created_at:ts
+      }));
+    }
+  });
+
   Promise.all(saves).then(function() {
-    _sdrMkLog('✅ ' + demoOnus.length + ' ONUs demo inseridas no Firebase.', 'ok');
-    document.getElementById('mk-count-olts'); // triggers refresh
+    _sdrMkLog('✅ Topologia completa gerada: ' + olts.length + ' OLTs, ' + dgos.length + ' DGOs, ' + sp1list.length + ' Sp1, ' + sp2list.length + ' Sp2, ' + sp3list.length + ' Sp3, ' + ctosDefs.length + ' CTOs, ' + onuIdx + ' ONUs + Clientes.', 'ok');
     _sdrMkRefreshCounts();
-    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'Demo ONUs', text:demoOnus.length + ' ONUs simuladas salvas. Acesse a aba ONUs para ver.', timer:2500, showConfirmButton:false});
-  }).catch(function(e) { _sdrMkLog('❌ Erro ao salvar ONUs demo: ' + e.message, 'error'); });
+    if (typeof Swal !== 'undefined') Swal.fire({
+      icon:'success', title:'Topologia Gerada!',
+      html: '<b>' + olts.length + '</b> OLTs · <b>' + dgos.length + '</b> DGOs · <b>' + (sp1list.length+sp2list.length+sp3list.length) + '</b> Splitters · <b>' + ctosDefs.length + '</b> CTOs · <b>' + onuIdx + '</b> ONUs<br><br>Acesse a aba <b>OLTs → Topologia</b> para visualizar.',
+      timer:4000, showConfirmButton:false
+    });
+  }).catch(function(e) { _sdrMkLog('❌ Erro ao gerar topologia: ' + e.message, 'error'); });
 };
 
-// ---- MK: Demo — Clientes ----
+// ---- MK: Demo — Só OLTs ----
+window.sdrMkDemoOlts = function() {
+  var ts = new Date().toISOString();
+  var demoOlts = {
+    'olt-demo-01': {name:'OLT-CENTRAL-01', model:'ZTE C320',       ip_address:'10.0.0.1', total_pon_ports:8, is_active:true, source:'demo', created_at:ts},
+    'olt-demo-02': {name:'OLT-FILIAL-01',  model:'Huawei MA5608T', ip_address:'10.0.0.2', total_pon_ports:4, is_active:true, source:'demo', created_at:ts},
+    'olt-demo-03': {name:'OLT-FILIAL-02',  model:'ZTE C300',       ip_address:'10.0.0.3', total_pon_ports:2, is_active:false,source:'demo', created_at:ts}
+  };
+  var saves = Object.entries(demoOlts).map(function(e){ return sdrRef('olt_connections/' + e[0]).set(e[1]); });
+  Promise.all(saves).then(function() {
+    _sdrMkLog('✅ ' + Object.keys(demoOlts).length + ' OLTs demo em olt_connections.', 'ok');
+    _sdrMkRefreshCounts();
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'OLTs Demo', text:'3 OLTs salvas. Acesse a aba OLTs para ver.', timer:2000, showConfirmButton:false});
+  }).catch(function(e) { _sdrMkLog('❌ Erro OLTs demo: ' + e.message, 'error'); });
+};
+
+// ---- MK: Demo — Só ONUs ----
+window.sdrMkDemoOnus = function() {
+  var ts = new Date().toISOString();
+  var modelos = ['ZTE F660','Huawei HG8245H','Intelbras 110A','ZTE F620','Multilaser RE160'];
+  var saves = [];
+  for (var i = 1; i <= 12; i++) {
+    var oltId = i <= 4 ? 'olt-demo-01' : i <= 8 ? 'olt-demo-02' : 'olt-demo-03';
+    var status = (i % 6 === 0) ? 'offline' : (i % 8 === 0) ? 'degraded' : 'online';
+    saves.push(sdrRef('onus/onu-demo-' + String(i).padStart(2,'0')).set({
+      serial_number: 'ZTEG' + String(i * 111111).padStart(8,'0'),
+      model:  modelos[i % modelos.length],
+      status: status,
+      olt_id: oltId,
+      rx_power: status === 'offline' ? null : -(Math.floor(Math.random()*12)+14),
+      ip_address: '192.168.1.' + (100 + i),
+      source:'demo', created_at:ts
+    }));
+  }
+  Promise.all(saves).then(function() {
+    _sdrMkLog('✅ 12 ONUs demo salvas.', 'ok');
+    _sdrMkRefreshCounts();
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'ONUs Demo', text:'12 ONUs salvas. Acesse a aba ONUs.', timer:2000, showConfirmButton:false});
+  }).catch(function(e) { _sdrMkLog('❌ Erro ONUs demo: ' + e.message, 'error'); });
+};
+
+// ---- MK: Demo — Só Clientes ----
 window.sdrMkDemoClientes = function() {
+  var ts = new Date().toISOString();
   var nomes = ['Ana Silva','Bruno Souza','Carlos Lima','Diana Costa','Eduardo Pereira',
                'Fernanda Oliveira','Gabriel Santos','Helena Rocha','Igor Martins','Julia Ferreira'];
-  var demo = nomes.map(function(n, i) {
-    return {
-      id: 'cli-' + String(i+1).padStart(3,'0'),
-      nome: n,
-      documento: '000.' + String(i*111+100).padStart(3,'0') + '.00' + i + '-00',
-      contrato: 'CON-202' + i,
-      plano: ['50MB','100MB','200MB','500MB'][i%4],
-      status: i % 5 === 0 ? 'inadimplente' : 'ativo',
-      onu_id: 'onu-' + String(i+1).padStart(3,'0'),
-      sync_at: new Date().toISOString(),
-      source: 'demo'
-    };
+  var planos = ['50MB','100MB','200MB','500MB'];
+  var saves = nomes.map(function(n, i) {
+    return sdrRef('clients/cli-demo-' + String(i+1).padStart(2,'0')).set({
+      name: n,
+      onu_serial: 'ZTEG' + String((i+1)*111111).padStart(8,'0'),
+      onu_status: i % 6 === 0 ? 'offline' : 'online',
+      rx_power: -(Math.floor(Math.random()*12)+14),
+      plan_name: planos[i%4],
+      financial_status: i % 5 === 0 ? 'inadimplente' : 'adimplente',
+      lat: -20.316 + (Math.random()-0.5)*0.02,
+      lng: -40.338 + (Math.random()-0.5)*0.02,
+      source:'demo', created_at:ts
+    });
   });
-  var saves = demo.map(function(c) { return sdrRef('clients/' + c.id).set(c); });
   Promise.all(saves).then(function() {
-    _sdrMkLog('✅ ' + demo.length + ' clientes demo inseridos no Firebase.', 'ok');
+    _sdrMkLog('✅ ' + nomes.length + ' clientes demo salvos.', 'ok');
     _sdrMkRefreshCounts();
-    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'Demo Clientes', text:demo.length + ' clientes simulados salvos. Acesse a aba Clientes.', timer:2500, showConfirmButton:false});
-  }).catch(function(e) { _sdrMkLog('❌ Erro ao salvar clientes demo: ' + e.message, 'error'); });
+    if (typeof Swal !== 'undefined') Swal.fire({icon:'success', title:'Clientes Demo', text:nomes.length + ' clientes salvos. Acesse a aba Clientes.', timer:2000, showConfirmButton:false});
+  }).catch(function(e) { _sdrMkLog('❌ Erro clientes demo: ' + e.message, 'error'); });
+};
+
+// ---- Topologia FTTH — Árvore Visual ----
+window.sdrTopologiaToggle = function() {
+  var panel = document.getElementById('topologia-tree');
+  if (!panel) return;
+  var visible = panel.style.display !== 'none';
+  panel.style.display = visible ? 'none' : 'block';
+  if (!visible) sdrTopologiaRender();
+};
+
+window.sdrTopologiaRender = function() {
+  var el = document.getElementById('topologia-content');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
+
+  Promise.all([
+    sdrRef('olt_connections').once('value'),
+    sdrRef('infrastructure').once('value'),
+    sdrRef('onus').once('value'),
+    sdrRef('clients').once('value')
+  ]).then(function(snaps) {
+    var olts    = snaps[0].val() || {};
+    var infra   = snaps[1].val() || {};
+    var onus    = snaps[2].val() || {};
+    var clients = snaps[3].val() || {};
+
+    // Índices por tipo/parent
+    var byType   = {};   // type → {id: obj}
+    var byParent = {};   // parent_id → [{id, obj}]
+    Object.entries(infra).forEach(function(e) {
+      var id = e[0], obj = e[1];
+      if (!obj) return;
+      var t = obj.type || 'unknown';
+      if (!byType[t]) byType[t] = {};
+      byType[t][id] = obj;
+      var pid = obj.parent_id || obj.olt_id || '__root__';
+      if (!byParent[pid]) byParent[pid] = [];
+      byParent[pid].push({id:id, obj:obj});
+    });
+
+    // ONUs por CTO
+    var onusByCto = {};
+    Object.entries(onus).forEach(function(e) {
+      var uid = e[0], u = e[1];
+      if (!u) return;
+      var cid = u.cto_id || '__nocto__';
+      if (!onusByCto[cid]) onusByCto[cid] = [];
+      onusByCto[cid].push({id:uid, obj:u});
+    });
+
+    // Clientes por ONU serial
+    var clientBySerial = {};
+    Object.entries(clients).forEach(function(e) {
+      var c = e[1];
+      if (c && c.onu_serial) clientBySerial[c.onu_serial] = c;
+    });
+
+    function badge(status) {
+      var col = status === 'online' ? '#16a34a' : status === 'degraded' ? '#d97706' : '#dc2626';
+      return '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + col + ';margin-right:4px"></span>';
+    }
+
+    function renderChildren(parentId, depth, oltId) {
+      var children = (byParent[parentId] || []).sort(function(a,b){ return (a.obj.nome||a.id).localeCompare(b.obj.nome||b.id); });
+      if (children.length === 0) return '';
+      var pad = depth * 20;
+      return children.map(function(c) {
+        var id = c.id, obj = c.obj;
+        var tipo = obj.type;
+        var color = tipo === 'dgo' ? '#3b82f6' : tipo === 'splitter' ? (obj.grau === 1 ? '#7c3aed' : obj.grau === 2 ? '#a855f7' : '#c084fc') : tipo === 'cto' ? '#d97706' : '#64748b';
+        var icon  = tipo === 'dgo' ? 'fa-network-wired' : tipo === 'splitter' ? 'fa-code-branch' : tipo === 'cto' ? 'fa-box' : 'fa-circle';
+        var label = obj.nome || id;
+        var info  = tipo === 'dgo' ? ('PON ' + (obj.pon_port||'—')) : tipo === 'splitter' ? ('Grau ' + obj.grau + ' · ' + (obj.ratio||'')) : tipo === 'cto' ? ((obj.used_ports||0) + '/' + (obj.total_ports||8) + ' portas') : '';
+
+        // CTOs: listar ONUs filhas
+        var onusHtml = '';
+        if (tipo === 'cto') {
+          var ctOnus = onusByCto[id] || [];
+          onusHtml = ctOnus.map(function(u) {
+            var cli = u.obj.serial_number ? (clientBySerial[u.obj.serial_number] || null) : null;
+            var st  = u.obj.status || 'offline';
+            return '<div style="padding:3px 0 3px ' + (pad+40) + 'px;font-size:.73rem;border-left:2px solid #e5e7eb;margin-left:' + (pad+28) + 'px;padding-left:12px">'
+              + badge(st)
+              + '<span style="color:#374151;font-family:monospace">' + (u.obj.serial_number||u.id) + '</span>'
+              + ' <span style="color:#64748b">' + (u.obj.model||'') + '</span>'
+              + (cli ? ' — <b style="color:#1e293b">' + cli.name + '</b> <span style="color:var(--muted);font-size:.7rem">' + (cli.plan_name||'') + '</span>' : '')
+              + (u.obj.rx_power != null ? ' <span style="color:' + (u.obj.rx_power > -25 ? '#16a34a' : u.obj.rx_power > -28 ? '#d97706' : '#dc2626') + ';font-size:.7rem">(' + u.obj.rx_power + ' dBm)</span>' : '')
+              + '</div>';
+          }).join('');
+          if (ctOnus.length === 0) onusHtml = '<div style="padding-left:' + (pad+52) + 'px;font-size:.72rem;color:#94a3b8;font-style:italic">Sem ONUs</div>';
+        }
+
+        return '<div style="padding:5px 0 2px ' + pad + 'px" class="topo-row" onclick="this.nextElementSibling&&(this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'block\':\'none\')">'
+          + '<span style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:4px 10px;font-size:.78rem;box-shadow:0 1px 2px rgba(0,0,0,.04)">'
+          + '<i class="fas ' + icon + '" style="color:' + color + ';width:14px"></i>'
+          + '<b style="color:#1e293b">' + label + '</b>'
+          + (info ? '<span style="color:#64748b;font-size:.7rem">' + info + '</span>' : '')
+          + '</span></div>'
+          + '<div>' + onusHtml + renderChildren(id, depth + 1, oltId) + '</div>';
+      }).join('');
+    }
+
+    var oltEntries = Object.entries(olts);
+    if (oltEntries.length === 0) {
+      el.innerHTML = '<div style="text-align:center;padding:30px;color:var(--muted)"><i class="fas fa-info-circle"></i> Nenhuma OLT cadastrada. Use <b>Integração MK → Simular Topologia Completa</b>.</div>';
+      return;
+    }
+
+    var html = oltEntries.map(function(e) {
+      var oid = e[0], o = e[1];
+      var status = o.is_active ? 'online' : 'offline';
+      var onusOlt = Object.values(onus).filter(function(u){ return u && u.olt_id === oid; });
+      var onOnline = onusOlt.filter(function(u){ return u.status === 'online'; }).length;
+      return '<div style="margin-bottom:16px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 14px">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'
+        + '<div style="width:32px;height:32px;background:' + (o.is_active ? 'linear-gradient(135deg,#dc2626,#b91c1c)' : '#94a3b8') + ';border-radius:8px;display:flex;align-items:center;justify-content:center">'
+        + '<i class="fas fa-server" style="color:#fff;font-size:.85rem"></i></div>'
+        + '<div><b style="color:#1e293b;font-size:.9rem">' + (o.name||oid) + '</b>'
+        + '<div style="font-size:.73rem;color:#64748b">' + (o.model||'OLT') + ' · IP: ' + (o.ip_address||'—') + ' · ' + (o.total_pon_ports||0) + ' PONs</div></div>'
+        + badge(status) + '<span style="font-size:.75rem;color:#64748b">' + onOnline + '/' + onusOlt.length + ' ONUs online</span>'
+        + '</div>'
+        + renderChildren(oid, 0, oid)
+        + ((!byParent[oid] || byParent[oid].length === 0) ? '<div style="padding-left:8px;font-size:.78rem;color:#94a3b8;font-style:italic">Sem DGOs vinculados a esta OLT</div>' : '')
+        + '</div>';
+    }).join('');
+
+    el.innerHTML = html;
+  }).catch(function(e) {
+    el.innerHTML = '<div style="color:#dc2626;padding:16px">Erro ao carregar topologia: ' + e.message + '</div>';
+  });
 };
 
 // ---- Helpers internos MK ----
@@ -4317,25 +4597,26 @@ function _sdrMkUpdateBadge(enabled) {
 }
 
 function _sdrMkRefreshCounts() {
-  sdrRef('olts').once('value').then(function(s) {
+  sdrRef('olt_connections').once('value').then(function(s) {
     var el = document.getElementById('mk-count-olts');
-    if (el) el.textContent = s.numChildren ? s.numChildren() : (Object.keys(s.val()||{}).length || '0');
+    if (el) el.textContent = Object.keys(s.val()||{}).length || '0';
+  });
+  sdrRef('infrastructure').once('value').then(function(s) {
+    var infra = s.val() || {};
+    var ctoCount  = Object.values(infra).filter(function(i){ return i && i.type === 'cto'; }).length;
+    var dgoCount  = Object.values(infra).filter(function(i){ return i && i.type === 'dgo'; }).length;
+    var elCto = document.getElementById('mk-count-ctos');
+    var elPop = document.getElementById('mk-count-pops');
+    if (elCto) elCto.textContent = ctoCount || '0';
+    if (elPop) elPop.textContent = dgoCount || '0';
   });
   sdrRef('clients').once('value').then(function(s) {
     var el = document.getElementById('mk-count-clientes');
-    if (el) el.textContent = s.numChildren ? s.numChildren() : (Object.keys(s.val()||{}).length || '0');
+    if (el) el.textContent = Object.keys(s.val()||{}).length || '0';
   });
-  sdrRef('onus').once('value').then(function(s) {
-    var el = document.getElementById('mk-count-ctos'); // reuse CTO slot for ONUs until POPs are sync'd
-    if (el) el.textContent = s.numChildren ? s.numChildren() : (Object.keys(s.val()||{}).length || '0');
-  });
-  // last sync
   sdrRef('mk_config/updated_at').once('value').then(function(s) {
     var el = document.getElementById('mk-last-sync');
-    if (el && s.val()) {
-      var d = new Date(s.val());
-      el.textContent = d.toLocaleString('pt-BR');
-    }
+    if (el && s.val()) el.textContent = new Date(s.val()).toLocaleString('pt-BR');
   });
 }
 
