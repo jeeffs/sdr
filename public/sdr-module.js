@@ -3111,25 +3111,20 @@ window.sdrDashRedeRender = function() {
     const degradedClients = clientsArr.filter(c => c.onu_status === 'degraded');
     const openTickets = tickets.filter(t => t.status !== 'resolvido');
 
-    // Stats KPIs
-    const statsEl = document.getElementById('dash-rede-stats');
-    if (statsEl) {
-      statsEl.innerHTML = `
-        <div class="infra-stat"><div class="is-num">${clientsArr.length}</div><div class="is-label">Clientes</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#16a34a">${onlineClients.length}</div><div class="is-label">Online</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#d97706">${degradedClients.length}</div><div class="is-label">Degradados</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#dc2626">${offlineClients.length}</div><div class="is-label">Offline</div></div>
-        <div class="infra-stat"><div class="is-num">${onus.length}</div><div class="is-label">ONUs</div></div>
-        <div class="infra-stat"><div class="is-num">${olts.length}</div><div class="is-label">OLTs</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#dc2626">${activeAlerts.length}</div><div class="is-label">Alertas</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#2563eb">${openTickets.length}</div><div class="is-label">Tickets</div></div>`;
-    }
+    // KPI Cards — IDs do template HTML _sdrHtml_dash_rede
+    const _kpi = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    _kpi('kpi-clientes-val', clientsArr.length);
+    _kpi('kpi-online-val',   onlineClients.length);
+    _kpi('kpi-offline-val',  offlineClients.length);
+    _kpi('kpi-olts-val',     olts.length);
+    _kpi('kpi-alertas-val',  activeAlerts.length);
+    _kpi('kpi-tickets-val',  openTickets.length);
 
-    // ── Gráfico 1: Status da Rede (Donut) ──
-    _sdrDestroyChart('chart-status-rede');
-    const ctxStatus = document.getElementById('chart-status-rede');
+    // ── Gráfico 1: Status das ONUs (Donut) → canvas #dash-chart-onus ──
+    _sdrDestroyChart('dash-chart-onus');
+    const ctxStatus = document.getElementById('dash-chart-onus');
     if (ctxStatus) {
-      sdrChartInstances['chart-status-rede'] = new Chart(ctxStatus, {
+      sdrChartInstances['dash-chart-onus'] = new Chart(ctxStatus, {
         type: 'doughnut',
         data: {
           labels: ['Online', 'Degradado', 'Offline', 'Sem ONU'],
@@ -3223,44 +3218,35 @@ window.sdrDashRedeRender = function() {
       });
     }
 
-    // ── Gráfico 4: Alertas últimos 7 dias (Linha) ──
-    _sdrDestroyChart('chart-alerts-week');
-    const ctxAlerts = document.getElementById('chart-alerts-week');
+    // ── Gráfico 4: Chamados por Status (Donut) → canvas #dash-chart-tickets ──
+    _sdrDestroyChart('dash-chart-tickets');
+    const ctxAlerts = document.getElementById('dash-chart-tickets');
     if (ctxAlerts) {
-      const days = [];
-      const alertCounts = [];
-      const ticketCounts = [];
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-        const label = d.toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit' });
-        days.push(label);
-        alertCounts.push(alerts.filter(a => (a.created_at || '').startsWith(dateStr)).length);
-        ticketCounts.push(tickets.filter(t => (t.created_at || '').startsWith(dateStr)).length);
-      }
-      sdrChartInstances['chart-alerts-week'] = new Chart(ctxAlerts, {
-        type: 'line',
+      const openT   = tickets.filter(t => t.status === 'aberto').length;
+      const inProgT = tickets.filter(t => t.status === 'em_andamento').length;
+      const waitT   = tickets.filter(t => t.status === 'aguardando').length;
+      const doneT   = tickets.filter(t => t.status === 'resolvido').length;
+      sdrChartInstances['dash-chart-tickets'] = new Chart(ctxAlerts, {
+        type: 'doughnut',
         data: {
-          labels: days,
-          datasets: [
-            { label: 'Alertas', data: alertCounts, borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.1)', fill: true, tension: 0.3 },
-            { label: 'Tickets', data: ticketCounts, borderColor: '#2563eb', backgroundColor: 'rgba(37,99,235,0.1)', fill: true, tension: 0.3 }
-          ]
+          labels: ['Abertos', 'Em Andamento', 'Aguardando', 'Resolvidos'],
+          datasets: [{
+            data: [openT, inProgT, waitT, doneT],
+            backgroundColor: ['#dc2626', '#2563eb', '#d97706', '#16a34a']
+          }]
         },
         options: {
           responsive: true,
           plugins: {
-            title: { display: true, text: 'Alertas e Tickets — Últimos 7 Dias', font: { size: 14 } },
+            title: { display: true, text: 'Chamados por Status', font: { size: 14 } },
             legend: { position: 'bottom', labels: { font: { size: 11 } } }
-          },
-          scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+          }
         }
       });
     }
 
-    // ── Tabelas (mantidas do Sprint 3) ──
-    const contentEl = document.getElementById('dash-rede-content');
+    // ── Alertas Recentes ──
+    const contentEl = document.getElementById('dash-alertas-recentes');
     if (contentEl) {
       const worstSignal = clientsArr.filter(c => c.rx_power != null).sort((a,b) => a.rx_power - b.rx_power).slice(0, 10);
       let html = '';
@@ -3286,9 +3272,9 @@ window.sdrDashRedeRender = function() {
         html += `</div>`;
       }
 
-      contentEl.innerHTML = html || '<p style="color:var(--muted);text-align:center;padding:20px">Cadastre clientes e infraestrutura para ver o dashboard completo.</p>';
+      contentEl.innerHTML = html || '<p style="color:var(--muted);text-align:center;padding:20px"><i class="fas fa-check-circle" style="color:#16a34a"></i> Nenhum alerta ativo no momento.</p>';
     }
-  });
+  }).catch(err => console.error('[SDR DashRede]', err));
 };
 
 function _sdrDestroyChart(id) {
@@ -4649,6 +4635,19 @@ window.sdrMkTestarConexao = function() {
 
   if (!url || !token || !pass) {
     if (res) res.innerHTML = '<span style="color:#ef4444">⚠️ Preencha servidor, token e contra-senha antes de testar.</span>';
+    return;
+  }
+  // Detectar mixed content: app HTTPS tentando chamar API HTTP privada
+  if (window.location.protocol === 'https:' && !url.startsWith('https')) {
+    var warnHtml = '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:.8rem">'
+      + '<b style="color:#d97706">⚠️ Mixed Content — Limitação do Browser</b><br>'
+      + '<span style="color:#78350f">O app está em <b>HTTPS</b> mas o servidor MK está em <b>HTTP</b>. Browsers modernos bloqueiam essa conexão por segurança.</span><br><br>'
+      + '<b>Soluções:</b><br>'
+      + '• Use o <b>Modo Demo</b> abaixo para testar as telas ✅<br>'
+      + '• Para produção: configure um <b>proxy HTTPS</b> no servidor MK (nginx/apache)<br>'
+      + '• Ou acesse o SDR via <b>rede local</b> com HTTP direto</div>';
+    if (res) res.innerHTML = warnHtml;
+    _sdrMkLog('⚠️ Mixed content: HTTPS→HTTP bloqueado pelo browser. Use Modo Demo.', 'warn');
     return;
   }
   if (res) res.innerHTML = '<span style="color:#3b82f6"><i class="fas fa-spinner fa-spin"></i> Testando conexão...</span>';
