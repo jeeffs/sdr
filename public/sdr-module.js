@@ -30,7 +30,9 @@
       + '</div>'
       + '<div style="flex:1;display:flex;position:relative">'
       + '<div id="sdr-map" style="flex:1;z-index:1"></div>'
-      + '<div id="map-info" style="width:260px;background:#1e293b;color:#e2e8f0;padding:12px;overflow-y:auto;font-size:.78rem">'
+      + '<div id="map-info" style="width:260px;min-width:260px;background:#1e293b;color:#e2e8f0;padding:12px;overflow-y:auto;font-size:.78rem;position:relative;transition:width .22s ease,min-width .22s ease,padding .22s ease">'
+      + '<button id="map-info-toggle" onclick="sdrMapInfoToggle()" title="Minimizar painel" style="position:absolute;top:50%;left:-14px;transform:translateY(-50%);width:26px;height:26px;background:#1a6fc4;border:2px solid rgba(255,255,255,.7);border-radius:50%;color:#fff;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;font-size:.65rem;box-shadow:0 2px 8px rgba(0,0,0,.35);padding:0;transition:background .15s"><i id="map-info-chev" class="fas fa-chevron-right" style="transition:transform .22s ease"></i></button>'
+      + '<div id="map-info-body">'
       + '<div style="font-weight:700;margin-bottom:8px;color:#38bdf8"><i class="fas fa-info-circle"></i> Resumo</div>'
       + '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">'
       + '<div style="display:flex;justify-content:space-between"><span><i class="fas fa-bolt" style="color:#d97706;width:18px"></i> Postes</span><b id="mi-poles">0</b></div>'
@@ -47,6 +49,7 @@
       + '<button id="ml-clients" class="btn-map active" onclick="sdrMapToggleLayer(\'clients\')" style="padding:4px 8px;font-size:.72rem;text-align:left"><i class="fas fa-user"></i> Clientes</button>'
       + '<button id="ml-olts" class="btn-map" onclick="sdrMapToggleLayer(\'olts\')" style="padding:4px 8px;font-size:.72rem;text-align:left"><i class="fas fa-server"></i> OLTs</button>'
       + '<button id="ml-heatmap" class="btn-map" onclick="sdrMapToggleLayer(\'heatmap\')" style="padding:4px 8px;font-size:.72rem;text-align:left"><i class="fas fa-fire"></i> Heatmap</button>'
+      + '</div>'
       + '</div>'
       + '</div>'
       + '<div id="sdr-side-panel" style="position:absolute;top:0;right:0;width:340px;height:100%;background:#fff;box-shadow:-4px 0 20px rgba(0,0,0,.15);z-index:500;overflow-y:auto;transform:translateX(100%);transition:transform .3s ease">'
@@ -101,7 +104,7 @@
     PAGE_TITLES['mapa']      = 'Mapa de Rede \u2014 Infraestrutura FTTH';
     PAGE_TITLES['dash-rede'] = 'Dashboard de Rede';
     PAGE_TITLES['clientes']  = 'Clientes FTTH';
-    PAGE_TITLES['olts']      = 'OLTs \u2014 Equipamentos';
+    PAGE_TITLES['olts']      = 'OLTs \u2014 Rede \u00d3ptica';
     PAGE_TITLES['onus']      = 'ONUs \u2014 Terminais de Cliente';
     PAGE_TITLES['alertas']   = 'Alertas de Rede';
     PAGE_TITLES['tickets']   = 'Chamados de Suporte';
@@ -109,8 +112,11 @@
   }
   if (typeof showPage === 'function' && !showPage._sdrPatched) {
     var _origShowPage = showPage;
+    var _sdrFullViewportPages = { mapa:1, olts:1 };
     window.showPage = function(name) {
       _origShowPage(name);
+      // Gerenciar overflow do body: full-viewport pages (mapa/olts) não usam scroll externo
+      document.body.style.overflowY = _sdrFullViewportPages[name] ? 'hidden' : '';
       // Timing fix: reinjetar HTML SDR se bootstrap rodou antes de _sdrHtml_* serem definidas
       var _pgEl = document.getElementById('page-' + name);
       var _pgFn = window['_sdrHtml_' + name.replace(/-/g,'_')];
@@ -529,7 +535,7 @@ let sdrMap = null;
 let sdrMapReady = false;
 let sdrBaseTile = null;
 let sdrLayers = { clients: null, ctos: null, poles: null, cables: null, olts: null, heatmap: null };
-let sdrLayerVisible = { clients: true, ctos: true, poles: true, cables: false, olts: false, heatmap: false };
+let sdrLayerVisible = { clients: true, ctos: true, poles: true, cables: false, olts: true, heatmap: false };
 let sdrInfraCache = {};
 let sdrClientesCache = {};
 let sdrOltsCache = {};
@@ -580,7 +586,7 @@ window.sdrMapInit = function() {
   sdrLayers.clients = L.layerGroup(); // não adiciona ao mapa por padrão (14k+ sem coords)
   sdrLayers.poles = L.layerGroup().addTo(sdrMap);
   sdrLayers.cables = L.layerGroup().addTo(sdrMap);
-  sdrLayers.olts = L.layerGroup();
+  sdrLayers.olts = L.layerGroup().addTo(sdrMap);
   sdrLayers.heatmap = L.layerGroup();
   sdrLayers.areas = L.layerGroup().addTo(sdrMap); // Áreas de cobertura (coverage_area)
 
@@ -651,6 +657,8 @@ function sdrMapRenderClients() {
 
 function sdrMapRenderOlts() {
   sdrLayers.olts.clearLayers();
+
+  // 1. OLTs gerenciadas via painel OLTs (olt_connections)
   Object.entries(sdrOltsCache).forEach(([id, o]) => {
     if (!o || !o.lat || !o.lng) return;
     const marker = L.marker([o.lat, o.lng], {
@@ -661,10 +669,37 @@ function sdrMapRenderOlts() {
       })
     });
     marker.bindTooltip(`<b>${o.name||'OLT'}</b><br>${o.model||''} · ${o.ip_address||''}`, {direction:'top', offset:[0,-14]});
-    marker.on('click', () => sdrOpenOltPanel(id));
+    marker.on('click', function() {
+      // Click simples → navega para aba OLTs e abre painel inline do chassis
+      if (typeof showPage === 'function') showPage('olts');
+      setTimeout(function() { sdrOltTabSwitch(id); }, 250);
+    });
     marker.on('contextmenu', (e) => { L.DomEvent.preventDefault(e); L.DomEvent.stopPropagation(e); sdrCtxMenu(e.originalEvent, _sdrCtxOlt(id)); });
     sdrLayers.olts.addLayer(marker);
   });
+
+  // 2. OLTs de infraestrutura (type='olt' em sdrInfraCache) — itens editados no mapa
+  // Evitar conflito: sdrMapRenderInfra tentaria adicionar ao sdrLayers.olts mas
+  // sdrMapRenderOlts limparia logo após. Tratamos aqui para garantir visibilidade.
+  if (window.sdrInfraCache) {
+    Object.entries(sdrInfraCache).forEach(function(entry) {
+      var iid = entry[0], item = entry[1];
+      if (!item || item.type !== 'olt' || !item.lat || !item.lng) return;
+      // Já está em olt_connections? Não duplicar
+      if (sdrOltsCache[iid]) return;
+      var imarker = L.marker([item.lat, item.lng], {
+        icon: L.divIcon({
+          className: 'leaflet-div-icon',
+          html: '<div class="marker-icon olt"><i class="fas fa-server"></i></div>',
+          iconSize: [28, 28], iconAnchor: [14, 14]
+        })
+      });
+      imarker.bindTooltip('<b>' + (item.name || item.code || 'OLT') + '</b>', {direction:'top', offset:[0,-14]});
+      imarker.on('click', function() { sdrOpenInfraPanel(iid, item); });
+      imarker.on('contextmenu', function(e) { L.DomEvent.stopPropagation(e); L.DomEvent.preventDefault(e); sdrOpenInfraPanel(iid, item); });
+      sdrLayers.olts.addLayer(imarker);
+    });
+  }
 }
 
 function _infraPopup(id, item) {
@@ -686,6 +721,36 @@ function sdrUpdateMapInfo() {
   _set('mi-clients', Object.keys(sdrClientesCache).length);
   _set('mi-olts', Object.keys(sdrOltsCache).length);
 }
+
+window.sdrMapInfoToggle = function() {
+  var panel = document.getElementById('map-info');
+  var body  = document.getElementById('map-info-body');
+  var chev  = document.getElementById('map-info-chev');
+  var btn   = document.getElementById('map-info-toggle');
+  if (!panel) return;
+  var collapsed = panel.getAttribute('data-collapsed') === '1';
+  if (collapsed) {
+    // Expandir
+    panel.style.width = '260px';
+    panel.style.minWidth = '260px';
+    panel.style.padding = '12px';
+    if (body) body.style.display = '';
+    if (chev) chev.style.transform = 'rotate(0deg)';
+    if (btn)  btn.title = 'Minimizar painel';
+    panel.setAttribute('data-collapsed', '0');
+    if (sdrMap) setTimeout(function(){ sdrMap.invalidateSize(); }, 240);
+  } else {
+    // Minimizar
+    panel.style.width = '28px';
+    panel.style.minWidth = '28px';
+    panel.style.padding = '0';
+    if (body) body.style.display = 'none';
+    if (chev) chev.style.transform = 'rotate(180deg)';
+    if (btn)  btn.title = 'Expandir painel';
+    panel.setAttribute('data-collapsed', '1');
+    if (sdrMap) setTimeout(function(){ sdrMap.invalidateSize(); }, 240);
+  }
+};
 
 window.sdrMapToggleLayer = function(layer) {
   sdrLayerVisible[layer] = !sdrLayerVisible[layer];
@@ -902,7 +967,7 @@ function _sdrShowAddModal(editId, editData) {
     <div style="padding:14px 16px;overflow-y:auto;max-height:70vh;display:flex;flex-direction:column;gap:8px">
       <div class="form-group">
         <label>Tipo</label>
-        <select id="sdr-f-type" ${isEdit?'disabled':''}>
+        <select id="sdr-f-type">
           ${Object.entries(INFRA_TYPES).map(([k,v]) => `<option value="${k}" ${d.type===k?'selected':''}>${v.label}</option>`).join('')}
         </select>
       </div>
@@ -978,13 +1043,60 @@ function _sdrShowAddModal(editId, editData) {
     if (isDragging) { isDragging = false; handle.style.cursor = 'grab'; }
   });
 
+  // ── Marcador arrastável no mapa (edição) ──
+  // Só cria se o mapa estiver ativo e o item tiver coordenadas
+  var _editDragMarker = null;
+  if (isEdit && d.lat && d.lng && window.sdrMap && window.sdrMapReady) {
+    var editCfg = INFRA_TYPES[d.type] || INFRA_TYPES.pole;
+    _editDragMarker = L.marker([d.lat, d.lng], {
+      draggable: true,
+      icon: L.divIcon({
+        className: 'leaflet-div-icon',
+        html: '<div class="marker-icon ' + editCfg.iconClass + '" style="border:2px dashed #f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.4)"><i class="fas ' + editCfg.icon + '"></i></div>',
+        iconSize: [28, 28], iconAnchor: [14, 14]
+      })
+    });
+    _editDragMarker.bindTooltip('Arraste para reposicionar', {permanent: false, direction: 'top', offset: [0, -14]});
+    _editDragMarker.addTo(sdrMap);
+    _editDragMarker.on('drag', function(ev) {
+      var ll = ev.target.getLatLng();
+      var latEl = document.getElementById('sdr-f-lat');
+      var lngEl = document.getElementById('sdr-f-lng');
+      if (latEl) latEl.value = ll.lat.toFixed(6);
+      if (lngEl) lngEl.value = ll.lng.toFixed(6);
+    });
+    // Focar o mapa neste item
+    sdrMap.setView([d.lat, d.lng], Math.max(sdrMap.getZoom(), 17));
+  }
+
+  // Remover marcador de edição quando o card for removido
+  var _origRemove = card.remove.bind(card);
+  card.remove = function() {
+    if (_editDragMarker && window.sdrMap) { try { sdrMap.removeLayer(_editDragMarker); } catch(e) {} _editDragMarker = null; }
+    _origRemove();
+  };
+
   // Campos extras por tipo
   const typeSelect = document.getElementById('sdr-f-type');
   function updateExtras() {
     const t = typeSelect.value;
     let ex = '';
     if (t === 'cto' || t === 'splitter') {
-      ex = `<div style="display:flex;gap:10px">
+      ex = `<div class="form-group">
+        <label>Subtipo</label>
+        <select id="sdr-f-cto-type">
+          <option value="default"      ${(d.cto_type||'default')==='default'      ?'selected':''}>CTO (genérica)</option>
+          <option value="ceo"          ${d.cto_type==='ceo'          ?'selected':''}>CEO — Caixa de Emenda Óptica</option>
+          <option value="1/8"          ${d.cto_type==='1/8'          ?'selected':''}>CTO 1:8 (8 portas)</option>
+          <option value="1/16"         ${d.cto_type==='1/16'         ?'selected':''}>CTO 1:16 (16 portas)</option>
+          <option value="1/4"          ${d.cto_type==='1/4'          ?'selected':''}>CTO 1:4 (4 portas)</option>
+          <option value="splitter"     ${d.cto_type==='splitter'     ?'selected':''}>Splitter</option>
+          <option value="emenda"       ${d.cto_type==='emenda'       ?'selected':''}>Emenda</option>
+          <option value="rt"           ${d.cto_type==='rt'           ?'selected':''}>RT — Reserva de Tubo</option>
+          <option value="nao_instalada"${d.cto_type==='nao_instalada'?'selected':''}>Não Instalada</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:10px">
         <div class="form-group" style="flex:1"><label>Portas Total</label><input id="sdr-f-total-ports" type="number" value="${d.total_ports||''}"></div>
         <div class="form-group" style="flex:1"><label>Portas Usadas</label><input id="sdr-f-used-ports" type="number" value="${d.used_ports||0}"></div>
       </div>`;
@@ -1049,10 +1161,17 @@ window.sdrInfraSave = async function(editId) {
 
   // Campos extras
   if (type === 'cto' || type === 'splitter') {
+    const ct = document.getElementById('sdr-f-cto-type');
     const tp = document.getElementById('sdr-f-total-ports');
     const up = document.getElementById('sdr-f-used-ports');
+    if (ct) data.cto_type = ct.value || 'default';
     if (tp) data.total_ports = parseInt(tp.value) || 0;
     if (up) data.used_ports = parseInt(up.value) || 0;
+    // Porta padrão por subtipo se não informada
+    if (!data.total_ports) {
+      const defaultPorts = {'1/8':8,'1/16':16,'1/4':4,'ceo':12,'splitter':8,'emenda':0,'rt':0,'nao_instalada':16,'default':8};
+      data.total_ports = defaultPorts[data.cto_type] || 8;
+    }
   }
   if (type === 'pole') {
     const c = document.getElementById('sdr-f-concess');
@@ -1085,10 +1204,37 @@ window.sdrInfraSave = async function(editId) {
 
   try {
     if (editId) {
+      const oldItem = sdrInfraCache[editId] || {};
       await sdrRef(`infrastructure/${editId}`).update(data);
+
+      // Atualizar cache local imediatamente (para refresh do mapa)
+      sdrInfraCache[editId] = Object.assign({}, oldItem, data);
+
+      // Se tipo mudou PARA OLT e ainda não tem olt_connection_id → criar entrada em olt_connections
+      if (type === 'olt' && !oldItem.olt_connection_id) {
+        const oltData = {
+          name: data.name, model: data.model || '', ip_address: data.ip_address || '',
+          snmp_community: data.snmp_community || 'public', snmp_version: 'v2c',
+          lat: data.lat, lng: data.lng,
+          total_pon_ports: data.total_pon_ports || 0,
+          is_active: true, created_at: new Date().toISOString()
+        };
+        const oltRef = await sdrRef('olt_connections').push(oltData);
+        await sdrRef(`infrastructure/${editId}`).update({ olt_connection_id: oltRef.key });
+        sdrInfraCache[editId].olt_connection_id = oltRef.key;
+        sdrOltsCache[oltRef.key] = oltData;  // update local OLT cache too
+      }
+
+      // Se tipo mudou DE OLT para outro → remover olt_connection_id do infra item
+      if (type !== 'olt' && oldItem.type === 'olt' && oldItem.olt_connection_id) {
+        // Não deletar olt_connections (pode ter DGOs vinculados), apenas desvincula
+        await sdrRef(`infrastructure/${editId}`).update({ olt_connection_id: null });
+        sdrInfraCache[editId].olt_connection_id = null;
+      }
+
       toast('Atualizado com sucesso!','success');
     } else {
-      // Se for OLT, salvar em olt_connections também
+      // Se for OLT nova, salvar em olt_connections também
       if (type === 'olt') {
         const oltData = { name: data.name, model: data.model, ip_address: data.ip_address,
           snmp_community: data.snmp_community, snmp_version: 'v2c',
@@ -1096,10 +1242,18 @@ window.sdrInfraSave = async function(editId) {
           is_active: true, created_at: data.created_at };
         const oltRef = await sdrRef('olt_connections').push(oltData);
         data.olt_connection_id = oltRef.key;
+        sdrOltsCache[oltRef.key] = oltData;  // update local OLT cache
       }
-      await sdrRef('infrastructure').push(data);
+      const newRef = await sdrRef('infrastructure').push(data);
+      sdrInfraCache[newRef.key] = data;  // update local infra cache
       toast('Cadastrado com sucesso!','success');
     }
+
+    // Refresh mapa para refletir mudanças (sem rebuscar Firebase)
+    if (typeof sdrMapRenderInfra === 'function') sdrMapRenderInfra();
+    if (typeof sdrMapRenderOlts === 'function') sdrMapRenderOlts();
+    if (typeof sdrUpdateMapInfo === 'function') sdrUpdateMapInfo();
+
     const modal = document.getElementById('sdr-modal');
     if (modal) modal.remove();
     sdrCloseSidePanel();
@@ -1222,6 +1376,8 @@ window.sdrClientesRender = function() {
     _renderClientesLista();
   });
 };
+// Filtro sem rebuscar Firebase — usa cache
+window.sdrClientesFilter = function() { _renderClientesLista(); };
 
 function _renderClientesLista() {
   const filter = document.getElementById('clientes-filter-status')?.value || '';
@@ -2087,164 +2243,1849 @@ window.sdrAutoLinkCTO = async function() {
 };
 
 // ════════════════════════════════════════════════════
+// SPRINT 4 — OLTs TAB INTERFACE + CHASSIS INLINE + CORD DRAWING
+// ════════════════════════════════════════════════════
+
+var _sdrActiveOltTab = null;
+var _sdrOltPlaceMode  = null;
+var _sdrCordDrawMode  = null;
+
+// ── HTML da página OLTs (tab-based dark UI) ─────────────────────────
+window._sdrHtml_olts = function() {
+  return '<div id="olts-page" style="height:100%;display:flex;flex-direction:column;background:#060d1c;overflow:hidden">'
+    // Tab bar row: scrollable tabs on left, Nova OLT button pinned on right
+    +'<div style="display:flex;align-items:stretch;background:#0a1628;border-bottom:1px solid #1e3a5f;flex-shrink:0">'
+    +'<div id="olts-tab-bar" style="flex:1;display:flex;align-items:flex-end;min-height:42px;overflow-x:auto;padding:0 4px"></div>'
+    +'<div style="display:flex;align-items:center;padding:0 10px;flex-shrink:0;border-left:1px solid #1e3a5f">'
+    +'<button onclick="sdrOltAddModal()" style="padding:5px 12px;font-size:.78rem;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap"><i class="fas fa-plus"></i> Nova OLT</button>'
+    +'</div>'
+    +'</div>'
+    +'<div id="olt-panel-content" style="flex:1;min-height:0;overflow:hidden;position:relative;background:#060d1c;display:flex;flex-direction:column"></div>'
+    +'</div>';
+};
+
+// ── Troca de aba ─────────────────────────────────────────────────────
+window.sdrOltTabSwitch = function(oltId) {
+  _sdrActiveOltTab = oltId;
+  _sdrCordDrawMode = null; // cancel any draw mode on tab switch
+  document.querySelectorAll('[id^="olt-tab-"]').forEach(function(btn) {
+    var active = btn.id === 'olt-tab-' + oltId;
+    btn.style.background    = active ? '#1e3a5f' : 'transparent';
+    btn.style.borderBottom  = '2px solid ' + (active ? '#6366f1' : 'transparent');
+    btn.style.color         = active ? '#e2e8f0' : '#64748b';
+    btn.style.fontWeight    = active ? '600' : '400';
+  });
+  var panel = document.getElementById('olt-panel-content');
+  if (panel) {
+    panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:80px;color:#64748b;font-size:.85rem"><i class="fas fa-spinner fa-spin" style="margin-right:6px"></i>Carregando...</div>';
+    sdrOltInlineRender(oltId);
+  }
+};
+
+// ── Render inline do painel (chassis + DGO) ──────────────────────────
+window.sdrOltInlineRender = function(oltId) {
+  Promise.all([
+    sdrRef('olt_connections/' + oltId).once('value'),
+    sdrRef('olt_connections/' + oltId + '/pons').once('value'),
+    sdrRef('infrastructure').once('value'),
+    sdrRef('onus').once('value')
+  ]).then(function(snaps) {
+    var olt   = snaps[0].val() || {};
+    var pons  = snaps[1].val() || {};
+    var infra = snaps[2].val() || {};
+    var onus  = snaps[3].val() || {};
+
+    // Index DGOs — exibir os vinculados a esta OLT + os referenciados por PONs com cordão
+    var dgos = {};
+    // 1. DGOs com olt_id vinculado
+    Object.entries(infra).forEach(function(e) {
+      if (e[1] && e[1].type === 'dgo' && e[1].olt_id === oltId) dgos[e[0]] = e[1];
+    });
+    // 2. DGOs referenciados por PONs desta OLT (para exibir cordões existentes)
+    Object.values(pons).forEach(function(p) {
+      if (p && p.dgo_id && !dgos[p.dgo_id] && infra[p.dgo_id]) {
+        dgos[p.dgo_id] = infra[p.dgo_id]; // mostrar DGO não vinculado se tem cordão
+      }
+    });
+
+    // ONUs por PON
+    var onusByPon = {};
+    Object.values(onus).forEach(function(u) {
+      if (u && u.olt_id === oltId && u.slot != null && u.port != null) {
+        var key = 's' + u.slot + '_p' + u.port;
+        if (!onusByPon[key]) onusByPon[key] = [];
+        onusByPon[key].push(u);
+      }
+    });
+
+    var panel = document.getElementById('olt-panel-content');
+    if (!panel) return;
+
+    var slotCount  = olt.slot_count  || 4;
+    var ponPerSlot = olt.pon_per_slot || 8;
+
+    // ── Chassis HTML — layout "em pé" (AN5516-06): slots lado a lado, PONs empilhadas ──
+    // Cada slot é uma COLUNA vertical; slots ficam dispostos horizontalmente
+    var chassisHtml = '<div style="display:flex;flex-direction:row;align-items:flex-start;gap:28px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px">';
+    for (var sl = 1; sl <= slotCount; sl++) {
+      var slotCfg   = ((olt.slots || {})[sl]) || {};
+      var portCount = slotCfg.pon_count || ponPerSlot;
+      // Coluna do slot: label no topo + PONs empilhadas abaixo
+      chassisHtml += '<div id="olt-slot-' + oltId + '-' + sl + '" style="display:flex;flex-direction:column;align-items:center;gap:2px">'
+        // Label do slot (topo) + botão de configuração de slot
+        + '<div style="font-size:.62rem;font-weight:700;color:#94a3b8;letter-spacing:.04em;'
+        + 'background:#0a1628;border:1px solid #334155;border-radius:3px 3px 0 0;'
+        + 'width:100%;text-align:center;padding:3px 0;min-width:40px;position:relative;cursor:pointer" '
+        + 'title="Configurar Slot ' + sl + '" '
+        + 'onclick="sdrSlotConfig(\'' + oltId + '\',' + sl + ',' + portCount + ')">'
+        + 'SL' + sl
+        + '<span style="position:absolute;right:3px;top:50%;transform:translateY(-50%);font-size:.55rem;opacity:.5">⚙</span>'
+        + '</div>'
+        // Caixa das PONs (coluna interna)
+        + '<div style="background:#0f172a;border:1px solid #334155;border-top:none;border-radius:0 0 4px 4px;'
+        + 'padding:4px 4px;display:flex;flex-direction:column;gap:3px;align-items:center">';
+      for (var po = 1; po <= portCount; po++) {
+        var key      = 's' + sl + '_p' + po;
+        var cfg      = pons[key] || {};
+        var portOnus = onusByPon[key] || [];
+        var hasAlarm = portOnus.some(function(u) { return u.status === 'offline'; });
+        var bg;
+        if (!cfg.active) {
+          bg = '#334155';
+        } else if (cfg.dgo_id) {
+          bg = hasAlarm ? '#dc2626' : '#16a34a';
+        } else {
+          bg = '#2563eb';
+        }
+        var dgoName  = cfg.dgo_id ? ((dgos[cfg.dgo_id] || {}).nome || 'DGO') : '';
+        var fiberLbl = cfg.dgo_fiber_key ? ' · ' + cfg.dgo_fiber_key : '';
+        var ponTitle = 'Slot ' + sl + ' PON ' + po
+          + (dgoName ? ' → ' + dgoName + fiberLbl : ' (sem DGO)')
+          + ' | ' + portOnus.length + ' ONUs'
+          + (cfg.dgo_id ? ' — Clique para rastrear' : ' — Clique para conectar cordão');
+        // hasCord: PON conectada a DGO (com ou sem waypoints de cordão)
+        var hasDgoConn = !!(cfg.dgo_id && cfg.dgo_fiber_key);
+        chassisHtml += '<div id="pon-btn-' + oltId + '-' + sl + '-' + po + '" '
+          + (hasDgoConn ? ('data-has-cord="1" data-dgo-id="' + cfg.dgo_id + '" data-fiber-key="' + cfg.dgo_fiber_key + '" ') : '')
+          + 'onclick="sdrPonCordStart(\'' + oltId + '\',' + sl + ',' + po + ')" '
+          + 'title="' + ponTitle + '" '
+          + 'style="width:38px;height:28px;border-radius:3px;background:' + bg + ';cursor:pointer;'
+          + 'display:flex;align-items:center;justify-content:center;font-size:.62rem;color:#fff;'
+          + 'font-weight:700;border:1px solid rgba(255,255,255,.12);transition:transform .1s;position:relative" '
+          + 'onmouseover="this.style.transform=\'scale(1.15)\';this.style.zIndex=5" '
+          + 'onmouseout="this.style.transform=\'\';this.style.zIndex=\'\'">' + po
+          + (cfg.dgo_id ? '<span style="position:absolute;bottom:-2px;right:-2px;width:6px;height:6px;border-radius:50%;background:#6366f1;border:1px solid #060d1c"></span>' : '')
+          + '</div>';
+      }
+      chassisHtml += '</div></div>'; // fecha caixa PONs + coluna slot
+    }
+    chassisHtml += '</div>'; // fecha row de slots
+
+    // Legenda horizontal — fica no cabeçalho do chassis, à direita (deitada)
+    var legend = '<div style="display:flex;flex-direction:row;align-items:center;gap:12px;flex-wrap:wrap;justify-content:flex-end">'
+      + '<span style="display:flex;align-items:center;gap:4px;font-size:.64rem;color:#64748b;white-space:nowrap"><span style="width:9px;height:9px;background:#334155;border-radius:2px;flex-shrink:0"></span>Inativa</span>'
+      + '<span style="display:flex;align-items:center;gap:4px;font-size:.64rem;color:#64748b;white-space:nowrap"><span style="width:9px;height:9px;background:#2563eb;border-radius:2px;flex-shrink:0"></span>Ativa</span>'
+      + '<span style="display:flex;align-items:center;gap:4px;font-size:.64rem;color:#64748b;white-space:nowrap"><span style="width:9px;height:9px;background:#16a34a;border-radius:2px;flex-shrink:0"></span>Conectada</span>'
+      + '<span style="display:flex;align-items:center;gap:4px;font-size:.64rem;color:#64748b;white-space:nowrap"><span style="width:9px;height:9px;background:#dc2626;border-radius:2px;flex-shrink:0"></span>Alarme</span>'
+      + '<span style="display:flex;align-items:center;gap:4px;font-size:.64rem;color:#64748b;white-space:nowrap"><span style="width:9px;height:9px;background:#6366f1;border-radius:50%;flex-shrink:0"></span>Tem DGO</span>'
+      + '</div>';
+
+    // ── DGO panel HTML ──────────────────────────────────────────────
+    var dgoItems = Object.entries(dgos);
+    var dgoHtml  = '<div style="display:flex;flex-direction:column;gap:8px">';
+    if (dgoItems.length === 0) {
+      dgoHtml += '<div style="font-size:.78rem;color:#64748b;font-style:italic;padding:8px 0">'
+        + 'Nenhum DGO cadastrado — '
+        + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="background:none;border:none;color:#6366f1;cursor:pointer;font-size:.78rem;text-decoration:underline">criar agora</button>'
+        + '</div>';
+    } else {
+      dgoItems.forEach(function(e) {
+        var did = e[0], d = e[1];
+        var tubeCount    = d.tube_count    || 12;
+        var fiberPerTube = d.fiber_per_tube || 12;
+        var usedFibers = Object.values(d.fibers || {}).filter(function(f){ return f && f.status === 'used'; }).length;
+        var total      = tubeCount * fiberPerTube;
+        var freeCount  = total - usedFibers;
+
+        // Layout "em pé": cada fileira (tubo) é uma COLUNA vertical de fibras
+        // Fileiras lado a lado — igual ao chassi AN5516-06
+        // Índice reverso: fiberKey → ponKey (para data-pon-key)
+        var fiberToPon = {};
+        Object.entries(pons).forEach(function(pe) {
+          if (pe[1] && pe[1].dgo_id === did && pe[1].dgo_fiber_key) {
+            fiberToPon[pe[1].dgo_fiber_key] = pe[0];
+          }
+        });
+
+        var fiberGrid = '<div style="display:flex;flex-direction:row;align-items:flex-start;gap:28px;flex-wrap:nowrap;overflow-x:auto">';
+        for (var t = 1; t <= tubeCount; t++) {
+          fiberGrid += '<div id="dgo-tube-' + did + '-' + t + '" style="display:flex;flex-direction:column;align-items:center;gap:2px">'
+            // Label do tubo (topo) — mesma largura do botão PON (38px)
+            + '<div style="font-size:.62rem;font-weight:700;color:#64748b;text-align:center;'
+            + 'background:#0a1628;border:1px solid #1e3a5f;border-radius:3px 3px 0 0;'
+            + 'min-width:38px;padding:3px 0">T' + t + '</div>'
+            // Fibras empilhadas
+            + '<div style="display:flex;flex-direction:column;gap:3px;'
+            + 'background:#060d1c;border:1px solid #1e3a5f;border-top:none;border-radius:0 0 4px 4px;padding:4px">';
+          for (var f = 1; f <= fiberPerTube; f++) {
+            var fKey  = 't' + t + '_f' + f;
+            var fib   = (d.fibers || {})[fKey] || {};
+            var fUsed = fib.status === 'used';
+            var fBg   = fUsed ? '#7f1d1d' : '#14532d';
+            var fBd   = fUsed ? '#dc2626' : '#22c55e';
+            var connPonKey = fiberToPon[fKey] || '';
+            fiberGrid += '<div id="dgo-fiber-' + did + '-' + fKey + '" '
+              + (connPonKey ? 'data-pon-key="' + connPonKey + '" ' : '')
+              + 'onclick="sdrCordConnectFiber(\'' + did + '\',\'' + fKey + '\')" '
+              + 'title="Tubo ' + t + ' · Fibra ' + f + (fUsed ? ' — USADA' : ' — livre') + (connPonKey ? ' (' + connPonKey + ')' : '') + '" '
+              + 'style="width:38px;height:28px;border-radius:3px;background:' + fBg + ';'
+              + 'border:1px solid ' + fBd + ';cursor:pointer;'
+              + 'transition:transform .1s,box-shadow .1s;font-size:.62rem;color:' + (fUsed ? '#fca5a5' : '#86efac') + ';'
+              + 'display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:600" '
+              + 'onmouseover="this.style.transform=\'scale(1.15)\';this.style.zIndex=5;'
+              + 'if(window._sdrCordDrawMode){'
+              + 'this.style.boxShadow=\'0 0 8px #a5b4fc,0 0 16px #6366f1\';'
+              + 'this.style.borderColor=\'#a5b4fc\';'
+              + 'if(window._sdrCordDrawMode._lastMouseSvg){var l=document.getElementById(\'olt-draw-dashline\');'
+              + 'if(l){var sa=document.getElementById(\'olt-scroll-area\');var r=this.getBoundingClientRect();var sr=sa?sa.getBoundingClientRect():{left:0,top:0};var st=sa?sa.scrollTop:0;'
+              + 'l.setAttribute(\'x2\',r.left-sr.left+r.width/2);l.setAttribute(\'y2\',r.top-sr.top+st+r.height/2)}}}" '
+              + 'onmouseout="this.style.transform=\'\';this.style.zIndex=\'\';'
+              + 'this.style.boxShadow=\'\';this.style.borderColor=\'' + fBd + '\'">'
+              + (fUsed ? 'F'+f : '<span style="opacity:.35">'+f+'</span>')
+              + '</div>';
+          }
+          fiberGrid += '</div></div>'; // fecha coluna de fibras + coluna do tubo
+        }
+        fiberGrid += '</div>'; // fecha row de tubos
+
+        dgoHtml += '<div id="dgo-card-' + did + '" style="background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;padding:10px 12px">'
+          + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+          + '<i class="fas fa-network-wired" style="color:#3b82f6;font-size:.85rem"></i>'
+          + '<span style="font-weight:600;color:#e2e8f0;font-size:.85rem;flex:1">' + (d.nome || did) + '</span>'
+          + '<span style="font-size:.72rem;color:#64748b">' + usedFibers + '/' + total
+          + ' &nbsp;<span style="color:#22c55e">' + freeCount + ' livres</span></span>'
+          + '</div>'
+          + fiberGrid
+          + '</div>';
+      });
+    }
+    dgoHtml += '</div>';
+
+    // ── Montar painel completo ──────────────────────────────────────
+    panel.innerHTML = ''
+      // Cabeçalho
+      + '<div style="background:#0f172a;border-bottom:1px solid #1e3a5f;padding:8px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;flex-wrap:wrap">'
+      + '<i class="fas fa-server" style="color:#dc2626"></i>'
+      + '<span style="color:#e2e8f0;font-weight:700">' + (olt.name || oltId) + '</span>'
+      + '<span style="font-size:.74rem;color:#64748b;font-family:monospace">' + (olt.ip_address || '') + '</span>'
+      + '<span style="padding:2px 8px;border-radius:10px;font-size:.7rem;font-weight:600;background:' + (olt.is_active ? '#14532d' : '#1e293b') + ';color:' + (olt.is_active ? '#22c55e' : '#64748b') + '">' + (olt.is_active ? 'Ativa' : 'Inativa') + '</span>'
+      + '<div style="margin-left:auto;display:flex;gap:5px;flex-wrap:wrap">'
+      + '<button onclick="sdrOltAddModal(\'' + oltId + '\')" title="Editar OLT" style="padding:4px 8px;font-size:.72rem;background:transparent;border:1px solid #334155;border-radius:5px;color:#94a3b8;cursor:pointer"><i class="fas fa-edit"></i></button>'
+      + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" title="Novo DGO" style="padding:4px 8px;font-size:.72rem;background:transparent;border:1px solid #334155;border-radius:5px;color:#94a3b8;cursor:pointer"><i class="fas fa-plus"></i>&nbsp;DGO</button>'
+      + '<button onclick="sdrOltSlotAdd(\'' + oltId + '\')" title="Adicionar Slot" style="padding:4px 8px;font-size:.72rem;background:transparent;border:1px solid #334155;border-radius:5px;color:#94a3b8;cursor:pointer"><i class="fas fa-plus-square"></i>&nbsp;Slot</button>'
+      + '<button onclick="sdrOltStartMapPlace(\'' + oltId + '\')" title="Posicionar no mapa" style="padding:4px 8px;font-size:.72rem;background:transparent;border:1px solid #334155;border-radius:5px;color:#94a3b8;cursor:pointer"><i class="fas fa-map-pin"></i></button>'
+      + '<button onclick="sdrOltDelete(\'' + oltId + '\')" title="Excluir OLT" style="padding:4px 8px;font-size:.72rem;background:transparent;border:1px solid #7f1d1d;border-radius:5px;color:#f87171;cursor:pointer"><i class="fas fa-trash"></i></button>'
+      + '</div>'
+      + '</div>'
+      // Área scrollável (sem padding — SVG de cordões ocupa o full scroll area)
+      + '<div id="olt-scroll-area" style="flex:1;overflow-y:auto;position:relative">'
+      + '<div style="padding:14px">'
+      // Banner modo cordão (oculto por padrão)
+      + '<div id="olt-cord-banner" style="display:none;background:#1e3a5f;border:1px solid #6366f1;border-radius:8px;padding:8px 14px;margin-bottom:12px;font-size:.8rem;color:#e2e8f0;align-items:center;gap:8px;position:relative;z-index:50">'
+      + '<i class="fas fa-pencil-alt" style="color:#6366f1"></i>'
+      + '<span id="olt-cord-banner-text">Selecione uma PON para iniciar o cordão</span>'
+      + '&nbsp;&nbsp;<button onclick="sdrCordDrawCancel()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:.78rem;text-decoration:underline">Cancelar</button>'
+      + '</div>'
+      // Chassis
+      + '<div id="olt-chassis-' + oltId + '" style="background:#1a2744;border:1px solid #1e3a5f;border-radius:10px;padding:12px 14px;margin-bottom:16px">'
+      // Cabeçalho: título à esquerda + legenda horizontal à direita
+      + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+      + '<span style="font-size:.76rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap">'
+      + '<i class="fas fa-server" style="margin-right:5px;color:#dc2626"></i>Chassis — ' + (olt.model || 'OLT') + '</span>'
+      + '<div style="flex:1"></div>'
+      + legend
+      + '</div>'
+      // Só os slots (sem legenda no flex-row)
+      + chassisHtml
+      + '</div>'
+      // DGOs
+      + '<div>'
+      + '<div style="font-size:.76rem;font-weight:700;color:#94a3b8;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;position:relative;z-index:15;background:#060d1c;padding:2px 0">'
+      + '<i class="fas fa-network-wired" style="margin-right:5px;color:#3b82f6"></i>DGOs — Distribuição de Fibras</div>'
+      + dgoHtml
+      + '</div>'
+      + '</div>' // end content wrapper
+      + '</div>'; // end scroll area
+
+    panel.style.display = 'flex';
+    panel.style.flexDirection = 'column';
+
+    // Desenhar cordões salvos (300ms para DOM settle e layout completo)
+    setTimeout(function() {
+      _sdrDrawSavedCords(oltId, pons, dgos);
+      // Guardar args para redesenho automático no resize/zoom
+      window._sdrLastCordArgs = { oltId: oltId, pons: pons, dgos: dgos };
+    }, 300);
+  });
+};
+
+// Redesenhar cordões ao redimensionar janela (zoom, resize)
+(function() {
+  var _resizeTimer = null;
+  window.addEventListener('resize', function() {
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(function() {
+      if (window._sdrLastCordArgs) {
+        var a = window._sdrLastCordArgs;
+        _sdrDrawSavedCords(a.oltId, a.pons, a.dgos);
+      }
+    }, 120);
+  });
+})();
+
+// ── Iniciar modo de cordão (com waypoints) ─────────────────────────
+window.sdrPonCordStart = function(oltId, slot, port) {
+  // Se em draw mode iniciado pela fibra → fechar circuito nesta PON
+  if (_sdrCordDrawMode && _sdrCordDrawMode._startType === 'fiber') {
+    _sdrCordFinishFiberToPon(oltId, slot, port);
+    return;
+  }
+  if (_sdrCordDrawMode) { sdrCordDrawCancel(); return; }
+
+  // Se PON conectada ao DGO → apenas mostrar rastreabilidade (sem modo de edição de waypoints)
+  var ponBtn = document.getElementById('pon-btn-' + oltId + '-' + slot + '-' + port);
+  if (ponBtn && ponBtn.getAttribute('data-has-cord')) {
+    if (window._sdrCordEdit) _sdrCordEditCancel();
+    var _dgoId    = ponBtn.getAttribute('data-dgo-id');
+    var _fiberKey = ponBtn.getAttribute('data-fiber-key');
+    if (_dgoId) _sdrRastreabilidade(oltId, slot, port, _dgoId, _fiberKey);
+    return;
+  }
+
+  _sdrCordDrawMode = { oltId: oltId, slot: slot, port: port, waypoints: [], _ponBtn: ponBtn };
+
+  // Banner
+  var banner = document.getElementById('olt-cord-banner');
+  if (banner) {
+    banner.style.display = 'flex';
+    var txt = document.getElementById('olt-cord-banner-text');
+    if (txt) txt.textContent = 'SL' + slot + ' · PON ' + port + ' — clique no painel para adicionar pontos; clique na fibra do DGO para finalizar';
+  }
+
+  // Destacar PON selecionada, escurecer demais
+  document.querySelectorAll('[id^="pon-btn-' + oltId + '-"]').forEach(function(el) {
+    el.style.opacity = '0.25';
+  });
+  if (ponBtn) {
+    ponBtn.style.opacity = '1';
+    ponBtn.style.outline = '2px solid #a5b4fc';
+    ponBtn.style.outlineOffset = '3px';
+    ponBtn.style.zIndex = '2';
+  }
+
+  document.body.style.cursor = 'crosshair';
+
+  // ── SVG de draw dentro do scroll area (scroll-relative, position:absolute) ──
+  var scrollArea = document.getElementById('olt-scroll-area');
+  if (scrollArea) {
+    var oldSvg = document.getElementById('olt-draw-svg');
+    if (oldSvg) oldSvg.remove();
+    var drawSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    drawSvg.id = 'olt-draw-svg';
+    drawSvg.setAttribute('style', 'position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:25;overflow:visible');
+    drawSvg.setAttribute('width', '100%');
+    drawSvg.setAttribute('height', scrollArea.scrollHeight);
+    drawSvg.innerHTML = '<defs>'
+      + '<marker id="draw-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">'
+      + '<polygon points="0 0,8 4,0 8" fill="#a5b4fc"/></marker>'
+      + '<filter id="draw-glow" x="-30%" y="-30%" width="160%" height="160%">'
+      + '<feGaussianBlur stdDeviation="2" result="b"/>'
+      + '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
+      + '</defs>'
+      // Polyline dos pontos confirmados (começa vazia)
+      + '<polyline id="olt-draw-polyline" stroke="#a5b4fc" stroke-width="2" fill="none" opacity="0.8"/>'
+      // Linha dashed do último ponto ao cursor
+      + '<line id="olt-draw-dashline" stroke="#a5b4fc" stroke-width="2" stroke-dasharray="9,6" '
+      + 'marker-end="url(#draw-arrow)" filter="url(#draw-glow)" opacity="0"/>'
+      // Grupo de dots dos waypoints
+      + '<g id="olt-draw-dots"></g>';
+    scrollArea.appendChild(drawSvg);
+  }
+
+  function getSaCoords(clientX, clientY) {
+    var sa = document.getElementById('olt-scroll-area');
+    if (!sa) return {x: clientX, y: clientY};
+    var r = sa.getBoundingClientRect();
+    return { x: clientX - r.left, y: clientY - r.top + sa.scrollTop };
+  }
+
+  function onMouseMove(ev) {
+    var sa = document.getElementById('olt-scroll-area');
+    var svg = document.getElementById('olt-draw-svg');
+    if (!sa || !svg) return;
+    // Atualizar altura do SVG se scroll mudou
+    svg.setAttribute('height', sa.scrollHeight);
+    var pos = getSaCoords(ev.clientX, ev.clientY);
+    _sdrCordDrawMode._lastMouseSvg = pos;
+    _sdrCordSvgUpdate();
+  }
+
+  function onScroll() {
+    var sa = document.getElementById('olt-scroll-area');
+    var svg = document.getElementById('olt-draw-svg');
+    if (sa && svg) svg.setAttribute('height', sa.scrollHeight);
+    _sdrCordSvgUpdate();
+  }
+
+  // Waypoint: clique no painel (não em PON nem em fibra DGO)
+  function onScrollClick(ev) {
+    if (!window._sdrCordDrawMode) return;
+    var tid = (ev.target.id || '');
+    if (tid.indexOf('pon-btn-') === 0 || tid.indexOf('dgo-fiber-') === 0) return;
+    var pos = getSaCoords(ev.clientX, ev.clientY);
+    window._sdrCordDrawMode.waypoints.push(pos);
+    _sdrCordSvgUpdate();
+    // Feedback visual rápido no ponto clicado
+    if (typeof toast === 'function') toast('Ponto ' + window._sdrCordDrawMode.waypoints.length + ' adicionado', 'info');
+  }
+
+  scrollArea.addEventListener('mousemove', onMouseMove);
+  scrollArea.addEventListener('scroll', onScroll);
+  scrollArea.addEventListener('click', onScrollClick);
+  _sdrCordDrawMode._onMouseMove   = onMouseMove;
+  _sdrCordDrawMode._onScroll      = onScroll;
+  _sdrCordDrawMode._onScrollClick = onScrollClick;
+
+  _sdrCordSvgUpdate();
+  if (typeof toast === 'function') toast('SL' + slot + ' PON ' + port + ' selecionada — clique para adicionar pontos do cordão', 'info');
+};
+
+// ── Cancelar modo de cordão ─────────────────────────────────────────
+window.sdrCordDrawCancel = function() {
+  if (window._sdrCordEdit) { _sdrCordEditCancel(); return; }
+  if (!_sdrCordDrawMode) return;
+  var m = _sdrCordDrawMode;
+  _sdrCordDrawMode = null;
+
+  // Remover listeners do scroll area
+  var sa = document.getElementById('olt-scroll-area');
+  if (sa) {
+    if (m._onMouseMove)   sa.removeEventListener('mousemove', m._onMouseMove);
+    if (m._onScroll)      sa.removeEventListener('scroll',    m._onScroll);
+    if (m._onScrollClick) sa.removeEventListener('click',     m._onScrollClick);
+  }
+
+  // Remover SVG de draw em progresso
+  var drawSvg = document.getElementById('olt-draw-svg');
+  if (drawSvg) drawSvg.remove();
+
+  // Restaurar cursor
+  document.body.style.cursor = '';
+
+  // Esconder banner
+  var banner = document.getElementById('olt-cord-banner');
+  if (banner) banner.style.display = 'none';
+
+  if (m._startType === 'fiber') {
+    // Restaurar fibras DGO
+    document.querySelectorAll('[id^="dgo-fiber-"]').forEach(function(el) {
+      el.style.opacity = '';
+      el.style.boxShadow = '';
+    });
+  } else {
+    // Restaurar botões PON
+    document.querySelectorAll('[id^="pon-btn-' + m.oltId + '-"]').forEach(function(el) {
+      el.style.opacity = '';
+      el.style.outline = '';
+      el.style.outlineOffset = '';
+      el.style.zIndex = '';
+    });
+  }
+};
+
+// ── Conectar PON → fibra do DGO ────────────────────────────────────
+window.sdrCordConnectFiber = function(dgoId, fiberKey) {
+  if (!_sdrCordDrawMode) {
+    var fiberEl = document.getElementById('dgo-fiber-' + dgoId + '-' + fiberKey);
+    var connKey = fiberEl ? fiberEl.getAttribute('data-pon-key') : null;
+    if (connKey) {
+      // Fibra já conectada → destacar cordão
+      _sdrCordHighlight(connKey);
+      return;
+    }
+    // Fibra livre → iniciar draw a partir da fibra
+    _sdrCordDrawFromFiber(dgoId, fiberKey);
+    return;
+  }
+  // Em draw mode pon-start: clicou na fibra → fechar circuito
+  if (_sdrCordDrawMode._startType === 'fiber') {
+    // Clicou na fibra de origem (cancela) ou em outra fibra (trocar destino não faz sentido → cancelar)
+    sdrCordDrawCancel();
+    return;
+  }
+  var m      = _sdrCordDrawMode;
+  var oltId  = m.oltId;
+  var slot   = m.slot;
+  var port   = m.port;
+  var ponKey = 's' + slot + '_p' + port;
+
+  sdrRef('infrastructure/' + dgoId + '/fibers/' + fiberKey).once('value').then(function(snap) {
+    var fib = snap.val() || {};
+    var oldPonKey = fib.pon_key || null;  // PON que usava esta fibra antes
+
+    if (fib.status === 'used') {
+      var msg = oldPonKey
+        ? 'Fibra ' + fiberKey + ' já está usada pela ' + oldPonKey + '.\nDesconectar e reconectar à SL' + slot + ' PON' + port + '?'
+        : 'Fibra ' + fiberKey + ' já está em uso. Reconectar mesmo assim?';
+      if (!confirm(msg)) {
+        sdrCordDrawCancel();
+        return;
+      }
+    }
+
+    // Converter waypoints para coordenadas fracionais (relativo ao scroll area)
+    var cordPath = [];
+    var sa = document.getElementById('olt-scroll-area');
+    if (sa && m.waypoints && m.waypoints.length > 0) {
+      var saW = sa.clientWidth  || 1;
+      var saH = sa.scrollHeight || 1;
+      cordPath = m.waypoints.map(function(wp) {
+        return { x: Math.round(wp.x / saW * 10000) / 10000,
+                 y: Math.round(wp.y / saH * 10000) / 10000 };
+      });
+    }
+
+    var updates = {};
+    // Liberar a antiga PON que usava esta fibra (se houver)
+    if (oldPonKey && oldPonKey !== ponKey) {
+      updates['olt_connections/' + oltId + '/pons/' + oldPonKey + '/dgo_id']        = null;
+      updates['olt_connections/' + oltId + '/pons/' + oldPonKey + '/dgo_fiber_key'] = null;
+      updates['olt_connections/' + oltId + '/pons/' + oldPonKey + '/cord_path']     = null;
+      updates['olt_connections/' + oltId + '/pons/' + oldPonKey + '/active']        = false;
+    }
+    // Liberar fibra antiga da PON atual (se estava conectada a outra fibra)
+    // (será lido da PON via Firebase para não depender de cache)
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/active']        = true;
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/dgo_id']        = dgoId;
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/dgo_fiber_key'] = fiberKey;
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/updated_at']    = new Date().toISOString();
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/cord_path']     = cordPath;
+    updates['infrastructure/' + dgoId + '/fibers/' + fiberKey + '/status']     = 'used';
+    updates['infrastructure/' + dgoId + '/fibers/' + fiberKey + '/olt_id']     = oltId;
+    updates['infrastructure/' + dgoId + '/fibers/' + fiberKey + '/pon_key']    = ponKey;
+
+    // Se a PON já estava conectada a OUTRA fibra, liberar a fibra antiga
+    sdrRef('olt_connections/' + oltId + '/pons/' + ponKey).once('value').then(function(pSnap) {
+      var pData = pSnap.val() || {};
+      if (pData.dgo_id && pData.dgo_fiber_key && (pData.dgo_id !== dgoId || pData.dgo_fiber_key !== fiberKey)) {
+        updates['infrastructure/' + pData.dgo_id + '/fibers/' + pData.dgo_fiber_key + '/status']  = 'free';
+        updates['infrastructure/' + pData.dgo_id + '/fibers/' + pData.dgo_fiber_key + '/olt_id']  = null;
+        updates['infrastructure/' + pData.dgo_id + '/fibers/' + pData.dgo_fiber_key + '/pon_key'] = null;
+      }
+      return sdrRef('').update(updates);
+    }).then(function() {
+      if (typeof toast === 'function') toast('Conectado: SL' + slot + ' PON' + port + ' → ' + fiberKey + (cordPath.length ? ' (' + cordPath.length + ' pontos)' : ''), 'success');
+      sdrCordDrawCancel();
+      sdrOltInlineRender(oltId);
+    }).catch(function(e) {
+      if (typeof toast === 'function') toast('Erro: ' + e.message, 'error');
+    });
+  });
+};
+
+// ── Draw mode iniciado pela fibra do DGO ───────────────────────────
+window._sdrCordDrawFromFiber = function(dgoId, fiberKey) {
+  // OLT ativa fica na global _sdrActiveOltTab (setada pelo sdrOltTabSwitch)
+  var oltId = window._sdrActiveOltTab || null;
+  if (!oltId) { if (typeof toast === 'function') toast('Abra o painel de uma OLT primeiro', 'warn'); return; }
+
+  var fiberEl = document.getElementById('dgo-fiber-' + dgoId + '-' + fiberKey);
+
+  _sdrCordDrawMode = {
+    _startType : 'fiber',
+    oltId      : oltId,
+    dgoId      : dgoId,
+    fiberKey   : fiberKey,
+    _fiberEl   : fiberEl,
+    waypoints  : []
+  };
+
+  // Banner
+  var banner = document.getElementById('olt-cord-banner');
+  if (banner) {
+    banner.style.display = 'flex';
+    var txt = document.getElementById('olt-cord-banner-text');
+    if (txt) txt.textContent = 'Fibra ' + fiberKey.replace('_', ' ') + ' selecionada — clique no painel para pontos; clique na PON de destino para finalizar';
+  }
+
+  // Destacar fibra de origem, escurecer demais fibras
+  document.querySelectorAll('[id^="dgo-fiber-"]').forEach(function(el) { el.style.opacity = '0.25'; });
+  if (fiberEl) { fiberEl.style.opacity = '1'; fiberEl.style.boxShadow = '0 0 10px #a5b4fc'; }
+
+  document.body.style.cursor = 'crosshair';
+
+  var scrollArea = document.getElementById('olt-scroll-area');
+  if (scrollArea) {
+    var oldSvg = document.getElementById('olt-draw-svg');
+    if (oldSvg) oldSvg.remove();
+    var drawSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    drawSvg.id = 'olt-draw-svg';
+    drawSvg.setAttribute('style', 'position:absolute;top:0;left:0;width:100%;pointer-events:none;z-index:25;overflow:visible');
+    drawSvg.setAttribute('width', '100%');
+    drawSvg.setAttribute('height', scrollArea.scrollHeight);
+    drawSvg.innerHTML = '<defs>'
+      + '<marker id="draw-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">'
+      + '<polygon points="0 0,8 4,0 8" fill="#a5b4fc"/></marker>'
+      + '<filter id="draw-glow" x="-30%" y="-30%" width="160%" height="160%">'
+      + '<feGaussianBlur stdDeviation="2" result="b"/>'
+      + '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
+      + '</defs>'
+      + '<polyline id="olt-draw-polyline" stroke="#a5b4fc" stroke-width="2" fill="none" opacity="0.8"/>'
+      + '<line id="olt-draw-dashline" stroke="#a5b4fc" stroke-width="2" stroke-dasharray="9,6" '
+      + 'marker-end="url(#draw-arrow)" filter="url(#draw-glow)" opacity="0"/>'
+      + '<g id="olt-draw-dots"></g>';
+    scrollArea.appendChild(drawSvg);
+  }
+
+  function getSaCoords(clientX, clientY) {
+    var sa = document.getElementById('olt-scroll-area');
+    if (!sa) return {x: clientX, y: clientY};
+    var r = sa.getBoundingClientRect();
+    return { x: clientX - r.left, y: clientY - r.top + sa.scrollTop };
+  }
+
+  function onMouseMove(ev) {
+    var sa = document.getElementById('olt-scroll-area');
+    var svg = document.getElementById('olt-draw-svg');
+    if (!sa || !svg) return;
+    svg.setAttribute('height', sa.scrollHeight);
+    var pos = getSaCoords(ev.clientX, ev.clientY);
+    _sdrCordDrawMode._lastMouseSvg = pos;
+    _sdrCordSvgUpdate();
+  }
+  function onScroll() {
+    var sa = document.getElementById('olt-scroll-area');
+    var svg = document.getElementById('olt-draw-svg');
+    if (sa && svg) svg.setAttribute('height', sa.scrollHeight);
+    _sdrCordSvgUpdate();
+  }
+  function onScrollClick(ev) {
+    if (!window._sdrCordDrawMode) return;
+    var tid = (ev.target.id || '');
+    // Ignorar cliques em fibras DGO e botões PON (tratados nos seus próprios handlers)
+    if (tid.indexOf('pon-btn-') === 0 || tid.indexOf('dgo-fiber-') === 0) return;
+    var pos = getSaCoords(ev.clientX, ev.clientY);
+    window._sdrCordDrawMode.waypoints.push(pos);
+    _sdrCordSvgUpdate();
+    if (typeof toast === 'function') toast('Ponto ' + window._sdrCordDrawMode.waypoints.length + ' adicionado', 'info');
+  }
+
+  if (scrollArea) {
+    scrollArea.addEventListener('mousemove', onMouseMove);
+    scrollArea.addEventListener('scroll', onScroll);
+    scrollArea.addEventListener('click', onScrollClick);
+    _sdrCordDrawMode._onMouseMove   = onMouseMove;
+    _sdrCordDrawMode._onScroll      = onScroll;
+    _sdrCordDrawMode._onScrollClick = onScrollClick;
+  }
+
+  _sdrCordSvgUpdate();
+  if (typeof toast === 'function') toast('Fibra ' + fiberKey + ' — clique na PON de destino para finalizar', 'info');
+};
+
+// ── Finalizar circuito: fibra DGO → PON (suporta reconexão) ─────────
+window._sdrCordFinishFiberToPon = function(oltId, slot, port) {
+  var m = _sdrCordDrawMode;
+  if (!m || m._startType !== 'fiber') return;
+
+  var ponKey   = 's' + slot + '_p' + port;
+  var dgoId    = m.dgoId;
+  var fiberKey = m.fiberKey;
+
+  // Ler estado atual da PON (pode já estar conectada a outra fibra)
+  sdrRef('olt_connections/' + oltId + '/pons/' + ponKey).once('value').then(function(snap) {
+    var pon = snap.val() || {};
+    var oldDgoId    = pon.dgo_id       || null;
+    var oldFiberKey = pon.dgo_fiber_key || null;
+
+    if (oldDgoId) {
+      var msg = oldFiberKey
+        ? 'PON SL' + slot + '-' + port + ' já está conectada à fibra ' + oldFiberKey + '.\nDesconectar e reconectar à fibra ' + fiberKey + '?'
+        : 'PON SL' + slot + '-' + port + ' já está conectada. Reconectar mesmo assim?';
+      if (!confirm(msg)) {
+        sdrCordDrawCancel();
+        return;
+      }
+    }
+
+    // Converter waypoints para fracional (inverter: fibra→PON fica PON→fibra)
+    var cordPath = [];
+    var sa = document.getElementById('olt-scroll-area');
+    if (sa && m.waypoints && m.waypoints.length > 0) {
+      var saW = sa.clientWidth  || 1;
+      var saH = sa.scrollHeight || 1;
+      cordPath = m.waypoints.slice().reverse().map(function(wp) {
+        return { x: Math.round(wp.x / saW * 10000) / 10000,
+                 y: Math.round(wp.y / saH * 10000) / 10000 };
+      });
+    }
+
+    var updates = {};
+    // Liberar fibra antiga (se era diferente)
+    if (oldDgoId && oldFiberKey && (oldDgoId !== dgoId || oldFiberKey !== fiberKey)) {
+      updates['infrastructure/' + oldDgoId + '/fibers/' + oldFiberKey + '/status']  = 'free';
+      updates['infrastructure/' + oldDgoId + '/fibers/' + oldFiberKey + '/olt_id']  = null;
+      updates['infrastructure/' + oldDgoId + '/fibers/' + oldFiberKey + '/pon_key'] = null;
+    }
+    // Gravar nova conexão na PON
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/active']        = true;
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/dgo_id']        = dgoId;
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/dgo_fiber_key'] = fiberKey;
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/updated_at']    = new Date().toISOString();
+    updates['olt_connections/' + oltId + '/pons/' + ponKey + '/cord_path']     = cordPath;
+    // Marcar nova fibra como usada
+    updates['infrastructure/' + dgoId + '/fibers/' + fiberKey + '/status']     = 'used';
+    updates['infrastructure/' + dgoId + '/fibers/' + fiberKey + '/olt_id']     = oltId;
+    updates['infrastructure/' + dgoId + '/fibers/' + fiberKey + '/pon_key']    = ponKey;
+
+    sdrRef('').update(updates).then(function() {
+      var msg = oldDgoId
+        ? 'Reconectado: SL' + slot + ' PON' + port + ' → ' + fiberKey + (oldFiberKey ? ' (era ' + oldFiberKey + ')' : '')
+        : 'Conectado: Fibra ' + fiberKey + ' → SL' + slot + ' PON' + port;
+      if (cordPath.length) msg += ' (' + cordPath.length + ' pontos)';
+      if (typeof toast === 'function') toast(msg, 'success');
+      sdrCordDrawCancel();
+      sdrOltInlineRender(oltId);
+    }).catch(function(e) {
+      if (typeof toast === 'function') toast('Erro: ' + e.message, 'error');
+    });
+  });
+};
+
+// ── Atualizar SVG em progresso (draw mode) ─────────────────────────
+window._sdrCordSvgUpdate = function() {
+  var m = window._sdrCordDrawMode;
+  if (!m) return;
+  var sa  = document.getElementById('olt-scroll-area');
+  var svg = document.getElementById('olt-draw-svg');
+  if (!sa || !svg) return;
+
+  var sr = sa.getBoundingClientRect();
+
+  // ── Ponto de origem depende de onde o draw foi iniciado ──
+  var startPt = { x: 0, y: 0 };
+  if (m._startType === 'fiber') {
+    // Iniciado pela fibra DGO — saída da borda direita
+    var fEl = m._fiberEl || document.getElementById('dgo-fiber-' + m.dgoId + '-' + m.fiberKey);
+    if (fEl) {
+      var fr = fEl.getBoundingClientRect();
+      startPt.x = fr.left - sr.left + fr.width;          // borda direita fibra
+      startPt.y = fr.top  - sr.top  + sa.scrollTop + fr.height / 2;
+    }
+  } else {
+    // Iniciado pela PON — saída da borda direita
+    var ponBtn = m._ponBtn || document.getElementById('pon-btn-' + m.oltId + '-' + m.slot + '-' + m.port);
+    if (ponBtn) {
+      var br = ponBtn.getBoundingClientRect();
+      startPt.x = br.left - sr.left + br.width;          // borda direita PON
+      startPt.y = br.top  - sr.top  + sa.scrollTop + br.height / 2;
+    }
+  }
+
+  // Todos os pontos confirmados: origem + waypoints
+  var pts = [startPt].concat(m.waypoints || []);
+  var ptsStr = pts.map(function(p) { return p.x + ',' + p.y; }).join(' ');
+
+  // Polyline dos pontos confirmados
+  var poly = document.getElementById('olt-draw-polyline');
+  if (poly) poly.setAttribute('points', ptsStr);
+
+  // Linha dashed: último ponto confirmado → cursor
+  var lastPt = pts[pts.length - 1];
+  var dash = document.getElementById('olt-draw-dashline');
+  if (dash) {
+    dash.setAttribute('x1', lastPt.x);
+    dash.setAttribute('y1', lastPt.y);
+    if (m._lastMouseSvg) {
+      dash.setAttribute('x2', m._lastMouseSvg.x);
+      dash.setAttribute('y2', m._lastMouseSvg.y);
+      dash.setAttribute('opacity', '0.85');
+    }
+  }
+
+  // Dots nos waypoints
+  var dotsG = document.getElementById('olt-draw-dots');
+  if (dotsG) {
+    dotsG.innerHTML = '';
+    (m.waypoints || []).forEach(function(wp, idx) {
+      var c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('cx', wp.x); c.setAttribute('cy', wp.y);
+      c.setAttribute('r', '5'); c.setAttribute('fill', '#6366f1');
+      c.setAttribute('stroke', '#a5b4fc'); c.setAttribute('stroke-width', '1.5');
+      dotsG.appendChild(c);
+      var txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      txt.setAttribute('x', wp.x + 7); txt.setAttribute('y', wp.y + 4);
+      txt.setAttribute('font-size', '8'); txt.setAttribute('fill', '#a5b4fc');
+      txt.textContent = idx + 1;
+      dotsG.appendChild(txt);
+    });
+    // Dot de início (PON ou fibra)
+    var startDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    startDot.setAttribute('cx', startPt.x); startDot.setAttribute('cy', startPt.y);
+    startDot.setAttribute('r', '7');
+    startDot.setAttribute('fill', m._startType === 'fiber' ? '#22c55e' : '#a5b4fc');
+    startDot.setAttribute('stroke', '#fff'); startDot.setAttribute('stroke-width', '1.5');
+    startDot.setAttribute('opacity', '0.9');
+    dotsG.appendChild(startDot);
+  }
+};
+
+// ── Desenhar cordões salvos no SVG permanente ──────────────────────
+window._sdrDrawSavedCords = function(oltId, pons, dgos) {
+  var sa = document.getElementById('olt-scroll-area');
+  if (!sa) return;
+
+  var old = document.getElementById('olt-cords-svg');
+  if (old) old.remove();
+  // Limpar qualquer SVG de edição de waypoints residual (não usado mais — rota auto-calculada)
+  var oldEdit = document.getElementById('olt-cord-edit-svg');
+  if (oldEdit) oldEdit.remove();
+  if (window._sdrCordEdit) { window._sdrCordEdit = null; }
+  var banner = document.getElementById('olt-cord-banner');
+  if (banner) banner.style.display = 'none';
+
+  // Verificar se há PONs conectadas a DGOs (com ou sem waypoints)
+  var hasAnyCord = Object.values(pons).some(function(c) {
+    return c && c.dgo_id && c.dgo_fiber_key;
+  });
+  if (!hasAnyCord) return;
+
+  var svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svgEl.id = 'olt-cords-svg';
+  svgEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;overflow:visible;pointer-events:none;z-index:10';
+  svgEl.setAttribute('width', '100%');
+  svgEl.setAttribute('height', Math.max(sa.scrollHeight, sa.clientHeight, 600));
+  svgEl.innerHTML = '<defs>'
+    + '<marker id="csaved-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">'
+    + '<polygon points="0 0,8 4,0 8" fill="#6366f1"/></marker>'
+    + '<filter id="csaved-glow" x="-20%" y="-20%" width="140%" height="140%">'
+    + '<feGaussianBlur stdDeviation="1.8" result="b"/>'
+    + '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>'
+    + '</defs>';
+  sa.appendChild(svgEl);
+
+  var saRect = sa.getBoundingClientRect();
+  var saW    = sa.clientWidth;
+  var saH    = sa.scrollHeight;
+
+  var _bridgePad = 10;
+
+  Object.entries(pons).forEach(function(e) {
+    var ponKey = e[0], cfg = e[1];
+    // Desenhar para TODAS as PONs conectadas a DGO (com ou sem waypoints)
+    if (!cfg || !cfg.dgo_id || !cfg.dgo_fiber_key) return;
+    var mm = ponKey.match(/^s(\d+)_p(\d+)$/);
+    if (!mm) return;
+    var sl = mm[1], po = mm[2];
+
+    var ponBtn  = document.getElementById('pon-btn-' + oltId + '-' + sl + '-' + po);
+    var fiberEl = document.getElementById('dgo-fiber-' + cfg.dgo_id + '-' + cfg.dgo_fiber_key);
+
+    var pts = [];
+    var ponX, ponY, fiberX, fiberY;
+
+    if (ponBtn) {
+      var br = ponBtn.getBoundingClientRect();
+      ponX = br.left - saRect.left + br.width;              // borda DIREITA da PON
+      ponY = br.top  - saRect.top  + sa.scrollTop + br.height / 2;
+    }
+    if (fiberEl) {
+      var fr = fiberEl.getBoundingClientRect();
+      fiberX = fr.left - saRect.left + fr.width;            // borda DIREITA da fibra DGO
+      fiberY = fr.top  - saRect.top  + sa.scrollTop + fr.height / 2;
+    }
+
+    if (ponX == null || fiberX == null) return;
+
+    // Roteamento duplo-L:
+    //   PON → gap do slot (↓ até abaixo da última PON) → ponte (→) → gap do tubo (↓) → fibra (→)
+    var GAP_HALF    = 14;
+    var BRIDGE_PAD  = 10; // px abaixo da última PON do slot
+
+    // slotGapX — direita do slot + GAP_HALF (espinha vertical)
+    var slotEl = document.getElementById('olt-slot-' + oltId + '-' + sl);
+    var slotGapX = slotEl
+      ? slotEl.getBoundingClientRect().right - saRect.left + GAP_HALF
+      : ponX + GAP_HALF;
+
+    // bridgeY — base da ÚLTIMA PON do slot deste cordão + margem
+    // Cada cord usa a base do seu próprio slot (todos devem ter o mesmo nº de PONs para alinhamento)
+    var bridgeY = slotEl
+      ? slotEl.getBoundingClientRect().bottom - saRect.top + sa.scrollTop + _bridgePad
+      : fiberY - 20;
+    bridgeY = Math.min(bridgeY, fiberY - 4); // nunca ultrapassar a fibra
+
+    // tubeGapX — direita do tubo alvo + GAP_HALF (extrai nº tubo da fiber key, ex: "t6f10" → t=6)
+    var tubeMatch = cfg.dgo_fiber_key && cfg.dgo_fiber_key.match(/^t(\d+)f/);
+    var tubeNum   = tubeMatch ? tubeMatch[1] : null;
+    var tubeEl    = tubeNum ? document.getElementById('dgo-tube-' + cfg.dgo_id + '-' + tubeNum) : null;
+    var tubeGapX  = tubeEl
+      ? tubeEl.getBoundingClientRect().right - saRect.left + GAP_HALF
+      : fiberX + GAP_HALF;
+
+    pts = [
+      { x: ponX,      y: ponY      },  // saída direita da PON →
+      { x: slotGapX,  y: ponY      },  // entra no gap do slot ↓
+      { x: slotGapX,  y: bridgeY   },  // desce abaixo da última PON (PON 16)
+      { x: tubeGapX,  y: bridgeY   },  // L → travessia horizontal até gap do tubo
+      { x: tubeGapX,  y: fiberY    },  // desce pelo gap do tubo ↓
+      { x: fiberX,    y: fiberY    }   // L → chega na fibra
+    ];
+    if (pts.length < 2) return;
+
+    var ptsStr = pts.map(function(p) { return p.x + ',' + p.y; }).join(' ');
+
+    // Grupo do cordão (pointer-events ativo para clique)
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.id = 'cord-' + ponKey;
+    g.setAttribute('pointer-events', 'all');
+    g.style.cursor = 'pointer';
+
+    // Área de clique transparente e larga
+    var hit = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    hit.setAttribute('points', ptsStr);
+    hit.setAttribute('stroke', 'transparent');
+    hit.setAttribute('stroke-width', '14');
+    hit.setAttribute('fill', 'none');
+    hit.setAttribute('pointer-events', 'stroke');
+    g.appendChild(hit);
+
+    // Polyline visível
+    var vis = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    vis.setAttribute('points', ptsStr);
+    vis.setAttribute('stroke', '#6366f1');
+    vis.setAttribute('stroke-width', '2.5');
+    vis.setAttribute('fill', 'none');
+    vis.setAttribute('marker-end', 'url(#csaved-arrow)');
+    vis.setAttribute('filter', 'url(#csaved-glow)');
+    vis.setAttribute('pointer-events', 'none');
+    vis.setAttribute('class', 'olt-cord-vis'); // SVG: usar setAttribute, não .className
+    g.appendChild(vis);
+
+    // Dots de waypoints removidos — roteamento automático (Sprint 16+)
+
+    // Clique no cordão
+    g.onclick = function(ev) {
+      ev.stopPropagation();
+      _sdrCordHighlight(ponKey);
+    };
+    svgEl.appendChild(g);
+  });
+};
+
+// ── Rastreabilidade completa do caminho óptico PON → DGO → Splitters → CTO ──
+window._sdrRastreabilidade = function(oltId, slot, port, dgoId, fiberKey) {
+  var panel = document.getElementById('olt-panel-content');
+  if (!panel) return;
+
+  // Criar ou limpar painel de rastreio
+  var tracePanel = document.getElementById('olt-rastreio-panel');
+  if (!tracePanel) {
+    panel.insertAdjacentHTML('beforeend',
+      '<div id="olt-rastreio-panel" style="margin-top:16px;background:#060d1c;border:1px solid #334155;border-radius:10px;overflow:hidden">'
+      + '<div style="background:#0f1f3a;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #1e3a5f">'
+      + '<span style="color:#38bdf8;font-size:.82rem;font-weight:700"><i class="fas fa-route" style="margin-right:7px"></i>Caminho Óptico</span>'
+      + '<button onclick="document.getElementById(\'olt-rastreio-panel\').remove()" '
+      + 'style="background:none;border:none;color:#64748b;cursor:pointer;font-size:1.1rem;line-height:1">&times;</button>'
+      + '</div>'
+      + '<div id="olt-rastreio-content" style="padding:14px;font-size:.8rem;color:#e2e8f0;max-height:420px;overflow-y:auto">'
+      + '<i class="fas fa-spinner fa-spin" style="color:#64748b"></i></div>'
+      + '</div>'
+    );
+    tracePanel = document.getElementById('olt-rastreio-panel');
+  } else {
+    var rc = document.getElementById('olt-rastreio-content');
+    if (rc) rc.innerHTML = '<i class="fas fa-spinner fa-spin" style="color:#64748b"></i>';
+  }
+  setTimeout(function() { tracePanel && tracePanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }, 100);
+
+  Promise.all([
+    sdrRef('olt_connections/' + oltId).once('value'),
+    sdrRef('infrastructure').once('value'),
+    sdrRef('onus').once('value'),
+    sdrRef('clients').once('value')
+  ]).then(function(snaps) {
+    var olt     = snaps[0].val() || {};
+    var infra   = snaps[1].val() || {};
+    var onus    = snaps[2].val() || {};
+    var clients = snaps[3].val() || {};
+
+    // Índice: pai → filhos
+    var byParent = {};
+    Object.entries(infra).forEach(function(e) {
+      var id = e[0], obj = e[1];
+      if (!obj) return;
+      var pid = obj.parent_id || obj.olt_id || '__root__';
+      if (!byParent[pid]) byParent[pid] = [];
+      byParent[pid].push({ id: id, obj: obj });
+    });
+
+    // Índice: serial → cliente
+    var clientBySerial = {};
+    Object.entries(clients).forEach(function(e) {
+      var c = e[1];
+      if (c && c.onu_serial) clientBySerial[c.onu_serial] = c;
+    });
+
+    var ponKey = 's' + slot + '_p' + port;
+    var ponCfg = (olt.pons || {})[ponKey] || {};
+    var dgo    = infra[dgoId] || {};
+
+    function rxBadge(rx) {
+      if (rx == null) return '';
+      var col = rx > -25 ? '#22c55e' : rx > -28 ? '#f59e0b' : '#ef4444';
+      return '<span style="color:' + col + ';font-size:.7rem;margin-left:4px">' + rx + ' dBm</span>';
+    }
+
+    function nodeHtml(depth, borderColor, iconCls, iconColor, label, sublabel, extra) {
+      var indent = depth * 18;
+      return '<div style="margin:5px 0 5px ' + indent + 'px;display:flex;align-items:flex-start;gap:0">'
+        + (depth > 0 ? '<div style="width:2px;min-height:24px;background:#1e3a5f;margin-right:10px;margin-top:6px;flex-shrink:0"></div>' : '')
+        + '<span style="display:inline-flex;align-items:center;gap:6px;background:#0f172a;'
+        + 'border:1px solid ' + borderColor + ';border-radius:7px;padding:5px 11px;flex-wrap:wrap">'
+        + '<i class="fas ' + iconCls + '" style="color:' + iconColor + ';width:14px;text-align:center"></i>'
+        + '<b style="color:' + iconColor + '">' + label + '</b>'
+        + (sublabel ? '<span style="color:#64748b;font-size:.72rem">' + sublabel + '</span>' : '')
+        + (extra || '')
+        + '</span></div>';
+    }
+
+    function renderSubtree(nodeId, depth) {
+      var children = (byParent[nodeId] || []).sort(function(a,b) {
+        return (a.obj.nome || a.id).localeCompare(b.obj.nome || b.id);
+      });
+      return children.map(function(c) {
+        var cid = c.id, cobj = c.obj;
+        var tipo = cobj.type;
+        if (tipo === 'cto') {
+          // CTOs: mostrar ONUs conectadas
+          var ctOnus = Object.entries(onus).filter(function(e) {
+            return e[1] && e[1].cto_id === cid;
+          });
+          var usedPorts = cobj.used_ports || 0;
+          var totalPorts = cobj.total_ports || 8;
+          var ctoNode = nodeHtml(depth, '#d97706', 'fa-box', '#fbbf24',
+            cobj.nome || cid,
+            usedPorts + '/' + totalPorts + ' portas · ' + ctOnus.length + ' ONUs', '');
+          var onusHtml = ctOnus.length > 0
+            ? ctOnus.map(function(e2) {
+                var uid = e2[0], u = e2[1];
+                var st  = u.status || 'offline';
+                var stCol = st === 'online' ? '#22c55e' : '#ef4444';
+                var cli = u.serial_number ? (clientBySerial[u.serial_number] || null) : null;
+                return '<div style="margin:3px 0 3px ' + ((depth+1)*18+12) + 'px;display:flex;align-items:center;gap:6px;font-size:.75rem">'
+                  + '<span style="width:7px;height:7px;border-radius:50%;background:' + stCol + ';flex-shrink:0"></span>'
+                  + '<span style="color:#94a3b8;font-family:monospace">' + (u.serial_number || uid) + '</span>'
+                  + '<span style="color:#64748b">' + (u.model || '') + '</span>'
+                  + rxBadge(u.rx_power)
+                  + (cli ? '<span style="color:#e2e8f0;font-weight:600"> — ' + cli.name + '</span>'
+                           + '<span style="color:#64748b;font-size:.7rem"> ' + (cli.plan_name || '') + '</span>' : '')
+                  + '</div>';
+              }).join('')
+            : '<div style="margin-left:' + ((depth+1)*18+12) + 'px;font-size:.72rem;color:#475569;font-style:italic">Sem ONUs</div>';
+          return ctoNode + onusHtml;
+        } else if (tipo === 'splitter') {
+          var grau = cobj.grau || 1;
+          var spColor = grau === 1 ? '#7c3aed' : grau === 2 ? '#a855f7' : '#c084fc';
+          var spNode = nodeHtml(depth, spColor, 'fa-code-branch', spColor,
+            cobj.nome || cid, 'Grau ' + grau + ' · ' + (cobj.ratio || ''), '');
+          return spNode + renderSubtree(cid, depth + 1);
+        } else {
+          return nodeHtml(depth, '#64748b', 'fa-circle', '#94a3b8',
+            cobj.nome || cid, tipo, '') + renderSubtree(cid, depth + 1);
+        }
+      }).join('');
+    }
+
+    // Caminho: OLT → PON → DGO → arvore infra
+    var ponLabel  = ponCfg.label || ('Slot ' + slot + ' PON ' + port);
+    var ponActive = ponCfg.active ? '<span style="color:#22c55e;font-size:.7rem">● Ativa</span>' : '<span style="color:#ef4444;font-size:.7rem">○ Inativa</span>';
+    var ponVlan   = ponCfg.vlan   ? '<span style="color:#64748b;font-size:.7rem">VLAN ' + ponCfg.vlan + '</span>' : '';
+
+    var subtree = renderSubtree(dgoId, 2);
+    var noSubtree = !subtree.trim();
+
+    var html = ''
+      // OLT
+      + nodeHtml(0, '#ef4444', 'fa-server', '#fca5a5', olt.name || oltId, (olt.ip_address || '') + ' · ' + (olt.model || ''), '')
+      // PON
+      + '<div style="margin-left:14px;font-size:.7rem;color:#4f6272;padding:2px 0"><i class="fas fa-long-arrow-alt-down"></i> cordão</div>'
+      + nodeHtml(1, '#3b82f6', 'fa-plug', '#93c5fd', ponLabel, 'SL' + slot + ' PON' + port + ' · ' + (ponCfg.speed || '1G GPON'), ' ' + ponActive + ' ' + ponVlan)
+      // DGO
+      + (dgoId
+        ? ('<div style="margin-left:' + (1*18+14) + 'px;font-size:.7rem;color:#4f6272;padding:2px 0"><i class="fas fa-long-arrow-alt-down"></i> fibra ' + (fiberKey || '') + '</div>'
+          + nodeHtml(1, '#0ea5e9', 'fa-network-wired', '#7dd3fc',
+              dgo.nome || dgoId,
+              (dgo.tube_count||12) + 'T × ' + (dgo.fiber_per_tube||12) + 'F', ''))
+        : '')
+      // Subtree (Splitters → CTOs → ONUs)
+      + (dgoId
+        ? (noSubtree
+            ? '<div style="margin-left:36px;font-size:.77rem;color:#475569;font-style:italic;padding:8px 0">Sem splitters/CTOs vinculados ao DGO na infraestrutura</div>'
+            : subtree)
+        : '');
+
+    var rc2 = document.getElementById('olt-rastreio-content');
+    if (rc2) rc2.innerHTML = html;
+  }).catch(function(err) {
+    var rc3 = document.getElementById('olt-rastreio-content');
+    if (rc3) rc3.innerHTML = '<span style="color:#ef4444"><i class="fas fa-exclamation-triangle"></i> Erro: ' + err.message + '</span>';
+  });
+};
+
+// ── Configuração de slot — quantidade de PONs por slot ──────────────
+window.sdrSlotConfig = function(oltId, slot, currentCount) {
+  var existing = document.getElementById('sdr-slot-cfg-modal');
+  if (existing) existing.remove();
+
+  var html = '<div class="modal-overlay open" id="sdr-slot-cfg-modal" onclick="if(event.target===this)this.remove()">'
+    + '<div class="modal-box" style="max-width:360px">'
+    + '<div class="modal-header">'
+    + '<h3 style="font-size:.95rem"><i class="fas fa-sliders-h" style="color:#6366f1;margin-right:8px"></i>Configurar Slot ' + slot + '</h3>'
+    + '<button onclick="document.getElementById(\'sdr-slot-cfg-modal\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">&times;</button>'
+    + '</div>'
+    + '<div class="modal-body">'
+    + '<div class="form-group">'
+    + '<label>Quantidade de PONs neste slot</label>'
+    + '<select id="slot-cfg-poncount" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:.9rem">'
+    + [4,8,16,32].map(function(n) {
+        return '<option value="' + n + '"' + (n === currentCount ? ' selected' : '') + '>' + n + ' PONs por slot</option>';
+      }).join('')
+    + '</select>'
+    + '</div>'
+    + '<div class="form-group">'
+    + '<label>Nome / Descrição do slot (opcional)</label>'
+    + '<input id="slot-cfg-label" placeholder="Ex: Slot ' + slot + ' — Bairro Norte" style="width:100%;padding:8px;border:1px solid #d1d5db;border-radius:6px;font-size:.9rem">'
+    + '</div>'
+    + '<div style="font-size:.78rem;color:#64748b;background:#f8fafc;border-radius:6px;padding:8px 12px">'
+    + '<i class="fas fa-info-circle" style="color:#3b82f6;margin-right:4px"></i>'
+    + 'A alteração afeta <b>somente este slot</b>. Os outros slots mantêm a configuração global da OLT.'
+    + '</div>'
+    + '</div>'
+    + '<div class="modal-footer">'
+    + '<button class="btn-secondary" onclick="document.getElementById(\'sdr-slot-cfg-modal\').remove()">Cancelar</button>'
+    + '<button class="btn-primary" onclick="sdrSlotConfigSave(\'' + oltId + '\',' + slot + ')"><i class="fas fa-save"></i> Salvar Slot</button>'
+    + '</div>'
+    + '</div></div>';
+
+  document.body.insertAdjacentHTML('beforeend', html);
+  // Preencher label existente assincronamente
+  sdrRef('olt_connections/' + oltId + '/slots/' + slot).once('value').then(function(snap) {
+    var slotCfg = snap.val() || {};
+    var labelEl = document.getElementById('slot-cfg-label');
+    if (labelEl && slotCfg.label) labelEl.value = slotCfg.label;
+    // Atualizar select com valor real do Firebase (sobrescreve currentCount)
+    var selEl = document.getElementById('slot-cfg-poncount');
+    if (selEl && slotCfg.pon_count) selEl.value = String(slotCfg.pon_count);
+  });
+};
+
+window.sdrSlotConfigSave = function(oltId, slot) {
+  var ponCount = parseInt(document.getElementById('slot-cfg-poncount').value) || 8;
+  var label    = (document.getElementById('slot-cfg-label').value || '').trim();
+  var updates  = {};
+  updates['olt_connections/' + oltId + '/slots/' + slot + '/pon_count'] = ponCount;
+  if (label) updates['olt_connections/' + oltId + '/slots/' + slot + '/label'] = label;
+  sdrRef('').update(updates).then(function() {
+    if (typeof toast === 'function') toast('Slot ' + slot + ' configurado com ' + ponCount + ' PONs!', 'success');
+    document.getElementById('sdr-slot-cfg-modal').remove();
+    if (document.getElementById('olt-panel-content') && _sdrActiveOltTab === oltId) {
+      sdrOltInlineRender(oltId);
+    }
+  }).catch(function(e) {
+    if (typeof toast === 'function') toast('Erro: ' + e.message, 'error');
+  });
+};
+
+// ── Destacar um cordão (clique no cordão, PON ou fibra) ────────────
+window._sdrCordHighlight = function(ponKey) {
+  var svg = document.getElementById('olt-cords-svg');
+  if (!svg) return;
+  // Escurecer todos
+  svg.querySelectorAll('.olt-cord-vis').forEach(function(el) {
+    el.setAttribute('stroke', '#312e81');
+    el.setAttribute('stroke-width', '2');
+    el.setAttribute('opacity', '0.35');
+  });
+  // Iluminar o selecionado
+  var g = document.getElementById('cord-' + ponKey);
+  if (g) {
+    var vis = g.querySelector('.olt-cord-vis');
+    if (vis) {
+      vis.setAttribute('stroke', '#e0e7ff');
+      vis.setAttribute('stroke-width', '3.5');
+      vis.setAttribute('opacity', '1');
+    }
+    // Info toast
+    var mm = ponKey.match(/^s(\d+)_p(\d+)$/);
+    if (mm && typeof toast === 'function') {
+      toast('Cordão: SL' + mm[1] + ' PON' + mm[2] + ' — clique noutra área para desfazer destaque', 'info');
+    }
+  }
+  // Restaurar após 4s
+  setTimeout(function() {
+    svg.querySelectorAll('.olt-cord-vis').forEach(function(el) {
+      el.setAttribute('stroke', '#6366f1');
+      el.setAttribute('stroke-width', '2.5');
+      el.setAttribute('opacity', '1');
+    });
+  }, 4000);
+};
+
+// ══════════════════════════════════════════════════════════════════════
+// ── EDITOR DE CORDÃO — arrastar waypoints + adicionar/remover pontos ──
+// ══════════════════════════════════════════════════════════════════════
+
+window._sdrCordEdit = null; // { oltId, slot, port, ponKey, dgoId, fiberKey, pts:[{x,y}...], dragging }
+
+// Retorna todos os pontos do cordão: PON → waypoints → fibra DGO
+window._sdrCordEditAllPts = function() {
+  var m = window._sdrCordEdit;
+  if (!m) return [];
+  var sa = document.getElementById('olt-scroll-area');
+  if (!sa) return m.pts.slice();
+  var saRect = sa.getBoundingClientRect();
+  var pts = [];
+
+  var ponBtn = document.getElementById('pon-btn-' + m.oltId + '-' + m.slot + '-' + m.port);
+  if (ponBtn) {
+    var br = ponBtn.getBoundingClientRect();
+    pts.push({ x: br.left - saRect.left + br.width,      // borda direita PON
+               y: br.top  - saRect.top  + sa.scrollTop + br.height/2, _fixed: true });
+  }
+  m.pts.forEach(function(p) { pts.push(p); });
+  var fEl = document.getElementById('dgo-fiber-' + m.dgoId + '-' + m.fiberKey);
+  if (fEl) {
+    var fr = fEl.getBoundingClientRect();
+    pts.push({ x: fr.left - saRect.left + fr.width,      // borda direita fibra DGO
+               y: fr.top  - saRect.top  + sa.scrollTop + fr.height/2, _fixed: true });
+  }
+  return pts;
+};
+
+window._sdrCordEditStart = function(oltId, slot, port, dgoId, fiberKey) {
+  var sa = document.getElementById('olt-scroll-area');
+  if (!sa) return;
+  var ponKey = 's' + slot + '_p' + port;
+
+  sdrRef('olt_connections/' + oltId + '/pons/' + ponKey + '/cord_path').once('value').then(function(snap) {
+    var saved  = snap.val() || [];
+    var saW    = sa.clientWidth  || 1;
+    var saH    = sa.scrollHeight || 1;
+    var pts    = saved.map(function(wp) { return { x: wp.x * saW, y: wp.y * saH }; });
+
+    window._sdrCordEdit = { oltId: oltId, slot: slot, port: port, ponKey: ponKey,
+                            dgoId: dgoId, fiberKey: fiberKey, pts: pts, dragging: null };
+
+    // Banner
+    var banner = document.getElementById('olt-cord-banner');
+    if (banner) {
+      banner.style.display = 'flex';
+      var txt = document.getElementById('olt-cord-banner-text');
+      if (txt) txt.textContent =
+        'Editando SL' + slot + ' PON' + port + ' — clique no painel para adicionar pontos; arraste pontos para mover; botão dir. para remover';
+      // Botão Cancelar já existe; adicionar Salvar dinamicamente
+      if (!document.getElementById('olt-cord-edit-save-btn')) {
+        var saveBtn = document.createElement('button');
+        saveBtn.id = 'olt-cord-edit-save-btn';
+        saveBtn.textContent = '✓ Salvar';
+        saveBtn.style.cssText = 'background:#16a34a;border:none;color:#fff;cursor:pointer;font-size:.78rem;padding:3px 10px;border-radius:4px;margin-left:6px';
+        saveBtn.onclick = _sdrCordEditSave;
+        banner.appendChild(saveBtn);
+      }
+    }
+
+    // Cursor crosshair no scroll area
+    sa.style.cursor = 'crosshair';
+
+    _sdrCordEditRender();
+    if (typeof toast === 'function') toast('Clique para adicionar pontos • Arraste para mover • Botão dir. para remover', 'info');
+  });
+};
+
+window._sdrCordEditRender = function() {
+  var m = window._sdrCordEdit;
+  if (!m) return;
+  var sa = document.getElementById('olt-scroll-area');
+  if (!sa) return;
+  var saH = Math.max(sa.scrollHeight, sa.clientHeight, 600);
+  var saRect = sa.getBoundingClientRect();
+
+  // Remover SVG anterior
+  var old = document.getElementById('olt-cord-edit-svg');
+  if (old) old.remove();
+
+  var svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svgEl.id = 'olt-cord-edit-svg';
+  // pointer-events:none no fundo do SVG — os elementos interativos (polyline hit, dots) definem pointer-events próprios
+  // Isso garante que botões do banner acima do SVG recebam cliques normalmente
+  svgEl.style.cssText = 'position:absolute;top:0;left:0;width:100%;overflow:visible;z-index:30;cursor:crosshair;pointer-events:none';
+  svgEl.setAttribute('width', '100%');
+  svgEl.setAttribute('height', saH);
+
+  var allPts = _sdrCordEditAllPts();
+  var ptsStr = allPts.map(function(p) { return p.x + ',' + p.y; }).join(' ');
+
+  // Área de clique larga na polyline (para inserir pontos)
+  if (allPts.length >= 2) {
+    var hit = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    hit.setAttribute('points', ptsStr);
+    hit.setAttribute('stroke', 'transparent');
+    hit.setAttribute('stroke-width', '16');
+    hit.setAttribute('fill', 'none');
+    hit.setAttribute('pointer-events', 'stroke');
+    hit.style.cursor = 'copy';
+    // Clique na linha = inserir waypoint no segmento mais próximo
+    hit.addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var m2 = window._sdrCordEdit;
+      if (!m2 || m2.dragging !== null) return;
+      var r = sa.getBoundingClientRect();
+      var cx = ev.clientX - r.left;
+      var cy = ev.clientY - r.top + sa.scrollTop;
+      // Encontrar o segmento mais próximo (ignorando pontos fixos nas extremidades)
+      var wp = _sdrCordEditAllPts();
+      var bestSeg = 0, bestDist = Infinity;
+      for (var i = 0; i < wp.length - 1; i++) {
+        var mx = (wp[i].x + wp[i+1].x) / 2, my = (wp[i].y + wp[i+1].y) / 2;
+        var d = Math.hypot(cx - mx, cy - my);
+        if (d < bestDist) { bestDist = d; bestSeg = i; }
+      }
+      // Inserir após bestSeg mas antes de qualquer ponto fixo
+      // bestSeg 0 = entre PON (fixo) e primeiro waypoint → inserir no início
+      // bestSeg N-1 = entre último waypoint e fibra (fixo) → inserir no fim
+      var hasStartFixed = (_sdrCordEditAllPts()[0] || {})._fixed;
+      var insertIdx = hasStartFixed ? bestSeg : bestSeg; // dentro de m.pts
+      var wpIdx = hasStartFixed ? Math.max(0, bestSeg) : bestSeg;
+      m2.pts.splice(wpIdx, 0, { x: cx, y: cy });
+      _sdrCordEditRender();
+    });
+    svgEl.appendChild(hit);
+
+    // Polyline visível com dash
+    var vis = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    vis.setAttribute('points', ptsStr);
+    vis.setAttribute('stroke', '#a5b4fc');
+    vis.setAttribute('stroke-width', '2.5');
+    vis.setAttribute('stroke-dasharray', '8,4');
+    vis.setAttribute('fill', 'none');
+    vis.setAttribute('pointer-events', 'none');
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    defs.innerHTML = '<filter id="cedit-glow" x="-30%" y="-30%" width="160%" height="160%">'
+      + '<feGaussianBlur stdDeviation="2" result="b"/>'
+      + '<feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+    svgEl.appendChild(defs);
+    vis.setAttribute('filter', 'url(#cedit-glow)');
+    svgEl.appendChild(vis);
+  }
+
+  // Pontos fixos (PON + fibra DGO) — losangos cinza
+  allPts.forEach(function(p) {
+    if (!p._fixed) return;
+    var d = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    var s = 8;
+    d.setAttribute('points', (p.x)+','+(p.y-s)+' '+(p.x+s)+','+(p.y)+' '+(p.x)+','+(p.y+s)+' '+(p.x-s)+','+(p.y));
+    d.setAttribute('fill', '#64748b');
+    d.setAttribute('stroke', '#e2e8f0');
+    d.setAttribute('stroke-width', '1.5');
+    d.setAttribute('pointer-events', 'none');
+    svgEl.appendChild(d);
+  });
+
+  // Waypoints draggáveis (pontos editáveis)
+  m.pts.forEach(function(pt, idx) {
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('pointer-events', 'all');
+    g.style.cursor = 'grab';
+
+    var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('cx', pt.x);
+    dot.setAttribute('cy', pt.y);
+    dot.setAttribute('r', m.dragging === idx ? '10' : '8');
+    dot.setAttribute('fill', m.dragging === idx ? '#4f46e5' : '#6366f1');
+    dot.setAttribute('stroke', '#e0e7ff');
+    dot.setAttribute('stroke-width', '2');
+    dot.setAttribute('pointer-events', 'all');
+
+    // Número do ponto
+    var lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    lbl.setAttribute('x', pt.x + 12); lbl.setAttribute('y', pt.y + 4);
+    lbl.setAttribute('font-size', '9'); lbl.setAttribute('fill', '#c7d2fe');
+    lbl.setAttribute('pointer-events', 'none');
+    lbl.textContent = idx + 1;
+
+    // Drag: mousedown
+    g.addEventListener('mousedown', function(ev) {
+      ev.stopPropagation(); ev.preventDefault();
+      var m3 = window._sdrCordEdit;
+      if (m3) { m3.dragging = idx; _sdrCordEditRender(); }
+    });
+
+    // Botão direito = remover ponto
+    g.addEventListener('contextmenu', function(ev) {
+      ev.preventDefault(); ev.stopPropagation();
+      var m4 = window._sdrCordEdit;
+      if (!m4) return;
+      m4.pts.splice(idx, 1);
+      _sdrCordEditRender();
+    });
+
+    g.appendChild(dot);
+    g.appendChild(lbl);
+    svgEl.appendChild(g);
+  });
+
+  // Rect transparente como fundo interativo (o SVG em si tem pointer-events:none,
+  // mas filhos com pointer-events:all ainda recebem eventos)
+  var bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('x', '0');
+  bgRect.setAttribute('y', '0');
+  bgRect.setAttribute('width', '100%');
+  bgRect.setAttribute('height', '100%');
+  bgRect.setAttribute('fill', 'transparent');
+  bgRect.setAttribute('pointer-events', 'all');
+  bgRect.style.cursor = 'crosshair';
+  // Clique no fundo = adicionar waypoint no final
+  bgRect.addEventListener('click', function(ev) {
+    var m5 = window._sdrCordEdit;
+    if (!m5 || m5.dragging !== null) return;
+    var r = sa.getBoundingClientRect();
+    m5.pts.push({ x: ev.clientX - r.left, y: ev.clientY - r.top + sa.scrollTop });
+    _sdrCordEditRender();
+  });
+  svgEl.insertBefore(bgRect, svgEl.firstChild); // inserir como primeiro filho (abaixo dos outros elementos)
+
+  sa.appendChild(svgEl);
+
+  // Arrastar: mousemove e mouseup no document
+  if (!svgEl._dragBound) {
+    svgEl._dragBound = true;
+    var onDocMove = function(ev) {
+      var m6 = window._sdrCordEdit;
+      if (!m6 || m6.dragging === null) return;
+      var r = sa.getBoundingClientRect();
+      var nx = ev.clientX - r.left;
+      var ny = ev.clientY - r.top + sa.scrollTop;
+      m6.pts[m6.dragging] = { x: nx, y: ny };
+      // Update positions diretamente sem re-render completo
+      var allNow = _sdrCordEditAllPts();
+      var pStr   = allNow.map(function(p) { return p.x + ',' + p.y; }).join(' ');
+      var poly   = svgEl.querySelector('polyline[stroke="#a5b4fc"]');
+      var phit   = svgEl.querySelector('polyline[stroke="transparent"]');
+      if (poly) poly.setAttribute('points', pStr);
+      if (phit) phit.setAttribute('points', pStr);
+      var dots = svgEl.querySelectorAll('circle');
+      dots.forEach(function(d, i) { d.setAttribute('cx', m6.pts[i].x); d.setAttribute('cy', m6.pts[i].y); });
+      var lbls = svgEl.querySelectorAll('text');
+      lbls.forEach(function(l, i) { l.setAttribute('x', m6.pts[i].x + 12); l.setAttribute('y', m6.pts[i].y + 4); });
+    };
+    var onDocUp = function() {
+      var m7 = window._sdrCordEdit;
+      if (m7 && m7.dragging !== null) {
+        m7.dragging = null;
+        _sdrCordEditRender(); // re-render limpo ao soltar
+      }
+    };
+    document.addEventListener('mousemove', onDocMove);
+    document.addEventListener('mouseup',  onDocUp);
+    // Cleanup quando edição terminar
+    window._sdrCordEditCleanupListeners = function() {
+      document.removeEventListener('mousemove', onDocMove);
+      document.removeEventListener('mouseup',  onDocUp);
+    };
+  }
+};
+
+window._sdrCordEditSave = function() {
+  var m = window._sdrCordEdit;
+  if (!m) return;
+  var sa = document.getElementById('olt-scroll-area');
+  var saW = sa ? sa.clientWidth  || 1 : 1;
+  var saH = sa ? sa.scrollHeight || 1 : 1;
+
+  // Converter pixel → fração
+  var cordPath = m.pts.map(function(p) {
+    return { x: Math.round(p.x / saW * 10000) / 10000,
+             y: Math.round(p.y / saH * 10000) / 10000 };
+  });
+
+  sdrRef('olt_connections/' + m.oltId + '/pons/' + m.ponKey + '/cord_path').set(cordPath).then(function() {
+    if (typeof toast === 'function') toast('Percurso do cordão salvo! (' + cordPath.length + ' pontos)', 'success');
+    _sdrCordEditCancel();
+    sdrOltInlineRender(m.oltId);
+  }).catch(function(e) {
+    if (typeof toast === 'function') toast('Erro ao salvar: ' + e.message, 'error');
+  });
+};
+
+window._sdrCordEditCancel = function() {
+  var m = window._sdrCordEdit;
+  window._sdrCordEdit = null;
+
+  // Limpar listeners globais
+  if (typeof window._sdrCordEditCleanupListeners === 'function') {
+    window._sdrCordEditCleanupListeners();
+    window._sdrCordEditCleanupListeners = null;
+  }
+
+  // Remover SVG de edição
+  var svg = document.getElementById('olt-cord-edit-svg');
+  if (svg) svg.remove();
+
+  // Remover botão Salvar do banner
+  var saveBtn = document.getElementById('olt-cord-edit-save-btn');
+  if (saveBtn) saveBtn.remove();
+
+  // Esconder banner
+  var banner = document.getElementById('olt-cord-banner');
+  if (banner) banner.style.display = 'none';
+
+  // Restaurar cursor
+  var sa = document.getElementById('olt-scroll-area');
+  if (sa) sa.style.cursor = '';
+
+  // Re-desenhar cordões salvos (com o percurso original intacto se Cancelar)
+  if (m) {
+    var oldTab = _sdrActiveOltTab;
+    if (oldTab && document.getElementById('olt-panel-content')) {
+      sdrOltInlineRender(oldTab);
+    }
+  }
+};
+
+// ── Posicionar OLT no mapa ──────────────────────────────────────────
+window.sdrOltStartMapPlace = function(oltId) {
+  var name = (sdrOltsCache[oltId] || {}).name || 'OLT';
+  _sdrOltPlaceMode = { oltId: oltId, name: name };
+  if (typeof showPage === 'function') showPage('mapa');
+  setTimeout(function() {
+    var mapEl = document.getElementById('sdr-map');
+    if (mapEl) mapEl.style.cursor = 'crosshair';
+    var existing = document.getElementById('sdr-olt-place-banner');
+    if (existing) existing.remove();
+    var banner = document.createElement('div');
+    banner.id = 'sdr-olt-place-banner';
+    banner.style.cssText = 'position:absolute;top:60px;left:50%;transform:translateX(-50%);'
+      + 'z-index:9999;background:#1e3a5f;border:1px solid #6366f1;border-radius:8px;'
+      + 'padding:8px 16px;color:#e2e8f0;font-size:.82rem;display:flex;align-items:center;'
+      + 'gap:10px;box-shadow:0 4px 16px rgba(0,0,0,.4);white-space:nowrap';
+    banner.innerHTML = '<i class="fas fa-map-pin" style="color:#6366f1"></i> Clique no mapa para posicionar <b>' + name + '</b>'
+      + ' <button onclick="_sdrCancelOltPlace()" style="margin-left:8px;background:#dc2626;border:none;'
+      + 'border-radius:4px;color:#fff;padding:2px 8px;cursor:pointer;font-size:.75rem">Cancelar</button>';
+    var mapParent = mapEl ? mapEl.parentElement : null;
+    if (mapParent) {
+      if (getComputedStyle(mapParent).position === 'static') mapParent.style.position = 'relative';
+      mapParent.appendChild(banner);
+    } else {
+      document.body.appendChild(banner);
+    }
+  }, 400);
+};
+
+window._sdrCancelOltPlace = function() {
+  _sdrOltPlaceMode = null;
+  var _placeMapEl = document.getElementById('sdr-map');
+  if (_placeMapEl) _placeMapEl.style.cursor = '';
+  var _placeBanner = document.getElementById('sdr-olt-place-banner');
+  if (_placeBanner) _placeBanner.remove();
+};
+
+// ── Hook de click no mapa ──────────────────────────────────────────
+// (chamado pelo sdrMap.on('click') que já existe no código de inicialização do mapa)
+window.sdrMapClickCapture = function(lat, lng) {
+  if (_sdrOltPlaceMode) {
+    var mode = _sdrOltPlaceMode;
+    _sdrOltPlaceMode = null;
+    var _placeMapEl = document.getElementById('sdr-map');
+    if (_placeMapEl) _placeMapEl.style.cursor = '';
+    var _placeBanner = document.getElementById('sdr-olt-place-banner');
+    if (_placeBanner) _placeBanner.remove();
+    sdrRef('olt_connections/' + mode.oltId).update({ lat: lat, lng: lng }).then(function() {
+      if (typeof toast === 'function') toast(mode.name + ' posicionada no mapa!', 'success');
+      sdrRef('olt_connections').once('value').then(function(s) {
+        sdrOltsCache = s.val() || {};
+        if (typeof sdrMapRenderOlts === 'function') sdrMapRenderOlts();
+      });
+    });
+    return true;
+  }
+  return false;
+};
+
+// ════════════════════════════════════════════════════
 // SPRINT 3 — OLTs CRUD MELHORADO
 // ════════════════════════════════════════════════════
 
 let sdrOnusCache = {};
 
-// Sobrescrever render de OLTs com versão Sprint 3 (stats + CRUD dedicado)
+// Render de OLTs — versão Sprint 4 (tab interface)
 window.sdrOltsRender = function() {
+  // Ajustar estilo do page-olts para layout flex sem padding
+  var pageEl = document.getElementById('page-olts');
+  if (pageEl) pageEl.style.cssText = 'padding:0;overflow:hidden;height:calc(100vh - 56px);display:flex;flex-direction:column';
+
+  // Garantir HTML da tab interface
+  if (!document.getElementById('olts-tab-bar')) {
+    var _htmlFn = window._sdrHtml_olts;
+    if (pageEl && _htmlFn) pageEl.innerHTML = _htmlFn();
+  }
+
   Promise.all([
     sdrRef('olt_connections').once('value'),
     sdrRef('onus').once('value')
-  ]).then(([oltSnap, onuSnap]) => {
-    sdrOltsCache = oltSnap.val() || {};
-    sdrOnusCache = onuSnap.val() || {};
+  ]).then(function(snaps) {
+    sdrOltsCache = snaps[0].val() || {};
+    sdrOnusCache = snaps[1].val() || {};
 
-    // Stats
-    const olts = Object.values(sdrOltsCache);
-    const statsEl = document.getElementById('olts-stats');
-    if (statsEl) {
-      const total = olts.length;
-      const ativas = olts.filter(o => o.is_active).length;
-      const totalPON = olts.reduce((s, o) => s + (o.total_pon_ports || 0), 0);
-      const totalOnus = Object.values(sdrOnusCache).length;
-      statsEl.innerHTML = `
-        <div class="infra-stat"><div class="is-num">${total}</div><div class="is-label">OLTs</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#16a34a">${ativas}</div><div class="is-label">Ativas</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#2563eb">${totalPON}</div><div class="is-label">Portas PON</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#7c3aed">${totalOnus}</div><div class="is-label">ONUs</div></div>`;
-    }
+    // Atualizar marcadores OLT no mapa (só se o mapa já foi inicializado)
+    try { if (typeof sdrMapRenderOlts === 'function' && window.sdrLayers && sdrLayers.olts) sdrMapRenderOlts(); } catch(e) {}
 
-    const el = document.getElementById('olts-lista');
-    if (!el) return;
-    const items = Object.entries(sdrOltsCache);
+    var tabBar = document.getElementById('olts-tab-bar');
+    var panel  = document.getElementById('olt-panel-content');
+    if (!tabBar) return;
+
+    var items = Object.entries(sdrOltsCache);
+
     if (items.length === 0) {
-      el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
-        <i class="fas fa-server" style="font-size:2.5rem;margin-bottom:12px;display:block;opacity:.4"></i>
-        <p>Nenhuma OLT cadastrada</p>
-        <button class="btn-primary" onclick="sdrOltAddModal()" style="margin-top:8px"><i class="fas fa-plus"></i> Cadastrar primeira OLT</button>
-      </div>`;
+      tabBar.innerHTML = '';
+      if (panel) panel.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#64748b">'
+        + '<i class="fas fa-server" style="font-size:3rem;opacity:.3;display:block;margin-bottom:16px"></i>'
+        + '<p style="font-size:.9rem;margin-bottom:12px">Nenhuma OLT cadastrada</p>'
+        + '<button onclick="sdrOltAddModal()" style="padding:8px 20px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-plus"></i> Cadastrar primeira OLT</button>'
+        + '</div>';
       return;
     }
 
-    el.innerHTML = `<div class="infra-grid">${items.map(([id, o]) => {
-      const onusThisOlt = Object.values(sdrOnusCache).filter(u => u.olt_id === id);
-      const online = onusThisOlt.filter(u => u.status === 'online').length;
-      const total = onusThisOlt.length;
-      return `
-      <div class="infra-card" style="cursor:pointer;position:relative" onclick="sdrOpenOltPanel('${id}')" oncontextmenu="sdrCtxMenu(event,_sdrCtxOlt('${id}'))">
-        <div class="ic-top">
-          <div class="ic-icon olt"><i class="fas fa-server"></i></div>
-          <div>
-            <div class="ic-name">${o.name || id}</div>
-            <div class="ic-type">${o.model || 'OLT'}</div>
-          </div>
-          <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
-            <span class="signal-badge ${o.is_active ? 'good' : 'off'}">${o.is_active ? 'Ativa' : 'Inativa'}</span>
-            <button class="sdr-row-menu" onclick="event.stopPropagation();sdrCtxMenu(event,_sdrCtxOlt('${id}'))" title="Ações"><i class="fas fa-ellipsis-v"></i></button>
-          </span>
-        </div>
-        <div class="ic-detail">IP: <b>${o.ip_address || '-'}</b> &nbsp;·&nbsp; PON: ${o.total_pon_ports || '-'} portas</div>
-        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap" class="sdr-card-actions">
-          <button onclick="event.stopPropagation();sdrOltVisualModal('${id}')" style="padding:4px 10px;font-size:.73rem;border:1px solid #1d4ed8;border-radius:6px;background:#eff6ff;color:#1d4ed8;cursor:pointer"><i class="fas fa-th"></i> Chassis</button>
-          <button onclick="event.stopPropagation();sdrOltAddModal('${id}')" style="padding:4px 10px;font-size:.73rem;border:1px solid #e5e7eb;border-radius:6px;background:#f8fafc;color:#374151;cursor:pointer"><i class="fas fa-edit"></i> Editar</button>
-          <button onclick="event.stopPropagation();sdrDgoCriarModal('${id}')" style="padding:4px 10px;font-size:.73rem;border:1px solid #e5e7eb;border-radius:6px;background:#f8fafc;color:#374151;cursor:pointer"><i class="fas fa-plus"></i> DGO</button>
-          <span style="margin-left:auto;font-size:.75rem;color:var(--muted);align-self:center"><i class="fas fa-wifi" style="color:#7c3aed"></i> ${total} ONUs &nbsp;<i class="fas fa-circle" style="color:#16a34a;font-size:.45rem;vertical-align:middle"></i> ${online} online</span>
-        </div>
-      </div>`;
-    }).join('')}</div>`;
+    if (!_sdrActiveOltTab || !sdrOltsCache[_sdrActiveOltTab]) {
+      _sdrActiveOltTab = items[0][0];
+    }
+
+    tabBar.innerHTML = items.map(function(e) {
+      var id = e[0], o = e[1];
+      var active     = id === _sdrActiveOltTab;
+      var onusThisOlt = Object.values(sdrOnusCache).filter(function(u){ return u.olt_id === id; });
+      var hasAlarm   = onusThisOlt.some(function(u){ return u.status === 'offline'; });
+      var dotColor   = !o.is_active ? '#64748b' : hasAlarm ? '#ef4444' : '#22c55e';
+      return '<button id="olt-tab-' + id + '" onclick="sdrOltTabSwitch(\'' + id + '\')" '
+        + 'style="padding:8px 14px;border:none;border-bottom:2px solid ' + (active ? '#6366f1' : 'transparent') + ';'
+        + 'background:' + (active ? '#1e3a5f' : 'transparent') + ';color:' + (active ? '#e2e8f0' : '#64748b') + ';'
+        + 'font-weight:' + (active ? '600' : '400') + ';font-size:.82rem;cursor:pointer;'
+        + 'white-space:nowrap;flex-shrink:0;display:flex;align-items:center;gap:6px;transition:all .15s">'
+        + '<span style="width:7px;height:7px;border-radius:50%;background:' + dotColor + ';flex-shrink:0"></span>'
+        + (o.name || id) + '</button>';
+    }).join('');
 
     // Atualizar filtro de OLTs na página ONUs
-    const oltFilter = document.getElementById('onus-filter-olt');
+    var oltFilter = document.getElementById('onus-filter-olt');
     if (oltFilter) {
-      const current = oltFilter.value;
-      oltFilter.innerHTML = '<option value="">Todas OLTs</option>' +
-        items.map(([id, o]) => `<option value="${id}" ${id === current ? 'selected' : ''}>${o.name || id}</option>`).join('');
+      var current = oltFilter.value;
+      oltFilter.innerHTML = '<option value="">Todas OLTs</option>'
+        + items.map(function(e) {
+          return '<option value="' + e[0] + '"' + (e[0] === current ? ' selected' : '') + '>' + (e[1].name || e[0]) + '</option>';
+        }).join('');
     }
+
+    sdrOltTabSwitch(_sdrActiveOltTab);
   });
 };
 
 // Modal dedicado para OLT
 window.sdrOltAddModal = function(editId) {
-  const d = editId ? sdrOltsCache[editId] || {} : {};
-  const isEdit = !!editId;
+  // Buscar DGOs disponíveis para seleção antes de abrir o modal
+  sdrRef('infrastructure').once('value').then(function(snap) {
+    var allInfra = snap.val() || {};
+    var d        = editId ? (sdrOltsCache[editId] || {}) : {};
+    var isEdit   = !!editId;
 
-  let html = `<div class="modal-overlay" id="sdr-modal" onclick="if(event.target===this)this.remove()">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h3><i class="fas fa-server" style="color:#dc2626;margin-right:8px"></i>${isEdit ? 'Editar' : 'Nova'} OLT</h3>
-        <button onclick="document.getElementById('sdr-modal').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="form-group"><label>Nome</label><input id="sdr-olt-name" value="${d.name || ''}" placeholder="Ex: OLT-01 Central"></div>
-        <div class="form-group"><label>Modelo</label><input id="sdr-olt-model" value="${d.model || ''}" placeholder="Ex: Fiberhome AN5516-04"></div>
-        <div style="display:flex;gap:10px">
-          <div class="form-group" style="flex:1"><label>IP Address</label><input id="sdr-olt-ip" value="${d.ip_address || ''}" placeholder="Ex: 192.168.1.100"></div>
-          <div class="form-group" style="flex:1"><label>Portas PON</label><input id="sdr-olt-pon" type="number" value="${d.total_pon_ports || 8}"></div>
-        </div>
-        <div style="display:flex;gap:10px">
-          <div class="form-group" style="flex:1"><label>SNMP Community</label><input id="sdr-olt-snmp" value="${d.snmp_community || 'public'}" placeholder="public"></div>
-          <div class="form-group" style="flex:1"><label>Versão SNMP</label>
-            <select id="sdr-olt-snmpv">
-              <option value="2c" ${d.snmp_version !== '3' ? 'selected' : ''}>v2c</option>
-              <option value="3" ${d.snmp_version === '3' ? 'selected' : ''}>v3</option>
-            </select>
-          </div>
-        </div>
-        <div style="display:flex;gap:10px">
-          <div class="form-group" style="flex:1"><label>Latitude</label><input id="sdr-olt-lat" type="number" step="any" value="${d.lat || ''}"></div>
-          <div class="form-group" style="flex:1"><label>Longitude</label><input id="sdr-olt-lng" type="number" step="any" value="${d.lng || ''}"></div>
-        </div>
-        <div class="form-group">
-          <label style="display:flex;align-items:center;gap:6px">
-            <input type="checkbox" id="sdr-olt-active" ${d.is_active !== false ? 'checked' : ''}> OLT Ativa
-          </label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="document.getElementById('sdr-modal').remove()">Cancelar</button>
-        <button class="btn-primary" onclick="sdrOltSave('${editId || ''}')">${isEdit ? 'Salvar' : 'Cadastrar'}</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.insertAdjacentHTML('beforeend', html);
-  document.getElementById('sdr-modal').classList.add('open');
+    // DGOs disponíveis: sem olt_id (livres) + o já vinculado a esta OLT
+    var dgoOptions = '<option value="">— Nenhum / selecionar depois —</option>';
+    Object.entries(allInfra).forEach(function(e) {
+      var did = e[0], dg = e[1];
+      if (!dg || dg.type !== 'dgo') return;
+      var vinculado = dg.olt_id === editId;
+      var livre     = !dg.olt_id;
+      if (vinculado || livre) {
+        var label = (dg.nome || did) + (vinculado ? ' ← vinculado' : ' (livre)');
+        dgoOptions += '<option value="' + did + '"' + (vinculado ? ' selected' : '') + '>' + label + '</option>';
+      }
+    });
+
+    // DGO(s) já vinculados a esta OLT (para exibição informativa)
+    var dgosVinculados = Object.entries(allInfra).filter(function(e) {
+      return e[1] && e[1].type === 'dgo' && e[1].olt_id === editId;
+    });
+    var dgoInfoHtml = '';
+    if (isEdit && dgosVinculados.length > 0) {
+      dgoInfoHtml = '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:8px 12px;margin-top:4px;font-size:.78rem;color:#15803d">'
+        + '<i class="fas fa-check-circle"></i> DGO vinculado: <b>'
+        + dgosVinculados.map(function(e){ return e[1].nome || e[0]; }).join(', ')
+        + '</b></div>';
+    }
+
+    var html = '<div class="modal-overlay" id="sdr-modal" onclick="if(event.target===this)this.remove()">'
+      + '<div class="modal-box" style="max-width:520px">'
+      + '<div class="modal-header">'
+      + '<h3><i class="fas fa-server" style="color:#dc2626;margin-right:8px"></i>' + (isEdit ? 'Editar' : 'Nova') + ' OLT</h3>'
+      + '<button onclick="document.getElementById(\'sdr-modal\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">&times;</button>'
+      + '</div>'
+      + '<div class="modal-body">'
+      + '<div class="form-group"><label>Nome</label><input id="sdr-olt-name" value="' + (d.name || '') + '" placeholder="Ex: OLT-01 Central"></div>'
+      + '<div class="form-group"><label>Modelo</label><input id="sdr-olt-model" value="' + (d.model || '') + '" placeholder="Ex: Fiberhome AN5516-04"></div>'
+      + '<div style="display:flex;gap:10px">'
+      + '<div class="form-group" style="flex:1"><label>IP Address</label><input id="sdr-olt-ip" value="' + (d.ip_address || '') + '" placeholder="Ex: 192.168.1.100"></div>'
+      + '<div class="form-group" style="flex:1"><label>Portas PON</label><input id="sdr-olt-pon" type="number" value="' + (d.total_pon_ports || 8) + '"></div>'
+      + '</div>'
+      + '<div style="display:flex;gap:10px">'
+      + '<div class="form-group" style="flex:1"><label>SNMP Community</label><input id="sdr-olt-snmp" value="' + (d.snmp_community || 'public') + '" placeholder="public"></div>'
+      + '<div class="form-group" style="flex:1"><label>Versão SNMP</label>'
+      + '<select id="sdr-olt-snmpv"><option value="2c" ' + (d.snmp_version !== '3' ? 'selected' : '') + '>v2c</option>'
+      + '<option value="3" ' + (d.snmp_version === '3' ? 'selected' : '') + '>v3</option></select>'
+      + '</div></div>'
+      + '<div style="display:flex;gap:10px">'
+      + '<div class="form-group" style="flex:1"><label>Latitude</label><input id="sdr-olt-lat" type="number" step="any" value="' + (d.lat || '') + '"></div>'
+      + '<div class="form-group" style="flex:1"><label>Longitude</label><input id="sdr-olt-lng" type="number" step="any" value="' + (d.lng || '') + '"></div>'
+      + '</div>'
+      + '<div class="form-group">'
+      + '<label style="display:flex;align-items:center;gap:6px">'
+      + '<input type="checkbox" id="sdr-olt-active" ' + (d.is_active !== false ? 'checked' : '') + '> OLT Ativa'
+      + '</label></div>'
+      // ── Seção DGO ──────────────────────────────────────────
+      + '<div style="background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;padding:10px 12px;margin-top:4px">'
+      + '<div style="font-size:.76rem;font-weight:700;color:#94a3b8;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">'
+      + '<i class="fas fa-network-wired" style="color:#3b82f6;margin-right:5px"></i>DGO — Distribuidor Óptico</div>'
+      + '<div style="display:flex;gap:8px;align-items:flex-end">'
+      + '<div class="form-group" style="flex:1;margin:0">'
+      + '<label style="font-size:.74rem;color:#64748b;display:block;margin-bottom:4px">Vincular DGO existente</label>'
+      + '<select id="sdr-olt-dgo-id" style="width:100%;padding:7px 10px;border:1px solid #334155;border-radius:6px;background:#0a1628;color:#e2e8f0;font-size:.83rem">'
+      + dgoOptions + '</select>'
+      + '</div>'
+      + '<button type="button" onclick="sdrOltModalCriarDgo(\'' + (editId || '__novo__') + '\')" '
+      + 'title="Criar novo DGO" '
+      + 'style="padding:7px 12px;font-size:.78rem;background:#1e3a5f;border:1px solid #3b82f6;border-radius:6px;color:#93c5fd;cursor:pointer;white-space:nowrap;flex-shrink:0">'
+      + '<i class="fas fa-plus"></i> Novo DGO</button>'
+      + '</div>'
+      + dgoInfoHtml
+      + '</div>'
+      // ────────────────────────────────────────────────────────
+      + '</div>'
+      + '<div class="modal-footer">'
+      + '<button class="btn-secondary" onclick="document.getElementById(\'sdr-modal\').remove()">Cancelar</button>'
+      + '<button class="btn-primary" onclick="sdrOltSave(\'' + (editId || '') + '\')">' + (isEdit ? 'Salvar' : 'Cadastrar') + '</button>'
+      + '</div></div></div>';
+
+    var prev = document.getElementById('sdr-modal');
+    if (prev) prev.remove();
+    document.body.insertAdjacentHTML('beforeend', html);
+    // IMPORTANTE: adicionar classe 'open' para o modal aparecer
+    var m = document.getElementById('sdr-modal');
+    if (m) m.classList.add('open');
+  });
+};
+
+// ── Botão "Novo DGO" dentro do modal de OLT ──────────────────────────
+window.sdrOltModalCriarDgo = function(oltIdOrPlaceholder) {
+  // Fechar modal da OLT, abrir modal DGO, depois reabrir OLT
+  var modal = document.getElementById('sdr-modal');
+  var dgoIdSel = (document.getElementById('sdr-olt-dgo-id') || {}).value || '';
+  if (modal) modal.remove();
+  // Salvar contexto para reabrir a OLT depois
+  var isNovo = oltIdOrPlaceholder === '__novo__';
+  var editId = isNovo ? null : oltIdOrPlaceholder;
+  sdrDgoCriarModal(isNovo ? '' : editId);
+  // Quando o DGO for criado, o sdrDgoSalvar já chama sdrOltInlineRender
+  // Depois fechar o DGO modal e reabrir o OLT modal para escolha
+  var orig = window.sdrDgoSalvar;
+  window.sdrDgoSalvar = function(oid) {
+    window.sdrDgoSalvar = orig; // restaurar
+    orig.call(this, oid);
+    // Reabrir modal da OLT após a criação do DGO
+    setTimeout(function() { sdrOltAddModal(editId || ''); }, 500);
+  };
 };
 
 window.sdrOltSave = async function(editId) {
-  const name = document.getElementById('sdr-olt-name').value.trim();
-  if (!name) { toast('Nome é obrigatório', 'error'); return; }
+  const name = (document.getElementById('sdr-olt-name') || {}).value && document.getElementById('sdr-olt-name').value.trim();
+  if (!name) { if (typeof toast === 'function') toast('Nome é obrigatório', 'error'); return; }
+
+  const dgoIdSelecionado = ((document.getElementById('sdr-olt-dgo-id') || {}).value || '').trim();
 
   const data = {
     name,
-    model: document.getElementById('sdr-olt-model').value.trim(),
-    ip_address: document.getElementById('sdr-olt-ip').value.trim(),
-    total_pon_ports: parseInt(document.getElementById('sdr-olt-pon').value) || 8,
-    snmp_community: document.getElementById('sdr-olt-snmp').value.trim() || 'public',
-    snmp_version: document.getElementById('sdr-olt-snmpv').value,
-    is_active: document.getElementById('sdr-olt-active').checked,
-    updated_at: new Date().toISOString()
+    model:           (document.getElementById('sdr-olt-model')  || {}).value && document.getElementById('sdr-olt-model').value.trim()  || '',
+    ip_address:      (document.getElementById('sdr-olt-ip')     || {}).value && document.getElementById('sdr-olt-ip').value.trim()     || '',
+    total_pon_ports: parseInt((document.getElementById('sdr-olt-pon') || {}).value) || 8,
+    snmp_community:  (document.getElementById('sdr-olt-snmp')   || {}).value && document.getElementById('sdr-olt-snmp').value.trim()   || 'public',
+    snmp_version:    (document.getElementById('sdr-olt-snmpv')  || {}).value || '2c',
+    is_active:       !!(document.getElementById('sdr-olt-active') || {}).checked,
+    updated_at:      new Date().toISOString()
   };
-  const lat = parseFloat(document.getElementById('sdr-olt-lat').value);
-  const lng = parseFloat(document.getElementById('sdr-olt-lng').value);
+  const lat = parseFloat((document.getElementById('sdr-olt-lat') || {}).value);
+  const lng = parseFloat((document.getElementById('sdr-olt-lng') || {}).value);
   if (!isNaN(lat)) data.lat = lat;
   if (!isNaN(lng)) data.lng = lng;
 
   if (!editId) data.created_at = new Date().toISOString();
 
   try {
+    var oltId = editId;
+
     if (editId) {
-      await sdrRef(`olt_connections/${editId}`).update(data);
-      toast('OLT atualizada!', 'success');
+      await sdrRef('olt_connections/' + editId).update(data);
+      if (typeof toast === 'function') toast('OLT atualizada!', 'success');
     } else {
-      await sdrRef('olt_connections').push(data);
-      toast('OLT cadastrada!', 'success');
+      var newRef = await sdrRef('olt_connections').push(data);
+      oltId = newRef.key;
+      if (typeof toast === 'function') toast('OLT cadastrada!', 'success');
     }
-    document.getElementById('sdr-modal').remove();
-    sdrOltsRender();
+
+    // ── Vincular DGO selecionado ─────────────────────────────────
+    if (dgoIdSelecionado) {
+      // Desvincular qualquer DGO anterior desta OLT (se houver)
+      var infraSnap = await sdrRef('infrastructure').once('value');
+      var infra = infraSnap.val() || {};
+      var dgoUpdates = {};
+      Object.entries(infra).forEach(function(e) {
+        var did = e[0], dg = e[1];
+        if (dg && dg.type === 'dgo' && dg.olt_id === oltId && did !== dgoIdSelecionado) {
+          dgoUpdates['infrastructure/' + did + '/olt_id'] = null;
+        }
+      });
+      // Vincular o novo DGO
+      dgoUpdates['infrastructure/' + dgoIdSelecionado + '/olt_id'] = oltId;
+      await sdrRef('').update(dgoUpdates);
+    }
+
+    var modal = document.getElementById('sdr-modal');
+    if (modal) modal.remove();
+
+    if (!editId) {
+      // Nova OLT: re-render lista + oferecer posicionamento
+      sdrOltsRender();
+      setTimeout(function() {
+        if (confirm('Deseja posicionar a OLT no mapa agora?')) {
+          sdrOltStartMapPlace(oltId);
+        }
+      }, 400);
+    } else {
+      // Edição: re-render painel inline se estiver aberto
+      sdrOltsRender();
+      if (document.getElementById('olt-panel-content') && _sdrActiveOltTab === editId) {
+        sdrOltInlineRender(editId);
+      }
+    }
   } catch (e) {
-    toast('Erro: ' + e.message, 'error');
+    if (typeof toast === 'function') toast('Erro: ' + e.message, 'error');
+    console.error('[sdrOltSave]', e);
   }
 };
 
@@ -2500,7 +4341,11 @@ window.sdrPonSave = function(oltId, slot, port) {
     sdrRef('olt_connections/' + oltId + '/pons/s' + slot + '_p' + port).set(data).then(function() {
       if (typeof toast === 'function') toast('PON ' + port + ' salva!', 'success');
       document.getElementById('sdr-pon-modal').remove();
-      sdrOltVisualModal(oltId);
+      if (document.getElementById('olt-panel-content') && _sdrActiveOltTab === oltId) {
+        sdrOltInlineRender(oltId);
+      } else {
+        sdrOltVisualModal(oltId);
+      }
     });
   });
 };
@@ -2648,7 +4493,13 @@ window.sdrDgoSalvar = function(oltId) {
   sdrRef('infrastructure').push(data).then(function() {
     if (typeof toast === 'function') toast('DGO criado com ' + (tubos * fpt) + ' fibras!', 'success');
     document.getElementById('sdr-dgo-criar-modal') && document.getElementById('sdr-dgo-criar-modal').remove();
-    if (oltId) sdrOltVisualModal(oltId);
+    if (oltId) {
+      if (document.getElementById('olt-panel-content') && _sdrActiveOltTab === oltId) {
+        sdrOltInlineRender(oltId);
+      } else {
+        sdrOltVisualModal(oltId);
+      }
+    }
   });
 };
 
@@ -2658,7 +4509,11 @@ window.sdrOltSlotAdd = function(oltId) {
     var next = (s.val() || 4) + 1;
     sdrRef('olt_connections/' + oltId + '/slot_count').set(next).then(function() {
       if (typeof toast === 'function') toast('Slot ' + next + ' adicionado!', 'success');
-      sdrOltVisualModal(oltId);
+      if (document.getElementById('olt-panel-content') && _sdrActiveOltTab === oltId) {
+        sdrOltInlineRender(oltId);
+      } else {
+        sdrOltVisualModal(oltId);
+      }
     });
   });
 };
@@ -2679,6 +4534,8 @@ window.sdrOnusRender = function() {
     _renderOnusLista();
   });
 };
+// Filtro sem rebuscar Firebase
+window.sdrOnusFilter = function() { _renderOnusLista(); };
 
 function _renderOnusLista() {
   const filterStatus = document.getElementById('onus-filter-status')?.value || '';
@@ -3087,7 +4944,26 @@ window.sdrMapReloadData = sdrMapReloadData;
 // ── 4B: DASHBOARD REDE COM GRÁFICOS ──
 let sdrChartInstances = {};
 
+// Carrega Chart.js dinamicamente se não estiver disponível
+function _sdrLoadChartJs(callback) {
+  if (typeof Chart !== 'undefined') { callback(); return; }
+  if (document.getElementById('sdr-chartjs-script')) {
+    // já solicitado mas ainda carregando — aguarda
+    var _poll = setInterval(function() {
+      if (typeof Chart !== 'undefined') { clearInterval(_poll); callback(); }
+    }, 50);
+    return;
+  }
+  var s = document.createElement('script');
+  s.id = 'sdr-chartjs-script';
+  s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+  s.onload = callback;
+  s.onerror = function() { console.warn('[SDR] Chart.js não carregou — gráficos desativados.'); };
+  document.head.appendChild(s);
+}
+
 window.sdrDashRedeRender = function() {
+  _sdrLoadChartJs(function() {
   Promise.all([
     sdrRef('infrastructure').once('value'),
     sdrRef('clients').once('value'),
@@ -3111,170 +4987,171 @@ window.sdrDashRedeRender = function() {
     const degradedClients = clientsArr.filter(c => c.onu_status === 'degraded');
     const openTickets = tickets.filter(t => t.status !== 'resolvido');
 
-    // KPI Cards — IDs do template HTML _sdrHtml_dash_rede
-    const _kpi = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-    _kpi('kpi-clientes-val', clientsArr.length);
-    _kpi('kpi-online-val',   onlineClients.length);
-    _kpi('kpi-offline-val',  offlineClients.length);
-    _kpi('kpi-olts-val',     olts.length);
-    _kpi('kpi-alertas-val',  activeAlerts.length);
-    _kpi('kpi-tickets-val',  openTickets.length);
+    // ── KPI Cards → #dash-rede-stats ──
+    const statsEl = document.getElementById('dash-rede-stats');
+    if (statsEl) {
+      const kpis = [
+        { val: clientsArr.length,     label: 'Clientes',      color: '#2563eb', icon: 'fa-users' },
+        { val: onlineClients.length,  label: 'Online',        color: '#16a34a', icon: 'fa-circle' },
+        { val: degradedClients.length,label: 'Degradados',    color: '#d97706', icon: 'fa-exclamation-triangle' },
+        { val: offlineClients.length, label: 'Offline',       color: '#dc2626', icon: 'fa-times-circle' },
+        { val: olts.length,           label: 'OLTs',          color: '#7c3aed', icon: 'fa-server' },
+        { val: activeAlerts.length,   label: 'Alertas',       color: '#dc2626', icon: 'fa-bell' },
+        { val: openTickets.length,    label: 'Chamados',      color: '#d97706', icon: 'fa-ticket-alt' }
+      ];
+      statsEl.innerHTML = kpis.map(k =>
+        `<div class="infra-stat">
+          <div class="is-num" style="color:${k.color}">${k.val}</div>
+          <div class="is-label"><i class="fas ${k.icon}" style="margin-right:3px;font-size:.7rem"></i>${k.label}</div>
+        </div>`
+      ).join('');
+    }
 
-    // ── Gráfico 1: Status das ONUs (Donut) → canvas #dash-chart-onus ──
+    // ── Conteúdo: gráficos + tabelas → #dash-rede-content ──
+    const contentEl = document.getElementById('dash-rede-content');
+    if (!contentEl) return;
+
+    // Calcular dados dos gráficos antes de injetar HTML
+    const ranges = { 'Excelente\n(>-20)':0, 'Bom\n(-20 a -25)':0, 'Regular\n(-25 a -28)':0, 'Ruim\n(<-28)':0, 'Sem dados':0 };
+    clientsArr.forEach(c => {
+      if (c.rx_power == null) { ranges['Sem dados']++; return; }
+      const rx = parseFloat(c.rx_power);
+      if (rx > -20) ranges['Excelente\n(>-20)']++;
+      else if (rx > -25) ranges['Bom\n(-20 a -25)']++;
+      else if (rx > -28) ranges['Regular\n(-25 a -28)']++;
+      else ranges['Ruim\n(<-28)']++;
+    });
+
+    const ctos = infraArr.filter(i => i.type === 'cto' || i.type === 'splitter');
+    const ctoNames = [], ctoOccupied = [], ctoFree = [];
+    const infraKeys = Object.keys(infra);
+    ctos.slice(0, 10).forEach(cto => {
+      const ctoKey = infraKeys.find(k => infra[k] === cto);
+      const ports = parseInt(cto.total_ports || cto.ports) || 8;
+      const linked = clientsArr.filter(c => c.cto_id && c.cto_id === ctoKey).length;
+      ctoNames.push(cto.name || cto.code || 'CTO');
+      ctoOccupied.push(linked);
+      ctoFree.push(Math.max(0, ports - linked));
+    });
+
+    const openT   = tickets.filter(t => t.status === 'aberto').length;
+    const inProgT = tickets.filter(t => t.status === 'em_andamento').length;
+    const waitT   = tickets.filter(t => t.status === 'aguardando').length;
+    const doneT   = tickets.filter(t => t.status === 'resolvido').length;
+
+    const worstSignal = clientsArr.filter(c => c.rx_power != null).sort((a,b) => a.rx_power - b.rx_power).slice(0, 10);
+
+    // Injetar HTML com canvases — os IDs existem depois do innerHTML
+    let contentHtml = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        <canvas id="dash-chart-onus" height="200"></canvas>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        <canvas id="chart-signal-dist" height="200"></canvas>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        <canvas id="chart-cto-capacity" height="200"></canvas>
+      </div>
+      <div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        <canvas id="dash-chart-tickets" height="200"></canvas>
+      </div>
+    </div>`;
+
+    // Tabela pior sinal
+    if (worstSignal.length > 0) {
+      contentHtml += `<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:16px">
+        <h4 style="font-size:.9rem;margin:0 0 10px"><i class="fas fa-signal" style="color:#dc2626;margin-right:6px"></i>Top 10 — Pior Sinal Rx</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+          <thead><tr style="background:#fef2f2">
+            <th style="padding:6px 10px;text-align:left">Cliente</th>
+            <th style="padding:6px 10px;text-align:center">Rx (dBm)</th>
+            <th style="padding:6px 10px;text-align:center">Status</th>
+            <th style="padding:6px 10px"></th>
+          </tr></thead>
+          <tbody>${worstSignal.map(c => {
+            const id = Object.keys(clients).find(k => clients[k] === c) || '';
+            const badge = c.rx_power > -25 ? 'good' : c.rx_power > -28 ? 'warn' : 'bad';
+            return `<tr style="border-bottom:1px solid #f1f5f9">
+              <td style="padding:6px 10px;font-weight:600">${c.name||'-'}</td>
+              <td style="padding:6px 10px;text-align:center"><span class="signal-badge ${badge}">${c.rx_power} dBm</span></td>
+              <td style="padding:6px 10px;text-align:center">${c.onu_status||'-'}</td>
+              <td style="padding:6px 10px;text-align:right">
+                <button class="btn-map" onclick="sdrOpenClientePanel('${id}',sdrClientesCache['${id}']||{})" style="padding:3px 8px;font-size:.72rem"><i class="fas fa-eye"></i></button>
+              </td>
+            </tr>`;
+          }).join('')}</tbody>
+        </table>
+      </div>`;
+    }
+
+    // Alertas ativos
+    if (activeAlerts.length > 0) {
+      contentHtml += `<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        <h4 style="font-size:.9rem;margin:0 0 10px"><i class="fas fa-bell" style="color:#d97706;margin-right:6px"></i>Alertas Ativos (${activeAlerts.length})</h4>`;
+      activeAlerts.slice(0, 5).forEach(a => {
+        const color = {info:'#2563eb',warning:'#d97706',critical:'#dc2626'}[a.severity]||'#2563eb';
+        contentHtml += `<div style="padding:8px 12px;border-left:3px solid ${color};background:#fafbfc;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:.82rem">
+          <b>${a.title||'Alerta'}</b><br><span style="color:var(--muted)">${a.message||''}</span></div>`;
+      });
+      contentHtml += `</div>`;
+    } else {
+      contentHtml += `<div style="text-align:center;padding:20px;color:var(--muted)"><i class="fas fa-check-circle" style="color:#16a34a;font-size:1.5rem;display:block;margin-bottom:8px"></i>Nenhum alerta ativo — rede estável.</div>`;
+    }
+
+    contentEl.innerHTML = contentHtml;
+
+    // Inicializar gráficos APÓS os canvases estarem no DOM
     _sdrDestroyChart('dash-chart-onus');
+    _sdrDestroyChart('chart-signal-dist');
+    _sdrDestroyChart('chart-cto-capacity');
+    _sdrDestroyChart('dash-chart-tickets');
+
     const ctxStatus = document.getElementById('dash-chart-onus');
-    if (ctxStatus) {
+    if (ctxStatus && typeof Chart !== 'undefined') {
       sdrChartInstances['dash-chart-onus'] = new Chart(ctxStatus, {
         type: 'doughnut',
         data: {
           labels: ['Online', 'Degradado', 'Offline', 'Sem ONU'],
-          datasets: [{
-            data: [
-              onlineClients.length,
-              degradedClients.length,
-              offlineClients.length,
-              clientsArr.filter(c => !c.onu_status || c.onu_status === '').length
-            ],
-            backgroundColor: ['#16a34a', '#d97706', '#dc2626', '#94a3b8']
-          }]
+          datasets: [{ data: [onlineClients.length, degradedClients.length, offlineClients.length, clientsArr.filter(c => !c.onu_status).length], backgroundColor: ['#16a34a','#d97706','#dc2626','#94a3b8'] }]
         },
-        options: {
-          responsive: true,
-          plugins: {
-            title: { display: true, text: 'Status da Rede', font: { size: 14 } },
-            legend: { position: 'bottom', labels: { font: { size: 11 } } }
-          }
-        }
+        options: { responsive:true, plugins: { title:{display:true,text:'Status da Rede',font:{size:14}}, legend:{position:'bottom',labels:{font:{size:11}}} } }
       });
     }
 
-    // ── Gráfico 2: Distribuição de Sinal (Barras) ──
-    _sdrDestroyChart('chart-signal-dist');
     const ctxSignal = document.getElementById('chart-signal-dist');
-    if (ctxSignal) {
-      const ranges = { 'Excelente (>-20)':0, 'Bom (-20 a -25)':0, 'Regular (-25 a -28)':0, 'Ruim (<-28)':0, 'Sem dados':0 };
-      clientsArr.forEach(c => {
-        if (c.rx_power == null) { ranges['Sem dados']++; return; }
-        const rx = parseFloat(c.rx_power);
-        if (rx > -20) ranges['Excelente (>-20)']++;
-        else if (rx > -25) ranges['Bom (-20 a -25)']++;
-        else if (rx > -28) ranges['Regular (-25 a -28)']++;
-        else ranges['Ruim (<-28)']++;
-      });
+    if (ctxSignal && typeof Chart !== 'undefined') {
       sdrChartInstances['chart-signal-dist'] = new Chart(ctxSignal, {
         type: 'bar',
-        data: {
-          labels: Object.keys(ranges),
-          datasets: [{
-            label: 'Clientes',
-            data: Object.values(ranges),
-            backgroundColor: ['#16a34a', '#22c55e', '#eab308', '#dc2626', '#94a3b8']
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            title: { display: true, text: 'Distribuição de Sinal Rx', font: { size: 14 } },
-            legend: { display: false }
-          },
-          scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
-        }
+        data: { labels: Object.keys(ranges), datasets: [{ label:'Clientes', data:Object.values(ranges), backgroundColor:['#16a34a','#22c55e','#eab308','#dc2626','#94a3b8'] }] },
+        options: { responsive:true, plugins: { title:{display:true,text:'Distribuição de Sinal Rx',font:{size:14}}, legend:{display:false} }, scales:{ y:{beginAtZero:true,ticks:{stepSize:1}} } }
       });
     }
 
-    // ── Gráfico 3: Capacidade CTOs (Barras horizontais) ──
-    _sdrDestroyChart('chart-cto-capacity');
     const ctxCto = document.getElementById('chart-cto-capacity');
-    if (ctxCto) {
-      const ctos = infraArr.filter(i => i.type === 'cto' || i.type === 'splitter');
-      const ctoNames = [];
-      const ctoOccupied = [];
-      const ctoFree = [];
-      ctos.slice(0, 10).forEach(cto => {
-        const ports = parseInt(cto.ports) || 8;
-        const linked = clientsArr.filter(c => c.cto_id && Object.keys(infra).find(k => infra[k] === cto && k === c.cto_id)).length;
-        ctoNames.push(cto.name || cto.code || 'CTO');
-        ctoOccupied.push(linked);
-        ctoFree.push(Math.max(0, ports - linked));
-      });
+    if (ctxCto && typeof Chart !== 'undefined') {
       sdrChartInstances['chart-cto-capacity'] = new Chart(ctxCto, {
         type: 'bar',
         data: {
           labels: ctoNames.length > 0 ? ctoNames : ['Nenhuma CTO'],
           datasets: [
-            { label: 'Ocupadas', data: ctoOccupied.length > 0 ? ctoOccupied : [0], backgroundColor: '#3b82f6' },
-            { label: 'Livres', data: ctoFree.length > 0 ? ctoFree : [0], backgroundColor: '#e2e8f0' }
+            { label:'Ocupadas', data: ctoOccupied.length>0?ctoOccupied:[0], backgroundColor:'#3b82f6' },
+            { label:'Livres',   data: ctoFree.length>0?ctoFree:[0],         backgroundColor:'#e2e8f0' }
           ]
         },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          plugins: {
-            title: { display: true, text: 'Capacidade de CTOs (Top 10)', font: { size: 14 } },
-            legend: { position: 'bottom', labels: { font: { size: 11 } } }
-          },
-          scales: { x: { stacked: true, beginAtZero: true }, y: { stacked: true } }
-        }
+        options: { indexAxis:'y', responsive:true, plugins:{ title:{display:true,text:'Capacidade de CTOs (Top 10)',font:{size:14}}, legend:{position:'bottom',labels:{font:{size:11}}} }, scales:{ x:{stacked:true,beginAtZero:true}, y:{stacked:true} } }
       });
     }
 
-    // ── Gráfico 4: Chamados por Status (Donut) → canvas #dash-chart-tickets ──
-    _sdrDestroyChart('dash-chart-tickets');
-    const ctxAlerts = document.getElementById('dash-chart-tickets');
-    if (ctxAlerts) {
-      const openT   = tickets.filter(t => t.status === 'aberto').length;
-      const inProgT = tickets.filter(t => t.status === 'em_andamento').length;
-      const waitT   = tickets.filter(t => t.status === 'aguardando').length;
-      const doneT   = tickets.filter(t => t.status === 'resolvido').length;
-      sdrChartInstances['dash-chart-tickets'] = new Chart(ctxAlerts, {
+    const ctxTickets = document.getElementById('dash-chart-tickets');
+    if (ctxTickets && typeof Chart !== 'undefined') {
+      sdrChartInstances['dash-chart-tickets'] = new Chart(ctxTickets, {
         type: 'doughnut',
-        data: {
-          labels: ['Abertos', 'Em Andamento', 'Aguardando', 'Resolvidos'],
-          datasets: [{
-            data: [openT, inProgT, waitT, doneT],
-            backgroundColor: ['#dc2626', '#2563eb', '#d97706', '#16a34a']
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            title: { display: true, text: 'Chamados por Status', font: { size: 14 } },
-            legend: { position: 'bottom', labels: { font: { size: 11 } } }
-          }
-        }
+        data: { labels:['Abertos','Em Andamento','Aguardando','Resolvidos'], datasets:[{ data:[openT,inProgT,waitT,doneT], backgroundColor:['#dc2626','#2563eb','#d97706','#16a34a'] }] },
+        options: { responsive:true, plugins:{ title:{display:true,text:'Chamados por Status',font:{size:14}}, legend:{position:'bottom',labels:{font:{size:11}}} } }
       });
-    }
-
-    // ── Alertas Recentes ──
-    const contentEl = document.getElementById('dash-alertas-recentes');
-    if (contentEl) {
-      const worstSignal = clientsArr.filter(c => c.rx_power != null).sort((a,b) => a.rx_power - b.rx_power).slice(0, 10);
-      let html = '';
-      if (worstSignal.length > 0) {
-        html += `<div style="margin-top:20px"><h4 style="font-size:.9rem;margin-bottom:10px"><i class="fas fa-signal" style="color:#dc2626;margin-right:6px"></i>Top 10 — Pior Sinal</h4>`;
-        html += `<table style="width:100%;border-collapse:collapse;font-size:.82rem">
-          <thead><tr style="background:#fef2f2"><th style="padding:6px 10px;text-align:left">Cliente</th><th style="padding:6px 10px">Rx (dBm)</th><th style="padding:6px 10px">Status</th></tr></thead>
-          <tbody>${worstSignal.map(c => {
-            const badge = c.rx_power > -25 ? 'good' : c.rx_power > -28 ? 'warn' : 'bad';
-            return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 10px">${c.name||'-'}</td>
-              <td style="padding:6px 10px;text-align:center"><span class="signal-badge ${badge}">${c.rx_power} dBm</span></td>
-              <td style="padding:6px 10px;text-align:center">${c.onu_status||'-'}</td></tr>`;
-          }).join('')}</tbody></table></div>`;
-      }
-
-      if (activeAlerts.length > 0) {
-        html += `<div style="margin-top:20px"><h4 style="font-size:.9rem;margin-bottom:10px"><i class="fas fa-bell" style="color:#d97706;margin-right:6px"></i>Alertas Ativos</h4>`;
-        activeAlerts.slice(0, 5).forEach(a => {
-          const color = {info:'#2563eb',warning:'#d97706',critical:'#dc2626'}[a.severity]||'#2563eb';
-          html += `<div style="padding:8px 12px;border-left:3px solid ${color};background:#fafbfc;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:.82rem">
-            <b>${a.title||'Alerta'}</b><br><span style="color:var(--muted)">${a.message||''}</span></div>`;
-        });
-        html += `</div>`;
-      }
-
-      contentEl.innerHTML = html || '<p style="color:var(--muted);text-align:center;padding:20px"><i class="fas fa-check-circle" style="color:#16a34a"></i> Nenhum alerta ativo no momento.</p>';
     }
   }).catch(err => console.error('[SDR DashRede]', err));
+  }); // _sdrLoadChartJs
 };
 
 function _sdrDestroyChart(id) {
@@ -3567,12 +5444,196 @@ window.sdrOpenTicketPanel = function(id) {
   html += `<div style="display:flex;gap:6px;margin-top:14px;flex-wrap:wrap">
     <button onclick="sdrTicketEdit('${id}')" class="btn-primary" style="padding:6px 14px;font-size:.82rem"><i class="fas fa-edit" style="margin-right:4px"></i>Editar</button>
     ${t.status !== 'resolvido' ? `<button onclick="sdrTicketResolve('${id}')" style="padding:6px 14px;font-size:.82rem;background:#16a34a;color:#fff;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-check" style="margin-right:4px"></i>Resolver</button>` : ''}
+    <button onclick="sdrTicketPrintOS('${id}')" style="padding:6px 14px;font-size:.82rem;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer" title="Imprimir Ordem de Serviço"><i class="fas fa-print" style="margin-right:4px"></i>OS</button>
     <button onclick="sdrTicketDelete('${id}')" style="padding:6px 14px;font-size:.82rem;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-trash" style="margin-right:4px"></i>Excluir</button>
   </div>`;
 
   document.getElementById('sp-title').textContent = 'Ticket #' + id.substring(0,6);
   document.getElementById('sp-body').innerHTML = html;
   document.getElementById('sdr-side-panel').classList.add('open');
+};
+
+// ── Imprimir OS (Ordem de Serviço) ──
+window.sdrTicketPrintOS = function(id) {
+  var t = sdrTicketsCache[id];
+  if (!t) { toast('Ticket não encontrado no cache — abra a aba Tickets primeiro', 'error'); return; }
+  var client = t.client_id ? sdrClientesCache[t.client_id] : null;
+  var now = new Date();
+  var osNum = 'OS-' + now.getFullYear() + '-' + id.substring(0, 6).toUpperCase();
+  var dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+  var timeStr = now.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+
+  var prioLbl = {critical:'🔴 CRÍTICA', high:'🟠 ALTA', medium:'🟡 MÉDIA', low:'🟢 BAIXA'};
+  var typeLbl = {sem_sinal:'Sem Sinal / ONU Offline', sinal_baixo:'Sinal Baixo / Degradado', lentidao:'Lentidão', queda_frequente:'Quedas Frequentes', instalacao:'Instalação', mudanca_endereco:'Mudança de Endereço', infra:'Infraestrutura', outro:'Outro'};
+  var checklist = {
+    sem_sinal:    ['Verificar alimentação da ONU', 'Verificar cabo drop do cliente', 'Verificar conector SC/APC', 'Verificar sinal na CTO/splitter', 'Substituir ONU se necessário'],
+    sinal_baixo:  ['Medir sinal Rx com OTDR/power meter', 'Limpar conectores SC/APC', 'Verificar emendas e curvas no cabo', 'Verificar atenuação da rota óptica', 'Verificar splitter'],
+    lentidao:     ['Verificar velocidade com speed test', 'Verificar plano contratado no sistema', 'Verificar QoS/limitação na OLT', 'Reiniciar ONU', 'Verificar cabeamento LAN do cliente'],
+    queda_frequente:['Verificar log de eventos na OLT', 'Medir sinal Rx ao longo de 30 min', 'Verificar temperatura da ONU', 'Verificar conexão do conector', 'Verificar alimentação elétrica'],
+    instalacao:   ['Verificar viabilidade do ponto', 'Localizar CTO mais próxima com porta livre', 'Lançar cabo drop', 'Instalar e provisionar ONU', 'Testar velocidade e sinal', 'Assinar contrato'],
+    outro:        ['Verificar configurações da ONU', 'Consultar painel SDR', 'Contatar suporte N2 se necessário']
+  };
+  var items = checklist[t.type] || checklist.outro;
+
+  var win = window.open('', '_blank', 'width=800,height=900');
+  win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8">
+<title>${osNum}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:13px;color:#111;margin:0;padding:24px;max-width:760px;margin:0 auto}
+  .os-header{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:12px;margin-bottom:16px}
+  .os-logo{font-size:22px;font-weight:900;color:#2563eb}
+  .os-logo span{color:#1e293b}
+  .os-num{text-align:right;font-size:.85rem;color:#475569}
+  .os-num strong{display:block;font-size:1.5rem;color:#2563eb;letter-spacing:1px}
+  .os-section{border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;margin-bottom:12px}
+  .os-section h3{margin:0 0 8px;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;border-bottom:1px solid #f1f5f9;padding-bottom:4px}
+  .os-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 20px}
+  .os-row{display:flex;gap:6px;padding:2px 0}
+  .os-lbl{font-weight:600;min-width:110px;color:#475569;font-size:.82rem}
+  .os-val{font-size:.82rem}
+  .os-checklist{list-style:none;margin:0;padding:0}
+  .os-checklist li{padding:5px 0;border-bottom:1px dashed #e2e8f0;display:flex;align-items:center;gap:8px;font-size:.84rem}
+  .os-check-box{width:14px;height:14px;border:1px solid #94a3b8;border-radius:2px;flex-shrink:0}
+  .os-sign{border-top:1px solid #1e293b;width:200px;padding-top:4px;margin-top:40px;font-size:.78rem;color:#475569;text-align:center}
+  .os-footer{margin-top:20px;font-size:.73rem;color:#94a3b8;text-align:center;border-top:1px solid #e2e8f0;padding-top:10px}
+  .prio-badge{display:inline-block;font-size:.75rem;padding:2px 8px;border-radius:10px;background:#fef3c7;color:#92400e;font-weight:600}
+  @media print{body{padding:0;font-size:11px}button{display:none!important}}
+</style>
+</head><body>
+
+<div class="os-header">
+  <div>
+    <div class="os-logo">SDR <span>Comercial</span></div>
+    <div style="font-size:.78rem;color:#64748b;margin-top:2px">Solução de Rede</div>
+  </div>
+  <div class="os-num">
+    <div>ORDEM DE SERVIÇO</div>
+    <strong>${osNum}</strong>
+    <div style="margin-top:4px">${dateStr} — ${timeStr}</div>
+  </div>
+</div>
+
+<div class="os-section">
+  <h3>📋 Dados do Chamado</h3>
+  <div class="os-row"><span class="os-lbl">Título:</span><span class="os-val"><b>${t.title || '-'}</b></span></div>
+  <div class="os-row"><span class="os-lbl">Tipo:</span><span class="os-val">${typeLbl[t.type] || t.type || '-'}</span></div>
+  <div class="os-row"><span class="os-lbl">Prioridade:</span><span class="os-val"><span class="prio-badge">${prioLbl[t.priority] || t.priority || '-'}</span></span></div>
+  <div class="os-row" style="margin-top:6px"><span class="os-lbl" style="align-self:flex-start">Descrição:</span><span class="os-val" style="white-space:pre-wrap">${t.description || 'Sem descrição'}</span></div>
+  ${t.notes ? `<div class="os-row" style="margin-top:4px"><span class="os-lbl" style="align-self:flex-start">Observações:</span><span class="os-val" style="white-space:pre-wrap">${t.notes}</span></div>` : ''}
+</div>
+
+${client ? `
+<div class="os-section">
+  <h3>👤 Dados do Cliente</h3>
+  <div class="os-grid">
+    <div class="os-row"><span class="os-lbl">Nome:</span><span class="os-val"><b>${client.name}</b></span></div>
+    ${client.cpf_cnpj ? `<div class="os-row"><span class="os-lbl">CPF/CNPJ:</span><span class="os-val">${client.cpf_cnpj}</span></div>` : ''}
+    ${client.phone ? `<div class="os-row"><span class="os-lbl">Telefone:</span><span class="os-val">${client.phone}</span></div>` : ''}
+    ${client.email ? `<div class="os-row"><span class="os-lbl">E-mail:</span><span class="os-val">${client.email}</span></div>` : ''}
+    ${client.plan_name ? `<div class="os-row"><span class="os-lbl">Plano:</span><span class="os-val">${client.plan_name} ${client.plan_speed_down ? '('+client.plan_speed_down+'M)' : ''}</span></div>` : ''}
+    ${client.onu_serial ? `<div class="os-row"><span class="os-lbl">Serial ONU:</span><span class="os-val" style="font-family:monospace">${client.onu_serial}</span></div>` : ''}
+  </div>
+  ${client.address ? `<div class="os-row" style="margin-top:6px"><span class="os-lbl">Endereço:</span><span class="os-val">${client.address}</span></div>` : ''}
+</div>
+` : ''}
+
+<div class="os-section">
+  <h3>✅ Checklist Técnico</h3>
+  <ul class="os-checklist">
+    ${items.map(i => `<li><div class="os-check-box"></div>${i}</li>`).join('')}
+    <li><div class="os-check-box"></div><em style="color:#94a3b8">Outro: ___________________________</em></li>
+  </ul>
+</div>
+
+<div class="os-section">
+  <h3>📝 Diagnóstico e Resolução (preencher em campo)</h3>
+  <div style="border:1px solid #e2e8f0;border-radius:4px;min-height:60px;padding:6px;color:#94a3b8;font-size:.8rem">Descreva o problema encontrado e a solução aplicada...</div>
+  <div style="margin-top:8px;font-size:.8rem"><b>Materiais utilizados:</b> ___________________________________________</div>
+  <div style="margin-top:6px;font-size:.8rem"><b>Sinal Rx antes:</b> _______ dBm &nbsp;&nbsp;&nbsp; <b>Sinal Rx depois:</b> _______ dBm</div>
+  <div style="margin-top:6px;font-size:.8rem"><b>Hora de chegada:</b> ____:____ &nbsp;&nbsp;&nbsp; <b>Hora de saída:</b> ____:____</div>
+</div>
+
+<div style="display:flex;justify-content:space-between;margin-top:20px">
+  <div class="os-sign">Assinatura do Técnico</div>
+  <div class="os-sign">Assinatura do Cliente</div>
+</div>
+
+<div class="os-footer">
+  Gerado pelo SDR Comercial em ${dateStr} às ${timeStr} &nbsp;·&nbsp; ${osNum}
+</div>
+
+<div style="text-align:center;margin-top:16px">
+  <button onclick="window.print()" style="padding:8px 20px;background:#2563eb;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.9rem"><i>🖨</i> Imprimir</button>
+  <button onclick="window.close()" style="padding:8px 20px;background:#f1f5f9;color:#475569;border:none;border-radius:6px;cursor:pointer;font-size:.9rem;margin-left:8px">Fechar</button>
+</div>
+
+</body></html>`);
+  win.document.close();
+  setTimeout(function() { win.focus(); }, 300);
+};
+
+// ── Relatório de Inadimplentes ──
+window.sdrRelatorioInadimplentes = function() {
+  var all = Object.entries(sdrClientesCache);
+  var inad = all.filter(function(e) { return e[1] && e[1].financial_status === 'inadimplente'; });
+  if (inad.length === 0) { toast('Nenhum cliente inadimplente cadastrado', 'success'); return; }
+
+  var now = new Date();
+  var dateStr = now.toLocaleDateString('pt-BR', { day:'2-digit', month:'long', year:'numeric' });
+
+  var rows = inad.map(function(e) {
+    var id = e[0], c = e[1];
+    var onuBadge = c.onu_status === 'online' ? '🟢 Online' : c.onu_status === 'offline' ? '🔴 Offline' : c.onu_status === 'degraded' ? '🟡 Degradado' : '⚪ Sem ONU';
+    return `<tr>
+      <td style="padding:6px 10px;font-weight:600">${c.name || '-'}</td>
+      <td style="padding:6px 10px">${c.cpf_cnpj || '-'}</td>
+      <td style="padding:6px 10px">${c.phone || '-'}</td>
+      <td style="padding:6px 10px">${c.plan_name || '-'} ${c.plan_speed_down ? '('+c.plan_speed_down+'M)' : ''}</td>
+      <td style="padding:6px 10px;text-align:center">${onuBadge}</td>
+      <td style="padding:6px 10px;font-size:.78rem;color:#64748b">${c.address || '-'}</td>
+    </tr>`;
+  }).join('');
+
+  var win = window.open('', '_blank', 'width=900,height=700');
+  win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8">
+<title>Relatório de Inadimplência — ${dateStr}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:12px;color:#111;padding:20px;margin:0 auto;max-width:900px}
+  h1{font-size:1.1rem;color:#dc2626;margin-bottom:4px}
+  .sub{font-size:.8rem;color:#64748b;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse}
+  th{background:#fef2f2;padding:7px 10px;text-align:left;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;border-bottom:2px solid #fca5a5}
+  tr:nth-child(even){background:#fff5f5}
+  tr:hover{background:#fee2e2}
+  td{border-bottom:1px solid #fecaca}
+  .total{font-weight:700;color:#dc2626;font-size:.9rem;margin-top:12px}
+  @media print{button{display:none!important}}
+</style>
+</head><body>
+<div style="display:flex;justify-content:space-between;align-items:flex-start">
+  <div>
+    <h1>🔴 Relatório de Inadimplência</h1>
+    <div class="sub">Gerado em ${dateStr} via SDR Comercial</div>
+  </div>
+  <div style="text-align:right">
+    <button onclick="window.print()" style="padding:6px 14px;background:#dc2626;color:#fff;border:none;border-radius:5px;cursor:pointer">🖨 Imprimir</button>
+    <button onclick="window.close()" style="padding:6px 14px;background:#f1f5f9;color:#475569;border:none;border-radius:5px;cursor:pointer;margin-left:6px">Fechar</button>
+  </div>
+</div>
+<table>
+  <thead><tr>
+    <th>Nome</th><th>CPF/CNPJ</th><th>Telefone</th><th>Plano</th><th>Status ONU</th><th>Endereço</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+</table>
+<div class="total" style="margin-top:14px">Total de inadimplentes: ${inad.length} cliente(s)</div>
+</body></html>`);
+  win.document.close();
+  setTimeout(function() { win.focus(); }, 300);
 };
 
 // ── 4D: MAPA BASE — SATÉLITE + RUAS ──
@@ -4312,6 +6373,91 @@ window.sdrKMZConfirmImport = async function() {
 // ────────────────────────────────────────────────
 
 
+// ────────────────────────────────────────────────
+// C. MODAL DE CLICK NA CTO / CEO / RT / SPLITTER
+// ────────────────────────────────────────────────
+window.sdrCTOPortsModal = function(id, item) {
+  var existing = document.getElementById('sdr-cto-ports-modal');
+  if (existing) existing.remove();
+  // Salva referência global para o botão Detalhes poder acessar o item
+  window._ctoPortsItemRef = { id: id, item: item };
+
+  var ico = (typeof SDR_CTO_ICONS !== 'undefined' ? (SDR_CTO_ICONS[item.cto_type||'default'] || SDR_CTO_ICONS.default) : {label:'CTO', icon:'fa-box', bg:'#2563eb'});
+  var cap = item.total_ports || 0;
+  var used = item.used_ports || 0;
+  var pct = cap > 0 ? Math.round((used / cap) * 100) : 0;
+  var barColor = pct >= 90 ? '#dc2626' : pct >= 60 ? '#d97706' : '#22c55e';
+
+  // Clientes conectados a esta CTO
+  var clientesConectados = [];
+  if (typeof sdrClientesCache !== 'undefined') {
+    Object.entries(sdrClientesCache).forEach(function(entry) {
+      var cid = entry[0], c = entry[1];
+      if (c && (c.cto_id === id || c.cto === id)) clientesConectados.push({id: cid, c: c});
+    });
+  }
+
+  var clientesHtml = '';
+  if (clientesConectados.length > 0) {
+    clientesHtml = '<div style="margin-top:12px">'
+      + '<div style="font-size:.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Clientes (' + clientesConectados.length + ')</div>'
+      + '<div style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">'
+      + clientesConectados.map(function(e) {
+          var status = e.c.onu_status || 'desconhecido';
+          var dot = status === 'online' ? '#22c55e' : status === 'offline' ? '#dc2626' : '#94a3b8';
+          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#f8fafc;border-radius:6px;font-size:.8rem">'
+            + '<span style="width:8px;height:8px;border-radius:50%;background:' + dot + ';flex-shrink:0"></span>'
+            + '<span style="flex:1;font-weight:500">' + (e.c.name || e.id) + '</span>'
+            + '<span style="color:#64748b;font-size:.72rem">' + (e.c.plan_name || '') + '</span>'
+            + '</div>';
+        }).join('')
+      + '</div></div>';
+  } else {
+    clientesHtml = '<div style="color:#94a3b8;font-size:.8rem;text-align:center;padding:10px 0">Nenhum cliente vinculado</div>';
+  }
+
+  var modal = document.createElement('div');
+  modal.id = 'sdr-cto-ports-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+
+  modal.innerHTML = '<div style="background:#fff;border-radius:14px;width:100%;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden">'
+    // Header
+    + '<div style="padding:13px 16px;background:' + (ico.bg || '#2563eb') + ';color:#fff;display:flex;align-items:center;justify-content:space-between">'
+    + '<div style="display:flex;align-items:center;gap:9px">'
+    + '<i class="fas ' + (ico.icon || 'fa-box') + '" style="font-size:1.1rem;opacity:.9"></i>'
+    + '<div><div style="font-weight:700;font-size:.95rem">' + (item.name || 'CTO') + '</div>'
+    + '<div style="font-size:.72rem;opacity:.8">' + ico.label + (item.code ? ' · ' + item.code : '') + '</div></div>'
+    + '</div>'
+    + '<button onclick="document.getElementById(\'sdr-cto-ports-modal\').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center">&times;</button>'
+    + '</div>'
+    // Body
+    + '<div style="padding:14px 16px">'
+    // Stats portas
+    + (cap > 0
+      ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+        + '<div style="flex:1;background:#f1f5f9;border-radius:8px;padding:8px 12px;text-align:center">'
+        + '<div style="font-size:1.3rem;font-weight:800;color:#1e293b">' + used + '<span style="font-size:.8rem;font-weight:500;color:#64748b">/' + cap + '</span></div>'
+        + '<div style="font-size:.7rem;color:#64748b">Portas usadas</div></div>'
+        + '<div style="flex:2"><div style="height:10px;background:#e2e8f0;border-radius:10px;overflow:hidden">'
+        + '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:10px;transition:.3s"></div></div>'
+        + '<div style="font-size:.72rem;color:#64748b;text-align:right;margin-top:3px">' + pct + '% ocupado</div>'
+        + '</div></div>'
+      : '<div style="color:#94a3b8;font-size:.8rem;text-align:center;padding:4px 0;margin-bottom:8px">Portas não configuradas</div>'
+    )
+    + clientesHtml
+    + (item.notes ? '<div style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:8px;font-size:.78rem;color:#78350f">' + item.notes + '</div>' : '')
+    + '</div>'
+    // Footer
+    + '<div style="padding:10px 16px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end">'
+    + '<button onclick="document.getElementById(\'sdr-cto-ports-modal\').remove()" style="padding:7px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:7px;cursor:pointer;font-size:.82rem">Fechar</button>'
+    + '<button onclick="event.stopPropagation();document.getElementById(\'sdr-cto-ports-modal\').remove();setTimeout(function(){var r=window._ctoPortsItemRef||{};sdrOpenInfraPanel(r.id,sdrInfraCache[r.id]||r.item||{});},50);" style="padding:7px 16px;background:#0ea5e9;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82rem"><i class="fas fa-eye"></i> Detalhes</button>'
+    + '<button onclick="event.stopPropagation();document.getElementById(\'sdr-cto-ports-modal\').remove();setTimeout(function(){var r=window._ctoPortsItemRef||{};sdrInfraEdit(r.id);},50);" style="padding:7px 16px;background:var(--primary);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82rem;font-weight:600"><i class="fas fa-edit"></i> Editar</button>'
+    + '</div></div>';
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+};
+
 // sdrCableDetailModal — versao completa (arquivo estava truncado)
 window.sdrCableDetailModal = function(id,item) {
   var tipos={backbone:'Backbone / Alimentador',distribuicao:'Distribuicao',drop:'Drop / Acesso',projeto:'Projeto'};
@@ -4344,38 +6490,35 @@ window.sdrCableDetailModal = function(id,item) {
 };
 
 // HTML DAS PAGINAS SDR
+// IDs devem bater exatamente com o que as funções de render buscam via getElementById
 window._sdrHtml_dash_rede = function() {
   return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
     +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b"><i class="fas fa-chart-bar" style="color:var(--primary)"></i> Dashboard de Rede</h2>'
     +'<button class="btn-map" onclick="sdrDashRedeRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
     +'</div>'
-    +'<div id="dash-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px">'
-    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#dbeafe"><i class="fas fa-users" style="color:#2563eb"></i></div><div class="sdr-kpi-val" id="kpi-clientes-val">-</div><div class="sdr-kpi-lbl">Clientes</div></div>'
-    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#dcfce7"><i class="fas fa-wifi" style="color:#16a34a"></i></div><div class="sdr-kpi-val" id="kpi-online-val" style="color:#16a34a">-</div><div class="sdr-kpi-lbl">Online</div></div>'
-    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#fee2e2"><i class="fas fa-wifi" style="color:#dc2626"></i></div><div class="sdr-kpi-val" id="kpi-offline-val" style="color:#dc2626">-</div><div class="sdr-kpi-lbl">Offline</div></div>'
-    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#ede9fe"><i class="fas fa-server" style="color:#7c3aed"></i></div><div class="sdr-kpi-val" id="kpi-olts-val">-</div><div class="sdr-kpi-lbl">OLTs Ativas</div></div>'
-    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#fff7ed"><i class="fas fa-bell" style="color:#d97706"></i></div><div class="sdr-kpi-val" id="kpi-alertas-val" style="color:#d97706">-</div><div class="sdr-kpi-lbl">Alertas</div></div>'
-    +'<div class="sdr-kpi-card"><div class="sdr-kpi-icon" style="background:#fdf4ff"><i class="fas fa-ticket-alt" style="color:#9333ea"></i></div><div class="sdr-kpi-val" id="kpi-tickets-val">-</div><div class="sdr-kpi-lbl">Chamados</div></div>'
+    // stats row — sdrDashRedeRender popula com infra-stat divs
+    +'<div id="dash-rede-stats" class="infra-stats-row" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">'
+    +'<div style="color:var(--muted);font-size:.82rem">Carregando...</div>'
     +'</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
-    +'<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)"><div style="font-weight:700;font-size:.88rem;margin-bottom:12px;color:#374151">Status das ONUs</div><canvas id="dash-chart-onus" height="180"></canvas></div>'
-    +'<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)"><div style="font-weight:700;font-size:.88rem;margin-bottom:12px;color:#374151">Chamados por Status</div><canvas id="dash-chart-tickets" height="180"></canvas></div>'
-    +'</div>'
-    +'<div style="background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08)">'
-    +'<div style="font-weight:700;font-size:.88rem;margin-bottom:12px;color:#374151"><i class="fas fa-bell" style="color:#d97706"></i> Alertas Recentes</div>'
-    +'<div id="dash-alertas-recentes"><div style="color:var(--muted);text-align:center;padding:20px">Carregando...</div></div>'
-    +'</div></div>';
+    // content area — sdrDashRedeRender insere tabelas e listas aqui
+    +'<div id="dash-rede-content"></div>'
+    +'</div>';
 };
 
 window._sdrHtml_clientes = function() {
   return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
     +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-users" style="color:var(--primary)"></i> Clientes FTTH</h2>'
-    +'<input id="clientes-busca" type="text" placeholder="Buscar cliente..." oninput="sdrClientesFiltrar(this.value)" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;width:220px">'
+    // IDs corretos que _renderClientesLista usa
+    +'<input id="clientes-search" type="text" placeholder="Buscar cliente..." oninput="sdrClientesFilter()" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;width:200px">'
+    +'<select id="clientes-filter-status" onchange="sdrClientesFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem">'
+    +'<option value="">Todos</option><option value="adimplente">Adimplentes</option><option value="inadimplente">Inadimplentes</option>'
+    +'</select>'
     +'<button class="btn-map" onclick="sdrClienteAdd()" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Novo</button>'
     +'<button class="btn-map" onclick="document.getElementById(\'clientes-import-input\').click()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-file-import"></i> Importar</button>'
     +'<button class="btn-map" onclick="sdrAutoLinkCTO()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-link"></i> Auto-Link CTO</button>'
+    +'<button class="btn-map" onclick="sdrRelatorioInadimplentes()" style="padding:6px 14px;font-size:.8rem;background:#dc2626;color:#fff;border-color:#b91c1c" title="Relatório de Inadimplentes"><i class="fas fa-exclamation-triangle"></i> Inadimplentes</button>'
     +'<input type="file" id="clientes-import-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="sdrImportClientes(this)">'
     +'</div>'
     +'<div id="clientes-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
@@ -4383,30 +6526,17 @@ window._sdrHtml_clientes = function() {
     +'</div>';
 };
 
-window._sdrHtml_olts = function() {
-  return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
-    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-server" style="color:var(--primary)"></i> OLTs — Equipamentos</h2>'
-    +'<button class="btn-map" id="btn-topo-toggle" onclick="sdrTopologiaToggle()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sitemap"></i> Topologia</button>'
-    +'<button class="btn-map" onclick="sdrOltsRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
-    +'<button class="btn-map" onclick="sdrOltAddModal(null)" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Nova OLT</button>'
-    +'</div>'
-    +'<div id="olts-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
-    +'<div id="topologia-tree" style="display:none;margin-bottom:20px;background:#f8fafc;border-radius:12px;padding:16px;border:1px solid #e5e7eb">'
-    +'<div style="font-weight:600;color:#1e293b;margin-bottom:12px;font-size:.9rem"><i class="fas fa-sitemap" style="color:var(--primary)"></i> Topologia FTTH — OLT → DGO → Splitter → CTO → ONU/Cliente</div>'
-    +'<div id="topologia-content"><div style="text-align:center;padding:20px;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> Carregando topologia...</div></div>'
-    +'</div>'
-    +'<div id="olts-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
-    +'</div>';
-};
+// _sdrHtml_olts definida na Sprint 4 (linha ~2098) — não redefinir aqui
 
 window._sdrHtml_onus = function() {
   return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
     +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-router" style="color:var(--primary)"></i> ONUs</h2>'
-    +'<select id="onus-filtro-olt" onchange="sdrOnusRender()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todas as OLTs</option></select>'
-    +'<select id="onus-filtro-status" onchange="sdrOnusRender()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todos os Status</option><option value="online">Online</option><option value="offline">Offline</option><option value="degraded">Degradado</option></select>'
-    +'<button class="btn-map" onclick="sdrOnusRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
+    // IDs corretos que _renderOnusLista usa: filter-olt, filter-status, onus-search
+    +'<input id="onus-search" type="text" placeholder="Buscar serial/cliente..." oninput="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem;width:190px">'
+    +'<select id="onus-filter-olt" onchange="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todas as OLTs</option></select>'
+    +'<select id="onus-filter-status" onchange="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todos os Status</option><option value="online">Online</option><option value="offline">Offline</option><option value="degraded">Degradado</option></select>'
+    +'<button class="btn-map" onclick="sdrOnusRender()" style="padding:6px 10px;font-size:.8rem"><i class="fas fa-sync-alt"></i></button>'
     +'<button class="btn-map" onclick="sdrOnuAdd()" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Nova ONU</button>'
     +'</div>'
     +'<div id="onus-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
@@ -4427,10 +6557,17 @@ window._sdrHtml_alertas = function() {
 
 window._sdrHtml_tickets = function() {
   return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
     +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-ticket-alt" style="color:var(--primary)"></i> Chamados de Suporte</h2>'
-    +'<select id="tickets-filtro-status" onchange="sdrTicketsFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todos</option><option value="aberto">Abertos</option><option value="em_andamento">Em Andamento</option><option value="resolvido">Resolvidos</option></select>'
-    +'<button class="btn-map" onclick="sdrTicketsRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
+    // IDs corretos que _renderTicketsLista usa: tickets-filter-status, tickets-filter-priority, tickets-search
+    +'<input id="tickets-search" type="text" placeholder="Buscar chamado..." oninput="sdrTicketsFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem;width:180px">'
+    +'<select id="tickets-filter-status" onchange="sdrTicketsFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem">'
+    +'<option value="">Todos os Status</option><option value="aberto">Abertos</option><option value="em_andamento">Em Andamento</option><option value="aguardando">Aguardando</option><option value="resolvido">Resolvidos</option>'
+    +'</select>'
+    +'<select id="tickets-filter-priority" onchange="sdrTicketsFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem">'
+    +'<option value="">Todas as Prioridades</option><option value="critical">Crítica</option><option value="high">Alta</option><option value="medium">Média</option><option value="low">Baixa</option>'
+    +'</select>'
+    +'<button class="btn-map" onclick="sdrTicketsRender()" style="padding:6px 10px;font-size:.8rem"><i class="fas fa-sync-alt"></i></button>'
     +'<button class="btn-map" onclick="sdrTicketAdd(null)" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Novo Chamado</button>'
     +'</div>'
     +'<div id="tickets-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
@@ -4459,7 +6596,11 @@ window.sdrClientesFiltrar = function(q) {
     '.sdr-kpi-lbl{font-size:.75rem;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.04em}',
     '#page-dash-rede{display:none!important}#page-dash-rede.active{display:block!important}',
     '#page-clientes{display:none!important}#page-clientes.active{display:block!important}',
-    '#page-olts{display:none!important}#page-olts.active{display:block!important}',
+    '#page-olts{display:none!important}#page-olts.active{display:flex!important;flex-direction:column;overflow:hidden;padding:0!important}',
+    '#page-olts #olts-page{flex:1;min-height:0;display:flex;flex-direction:column}',
+    /* Esconder scrollbar interno do painel OLT sem afetar o resto do app */
+    '#page-olts *::-webkit-scrollbar{width:0;height:0;background:transparent}',
+    '#page-olts *{scrollbar-width:none}',
     '#page-onus{display:none!important}#page-onus.active{display:block!important}',
     '#page-alertas{display:none!important}#page-alertas.active{display:block!important}',
     '#page-tickets{display:none!important}#page-tickets.active{display:block!important}',
@@ -4625,73 +6766,154 @@ window.sdrMkSaveConfig = function() {
   });
 };
 
-// ---- MK: Testar Conexão ----
+// ── URL base das Firebase Functions (proxy MK) ──────────────────────
+var _SDR_FN_BASE = 'https://us-central1-solucaoderua.cloudfunctions.net';
+
+// ---- MK: Testar Conexão (via Firebase Functions proxy) ----
 window.sdrMkTestarConexao = function() {
   var url   = (document.getElementById('mk-server-url')||{}).value || '';
   var token = (document.getElementById('mk-token')||{}).value || '';
   var pass  = (document.getElementById('mk-password')||{}).value || '';
-  var cdSvc = (document.getElementById('mk-cd-servico')||{}).value || '9999';
   var res   = document.getElementById('mk-test-result');
 
   if (!url || !token || !pass) {
     if (res) res.innerHTML = '<span style="color:#ef4444">⚠️ Preencha servidor, token e contra-senha antes de testar.</span>';
     return;
   }
-  // Detectar mixed content: app HTTPS tentando chamar API HTTP privada
-  if (window.location.protocol === 'https:' && !url.startsWith('https')) {
-    var warnHtml = '<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:.8rem">'
-      + '<b style="color:#d97706">⚠️ Mixed Content — Limitação do Browser</b><br>'
-      + '<span style="color:#78350f">O app está em <b>HTTPS</b> mas o servidor MK está em <b>HTTP</b>. Browsers modernos bloqueiam essa conexão por segurança.</span><br><br>'
-      + '<b>Soluções:</b><br>'
-      + '• Use o <b>Modo Demo</b> abaixo para testar as telas ✅<br>'
-      + '• Para produção: configure um <b>proxy HTTPS</b> no servidor MK (nginx/apache)<br>'
-      + '• Ou acesse o SDR via <b>rede local</b> com HTTP direto</div>';
-    if (res) res.innerHTML = warnHtml;
-    _sdrMkLog('⚠️ Mixed content: HTTPS→HTTP bloqueado pelo browser. Use Modo Demo.', 'warn');
-    return;
-  }
-  if (res) res.innerHTML = '<span style="color:#3b82f6"><i class="fas fa-spinner fa-spin"></i> Testando conexão...</span>';
-  _sdrMkLog('Testando conexão com ' + url + ' ...');
 
-  var authUrl = 'http://' + url + '/mk/WSAutenticacao.rule?sys=MK0'
-    + '&token=' + encodeURIComponent(token)
-    + '&password=' + encodeURIComponent(pass)
-    + '&cd_servico=' + encodeURIComponent(cdSvc);
+  // Salvar config temporária para o teste (precisa estar salvo no Firebase para o proxy ler)
+  if (res) res.innerHTML = '<span style="color:#3b82f6"><i class="fas fa-spinner fa-spin"></i> Salvando config e testando via proxy...</span>';
+  _sdrMkLog('⏳ Testando conexão via Firebase Functions proxy...');
 
-  fetch(authUrl, {mode:'cors', signal: AbortSignal.timeout(8000)})
-    .then(function(r) { return r.text(); })
-    .then(function(txt) {
-      if (txt && txt.toLowerCase().includes('token')) {
-        if (res) res.innerHTML = '<span style="color:#10b981">✅ Conexão bem-sucedida! Token retornado.</span>';
-        _sdrMkLog('✅ Autenticação OK. Resposta: ' + txt.substring(0,120), 'ok');
-        // Salvar token de sessão
-        window._sdrMkSessionToken = txt.replace(/\s/g,'');
+  // Salvar config no Firebase primeiro (proxy lê de lá)
+  sdrRef('mk_config').update({
+    ip_porta: url,
+    token:    token,
+    password: pass,
+    enabled:  true
+  }).then(function() {
+    var fnUrl = _SDR_FN_BASE + '/sdrMkTestar?tenant=default_tenant';
+    return fetch(fnUrl, { signal: AbortSignal.timeout(15000) });
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(j) {
+    if (j.ok && j.data && j.data.sucesso) {
+      var ms = j.data.ms || 0;
+      if (res) res.innerHTML = '<span style="color:#10b981">✅ Conexão OK via proxy! Latência: ' + ms + 'ms</span>';
+      _sdrMkLog('✅ Autenticação MK OK via proxy. Latência: ' + ms + 'ms', 'ok');
+    } else if (j.ok && j.data) {
+      var raw = j.data.resposta_raw || '';
+      if (res) res.innerHTML = '<span style="color:#f59e0b">⚠️ Proxy chegou ao MK mas credenciais inválidas. Resposta: ' + raw.substring(0,120) + '</span>';
+      _sdrMkLog('⚠️ Proxy OK, MK recusou credenciais: ' + raw.substring(0,200), 'warn');
+    } else {
+      if (res) res.innerHTML = '<span style="color:#ef4444">❌ ' + (j.error || 'Erro desconhecido') + '</span>';
+      _sdrMkLog('❌ Erro no proxy: ' + (j.error || JSON.stringify(j)), 'error');
+    }
+  })
+  .catch(function(e) {
+    var msg = e.name === 'TimeoutError' ? 'Timeout (proxy não respondeu em 15s)'
+      : (e.message.includes('Failed to fetch') ? 'Firebase Functions não deployadas ainda — rode: firebase deploy --only functions' : e.message);
+    if (res) res.innerHTML = '<span style="color:#ef4444">❌ ' + msg + '</span>';
+    _sdrMkLog('❌ ' + msg, 'error');
+  });
+};
+
+// ---- MK: Sincronizar Tudo (via Firebase Functions proxy) ----
+window.sdrMkSyncAll = function() {
+  _sdrMkLog('⏳ Iniciando sincronização completa via proxy...');
+  var btn = document.querySelector('[onclick="sdrMkSyncAll()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...'; }
+
+  sdrRef('mk_config').once('value').then(function(snap) {
+    var cfg = snap.val() || {};
+    if (!cfg.enabled || !cfg.ip_porta) {
+      _sdrMkLog('⚠️ Integração desativada ou servidor não configurado. Configure e teste a conexão primeiro.', 'warn');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar Agora'; }
+      return;
+    }
+
+    // Sync paralelo: clientes + infra
+    var urlClientes = _SDR_FN_BASE + '/sdrMkSyncClientes?tenant=default_tenant';
+    var urlInfra    = _SDR_FN_BASE + '/sdrMkSyncInfra?tenant=default_tenant';
+
+    _sdrMkLog('🔄 Sincronizando clientes e infraestrutura...');
+
+    Promise.all([
+      fetch(urlClientes, { signal: AbortSignal.timeout(60000) }).then(function(r){ return r.json(); }),
+      fetch(urlInfra,    { signal: AbortSignal.timeout(60000) }).then(function(r){ return r.json(); })
+    ]).then(function(results) {
+      var rCli  = results[0];
+      var rInfra = results[1];
+
+      if (rCli.ok && rCli.data) {
+        _sdrMkLog('✅ Clientes: ' + (rCli.data.sincronizados || 0) + ' sincronizados.', 'ok');
+        var kc = document.getElementById('mk-count-clients');
+        if (kc) kc.textContent = rCli.data.sincronizados || '0';
       } else {
-        if (res) res.innerHTML = '<span style="color:#f59e0b">⚠️ Resposta inesperada do servidor. Verifique as credenciais.</span>';
-        _sdrMkLog('⚠️ Resposta: ' + txt.substring(0,200), 'warn');
+        _sdrMkLog('⚠️ Clientes: ' + (rCli.error || 'sem dados'), 'warn');
       }
+
+      if (rInfra.ok && rInfra.data) {
+        _sdrMkLog('✅ Infra: ' + (rInfra.data.olts || 0) + ' OLTs, ' + (rInfra.data.ctos || 0) + ' CTOs sincronizados.', 'ok');
+        var ko = document.getElementById('mk-count-olts');
+        if (ko) ko.textContent = rInfra.data.olts || '0';
+      } else {
+        _sdrMkLog('⚠️ Infraestrutura: ' + (rInfra.error || 'sem dados'), 'warn');
+      }
+
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar Agora'; }
+
+      var agora = new Date().toLocaleTimeString('pt-BR');
+      _sdrMkLog('✅ Sync concluído às ' + agora + '.', 'ok');
     })
     .catch(function(e) {
-      var msg = e.name === 'TimeoutError' ? 'Timeout (servidor não respondeu em 8s)' : e.message;
-      if (res) res.innerHTML = '<span style="color:#ef4444">❌ Erro: ' + msg + '</span>';
-      _sdrMkLog('❌ Falha na conexão: ' + msg, 'error');
+      var msg = e.message.includes('Failed to fetch')
+        ? 'Firebase Functions não deployadas — rode: firebase deploy --only functions'
+        : e.message;
+      _sdrMkLog('❌ Erro no sync: ' + msg, 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-sync-alt"></i> Sincronizar Agora'; }
+    });
+  });
+};
+
+// ---- MK: Obter conexões de um cliente (via proxy) ----
+window.sdrMkGetConexao = function(cdCliente, callback) {
+  var url = _SDR_FN_BASE + '/sdrMkConexoes?tenant=default_tenant&cd_cliente=' + encodeURIComponent(cdCliente);
+  fetch(url, { signal: AbortSignal.timeout(10000) })
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      if (typeof callback === 'function') callback(j.ok ? j.data : null, j.ok ? null : j.error);
+    })
+    .catch(function(e) {
+      if (typeof callback === 'function') callback(null, e.message);
     });
 };
 
-// ---- MK: Sincronizar Tudo ----
-window.sdrMkSyncAll = function() {
-  _sdrMkLog('⏳ Iniciando sincronização completa...');
-  var cfg = {};
-  sdrRef('mk_config').once('value').then(function(snap) {
-    cfg = snap.val() || {};
-    if (!cfg.enabled || !cfg.server_url) {
-      _sdrMkLog('⚠️ Integração desativada ou servidor não configurado. Use Modo Demo para simulação.', 'warn');
-      return;
-    }
-    // Futuro: chamar WSMKConsultaLocalManutencao local=4 (OLTs), local=1 (POPs), local=6 (CTOs)
-    _sdrMkLog('🔄 Sincronização via API real será ativada quando o IP do servidor estiver disponível.', 'warn');
-    _sdrMkLog('💡 Por enquanto, use os botões "Simular" para testar as telas.', 'ok');
-  });
+// ---- MK: Abrir OS (via proxy) ----
+window.sdrMkAbrirOS = function(params, callback) {
+  var url = _SDR_FN_BASE + '/sdrMkAbrirOS?tenant=default_tenant&'
+    + Object.entries(params).map(function(e){ return encodeURIComponent(e[0])+'='+encodeURIComponent(e[1]); }).join('&');
+  fetch(url, { signal: AbortSignal.timeout(10000) })
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      if (typeof callback === 'function') callback(j.ok ? j.data : null, j.ok ? null : j.error);
+    })
+    .catch(function(e) {
+      if (typeof callback === 'function') callback(null, e.message);
+    });
+};
+
+// ---- MK: Desbloquear conexão (via proxy) ----
+window.sdrMkDesbloquear = function(cdConexao, callback) {
+  var url = _SDR_FN_BASE + '/sdrMkDesbloquear?tenant=default_tenant&cd_conexao=' + encodeURIComponent(cdConexao);
+  fetch(url, { signal: AbortSignal.timeout(10000) })
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      if (typeof callback === 'function') callback(j.ok ? j.data : null, j.ok ? null : j.error);
+    })
+    .catch(function(e) {
+      if (typeof callback === 'function') callback(null, e.message);
+    });
 };
 
 // ---- MK: Demo — Topologia COMPLETA (OLT→DGO→Sp1→Sp2→Sp3→CTO→ONU→Cliente) ----
@@ -5143,11 +7365,102 @@ window.sdrCtxClose = function() {
   if (w) w.remove();
 };
 
+// ── Mover marcador no mapa (drag & drop) ─────────────────────────────────────
+var _sdrMoveState = null; // { id, collection, marker, origLat, origLng }
+
+window.sdrMoveMarker = function(id, collection) {
+  // Remover estado anterior se existir
+  sdrMoveCancelMarker();
+
+  var item, lat, lng, label;
+  if (collection === 'infrastructure') {
+    item = sdrInfraCache[id] || {};
+    lat  = item.lat; lng = item.lng;
+    label = item.name || item.code || id;
+  } else if (collection === 'cliente') {
+    item = sdrClientesCache[id] || {};
+    lat  = item.lat; lng = item.lng;
+    label = item.name || id;
+  }
+  if (!lat || !lng) { toast('Item sem coordenadas — use Editar para definir posição.', 'error'); return; }
+
+  // Navegar para o mapa
+  if (typeof showPage === 'function') showPage('mapa');
+
+  setTimeout(function() {
+    // Centralizar no item
+    if (sdrMap) sdrMap.setView([lat, lng], Math.max(sdrMap.getZoom(), 17));
+
+    // Criar marcador arrastável com visual distinto
+    var moveIcon = L.divIcon({
+      className: '',
+      html: '<div style="width:32px;height:32px;background:#f97316;border:3px solid #fff;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.4);cursor:grab">'
+          + '<i class="fas fa-arrows-alt" style="color:#fff;font-size:.75rem"></i></div>',
+      iconSize:   [32, 32],
+      iconAnchor: [16, 16]
+    });
+
+    var dragMarker = L.marker([lat, lng], { draggable: true, icon: moveIcon, zIndexOffset: 9999 });
+    dragMarker.addTo(sdrMap);
+    dragMarker.bindTooltip('Arraste para reposicionar: ' + label, { permanent: false, direction: 'top', offset: [0, -18] });
+
+    _sdrMoveState = { id: id, collection: collection, marker: dragMarker, origLat: lat, origLng: lng };
+
+    // Banner de confirmação
+    var existing = document.getElementById('sdr-move-banner');
+    if (existing) existing.remove();
+    var banner = document.createElement('div');
+    banner.id = 'sdr-move-banner';
+    banner.style.cssText = 'position:absolute;top:68px;left:50%;transform:translateX(-50%);z-index:9999;'
+      + 'background:#1e293b;border:1px solid #f97316;border-radius:10px;'
+      + 'padding:9px 16px;color:#f1f5f9;font-size:.82rem;display:flex;align-items:center;'
+      + 'gap:12px;box-shadow:0 4px 20px rgba(0,0,0,.45);white-space:nowrap';
+    banner.innerHTML = '<i class="fas fa-arrows-alt" style="color:#f97316"></i>'
+      + '<span>Arraste <b>' + label + '</b> para nova posição</span>'
+      + '<button onclick="sdrMoveConfirmMarker()" style="padding:5px 14px;background:#f97316;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.8rem;font-weight:700"><i class="fas fa-check"></i> Confirmar</button>'
+      + '<button onclick="sdrMoveCancelMarker()" style="padding:5px 10px;background:#334155;color:#cbd5e1;border:none;border-radius:6px;cursor:pointer;font-size:.8rem">Cancelar</button>';
+    var mapContainer = document.getElementById('sdr-map');
+    if (mapContainer) mapContainer.appendChild(banner);
+  }, 300);
+};
+
+window.sdrMoveConfirmMarker = function() {
+  if (!_sdrMoveState) return;
+  var s   = _sdrMoveState;
+  var pos = s.marker.getLatLng();
+  var ref, cache;
+  if (s.collection === 'infrastructure') {
+    ref   = sdrRef('infrastructure/' + s.id);
+    cache = sdrInfraCache;
+  } else {
+    ref   = sdrRef('clients/' + s.id);
+    cache = sdrClientesCache;
+  }
+  ref.update({ lat: pos.lat, lng: pos.lng, updated_at: new Date().toISOString() })
+    .then(function() {
+      if (cache[s.id]) { cache[s.id].lat = pos.lat; cache[s.id].lng = pos.lng; }
+      toast('Posição salva com sucesso.', 'success');
+      sdrMoveCancelMarker();
+      if (typeof sdrMapRenderInfra === 'function') sdrMapRenderInfra();
+      if (typeof sdrMapRenderClientes === 'function') sdrMapRenderClientes();
+    })
+    .catch(function(e) { toast('Erro ao salvar: ' + e.message, 'error'); });
+};
+
+window.sdrMoveCancelMarker = function() {
+  if (_sdrMoveState) {
+    try { sdrMap && sdrMap.removeLayer(_sdrMoveState.marker); } catch(e){}
+    _sdrMoveState = null;
+  }
+  var b = document.getElementById('sdr-move-banner');
+  if (b) b.remove();
+};
+
 // Helpers de itens de contexto por tipo
 window._sdrCtxOlt = function(id) {
   return [
     {_label: 'OLT'},
-    {icon:'fa-th',          label:'Chassis Visual',   fn:function(){ sdrOltVisualModal(id); }},
+    {icon:'fa-th',          label:'Ver Chassis',      fn:function(){ showPage && showPage('olts'); setTimeout(function(){ sdrOltTabSwitch(id); }, 200); }},
     {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrOltAddModal(id); }},
     {icon:'fa-sitemap',     label:'Ver Topologia',    fn:function(){ showPage && showPage('olts'); setTimeout(function(){ var p=document.getElementById('topologia-tree'); if(p&&p.style.display==='none') sdrTopologiaToggle(); else sdrTopologiaRender(); },200); }},
     '---',
@@ -5173,6 +7486,7 @@ window._sdrCtxCliente = function(id) {
     {_label: 'Cliente'},
     {icon:'fa-eye',         label:'Ver Detalhes',     fn:function(){ sdrOpenClientePanel(id, sdrClientesCache[id]); }},
     {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrClienteEdit && sdrClienteEdit(id); }},
+    {icon:'fa-arrows-alt',  label:'Mover',            fn:function(){ sdrMoveMarker(id, 'cliente'); }},
     {icon:'fa-map-pin',     label:'Ver no Mapa',      fn:function(){ sdrMapFlyToClient(id); }},
     {icon:'fa-ticket-alt',  label:'Abrir Chamado',    fn:function(){ sdrTicketAdd && sdrTicketAdd(id); }},
     '---',
@@ -5186,11 +7500,470 @@ window._sdrCtxInfra = function(id) {
     {_label: 'Infraestrutura'},
     {icon:'fa-eye',         label:'Ver Detalhes',     fn:function(){ sdrOpenInfraPanel(id, sdrInfraCache[id]); }},
     {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrInfraEdit(id); }},
+    {icon:'fa-arrows-alt',  label:'Mover',            fn:function(){ sdrMoveMarker(id, 'infrastructure'); }},
     {icon:'fa-map-marker-alt',label:'Ir ao Mapa',     fn:function(){ var it=sdrInfraCache[id]; if(it&&it.lat) { showPage&&showPage('mapa'); setTimeout(function(){ sdrMapFlyTo(it.lat,it.lng); },300); } }},
     '---',
     {icon:'fa-trash',       label:'Excluir',          color:'#dc2626', fn:function(){ sdrInfraDelete && sdrInfraDelete(id); }}
   ];
 };
+
+// ════════════════════════════════════════════════════════════════════
+// SPRINT 8 — Real-time · Badge Alertas · MK Panel · Alerta→Ticket
+//            Export CSV · Auto-refresh Dashboard · Fix Filtros
+// ════════════════════════════════════════════════════════════════════
+
+// ── 1. Fix filtro de clientes (trabalha com tabela, não cards) ────
+window.sdrClientesFiltrar = function(q) {
+  q = (q || '').toLowerCase().trim();
+  var rows = document.querySelectorAll('#clientes-lista tbody tr');
+  if (rows.length === 0) { sdrClientesRender(); return; }
+  rows.forEach(function(row) {
+    var text = row.textContent.toLowerCase();
+    row.style.display = (!q || text.includes(q)) ? '' : 'none';
+  });
+};
+
+// ── 2. Export CSV ─────────────────────────────────────────────────
+window.sdrExportClientesCSV = function() {
+  var data = Object.entries(sdrClientesCache || {});
+  if (!data.length) { if (typeof toast === 'function') toast('Sem clientes para exportar', 'warn'); return; }
+  var header = ['Nome','CPF/CNPJ','Telefone','Email','Endereço','Plano','Velocidade','Preço','Financeiro','ONU Serial','Status ONU','Sinal Rx','CTO'];
+  var rows = data.map(function(e) {
+    var c = e[1];
+    return [
+      c.name || '', c.cpf_cnpj || '', c.phone || '', c.email || '', c.address || '',
+      c.plan_name || '', (c.plan_speed_down ? c.plan_speed_down + 'M' : ''), (c.plan_price ? 'R$ ' + parseFloat(c.plan_price).toFixed(2) : ''),
+      c.financial_status || 'adimplente', c.onu_serial || '', c.onu_status || '', (c.rx_power != null ? c.rx_power + ' dBm' : ''), c.cto_nome || c.cto_id || ''
+    ].map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+  });
+  var csv = [header.join(',')].concat(rows).join('\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url; a.download = 'clientes_sdr_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+  if (typeof toast === 'function') toast('CSV exportado: ' + data.length + ' clientes', 'success');
+};
+
+window.sdrExportOnusCSV = function() {
+  var data = Object.entries(sdrOnusCache || {});
+  if (!data.length) { if (typeof toast === 'function') toast('Sem ONUs para exportar', 'warn'); return; }
+  var header = ['Serial','Modelo','Status','Sinal Rx','Sinal Tx','IP','OLT','PON','CTO','Cliente'];
+  var cbs = {};
+  Object.entries(sdrClientesCache || {}).forEach(function(e) {
+    if (e[1] && e[1].onu_serial) cbs[e[1].onu_serial.toLowerCase()] = e[1].name;
+  });
+  var rows = data.map(function(e) {
+    var u = e[1];
+    var olt = (sdrOltsCache || {})[u.olt_id] || {};
+    return [
+      u.serial_number || '', u.model || '', u.status || '', (u.rx_power != null ? u.rx_power : ''), (u.tx_power != null ? u.tx_power : ''),
+      u.ip_address || '', olt.name || u.olt_id || '', u.pon_port || '', u.cto_nome || u.cto_id || '',
+      (u.serial_number ? cbs[u.serial_number.toLowerCase()] || '' : '')
+    ].map(function(v) { return '"' + String(v).replace(/"/g, '""') + '"'; }).join(',');
+  });
+  var csv = [header.join(',')].concat(rows).join('\n');
+  var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  a.href = url; a.download = 'onus_sdr_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+  if (typeof toast === 'function') toast('CSV exportado: ' + data.length + ' ONUs', 'success');
+};
+
+// Adicionar botões de export nas páginas (chamado após render)
+(function _sdrInjectExportBtns() {
+  // Esperar DOM estar pronto (as páginas podem não existir ainda)
+  var _orig8ShowPage = window.showPage;
+  if (typeof _orig8ShowPage === 'function' && !_orig8ShowPage._sdr8Patched) {
+    var _orig8 = _orig8ShowPage;
+    window.showPage = function(name) {
+      _orig8(name);
+      setTimeout(function() {
+        if (name === 'clientes') {
+          var hdr = document.querySelector('#page-clientes .flex');
+          if (hdr && !document.getElementById('btn-exp-clients')) {
+            var btn = document.createElement('button');
+            btn.id = 'btn-exp-clients';
+            btn.className = 'btn-map';
+            btn.style.cssText = 'padding:6px 14px;font-size:.8rem';
+            btn.innerHTML = '<i class="fas fa-file-csv"></i> Exportar CSV';
+            btn.onclick = sdrExportClientesCSV;
+            hdr.appendChild(btn);
+          }
+        }
+        if (name === 'onus') {
+          var hdr2 = document.querySelector('#page-onus .flex');
+          if (hdr2 && !document.getElementById('btn-exp-onus')) {
+            var btn2 = document.createElement('button');
+            btn2.id = 'btn-exp-onus';
+            btn2.className = 'btn-map';
+            btn2.style.cssText = 'padding:6px 14px;font-size:.8rem';
+            btn2.innerHTML = '<i class="fas fa-file-csv"></i> Exportar CSV';
+            btn2.onclick = sdrExportOnusCSV;
+            hdr2.appendChild(btn2);
+          }
+        }
+      }, 500);
+    };
+    window.showPage._sdrPatched = window.showPage._sdr8Patched = true;
+  }
+})();
+
+// ── 3. Listener real-time de ONUs → auto-alertas + badge sidebar ──
+var _sdrRealtimeActive = false;
+window._sdrInitRealtime = function() {
+  if (_sdrRealtimeActive) return;
+  _sdrRealtimeActive = true;
+
+  // Listener em /onus: detecta mudança de status para offline
+  var _prevOnuStatus = {};
+  sdrRef('onus').on('value', function(snap) {
+    var onus = snap.val() || {};
+
+    // Atualizar badge de alertas (verificar alertas ativos)
+    sdrRef('alerts').once('value').then(function(aSnap) {
+      var alerts = aSnap.val() || {};
+      var activeCount = Object.values(alerts).filter(function(a) { return a && a.is_active; }).length;
+      _sdrUpdateAlertBadge(activeCount);
+    });
+
+    // Detectar ONUs que ficaram offline desde a última leitura
+    var now = new Date().toISOString();
+    var updates = {};
+    var newAlerts = 0;
+
+    Object.entries(onus).forEach(function(e) {
+      var onuId = e[0], u = e[1];
+      if (!u) return;
+      var prev = _prevOnuStatus[onuId];
+      // ONU acabou de ficar offline
+      if (u.status === 'offline' && prev && prev !== 'offline') {
+        var alertKey = sdrRef('alerts').push().key;
+        updates['alerts/' + alertKey] = {
+          onu_id:    onuId,
+          client_id: u.client_id || null,
+          severity:  'critical',
+          title:     'ONU Offline: ' + (u.serial_number || onuId),
+          message:   'ONU ' + (u.serial_number || '') + ' ficou offline às ' + new Date().toLocaleTimeString('pt-BR'),
+          is_active: true,
+          created_at: now
+        };
+        newAlerts++;
+      }
+      _prevOnuStatus[onuId] = u.status;
+    });
+
+    if (Object.keys(updates).length) {
+      sdrRef('').update(updates).then(function() {
+        // Re-verificar badge após criar alertas
+        sdrRef('alerts').once('value').then(function(aSnap2) {
+          var cnt = Object.values(aSnap2.val() || {}).filter(function(a) { return a && a.is_active; }).length;
+          _sdrUpdateAlertBadge(cnt);
+        });
+        if (typeof toast === 'function') toast('⚠ ' + newAlerts + ' ONU(s) ficou offline — alerta criado!', 'error');
+        // Atualizar página de alertas se aberta
+        if (document.getElementById('alertas-lista') && document.querySelector('#page-alertas.active')) {
+          sdrAlertasRender();
+        }
+      });
+    }
+  });
+};
+
+// Badge de alertas no sidebar
+window._sdrUpdateAlertBadge = function(count) {
+  var badge = document.getElementById('sdr-alert-badge');
+  if (!badge) {
+    // Criar badge no item de Alertas do sidebar
+    var alertLink = document.querySelector('[onclick*="showPage(\'alertas\')"], [onclick*="showPage(\"alertas\")"]');
+    if (!alertLink) return;
+    badge = document.createElement('span');
+    badge.id = 'sdr-alert-badge';
+    badge.style.cssText = 'display:inline-block;background:#dc2626;color:#fff;font-size:.62rem;font-weight:700;border-radius:50%;width:16px;height:16px;text-align:center;line-height:16px;margin-left:4px';
+    alertLink.appendChild(badge);
+  }
+  if (count > 0) {
+    badge.textContent = count > 99 ? '99+' : count;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+};
+
+// Iniciar real-time após 2s (garantir que Firebase está pronto)
+setTimeout(function() {
+  if (typeof sdrRef === 'function') window._sdrInitRealtime();
+}, 2000);
+
+// ── 4. Seção MK Solutions no painel do cliente ────────────────────
+(function _sdrPatchClientePanel() {
+  var _origBuildPanel = window._buildClientePanel || window.sdrOpenClientePanel;
+  // Estender _buildClientePanel injetando seção MK depois de renderizar
+  var _origOpenPanel = window.sdrOpenClientePanel;
+  window.sdrOpenClientePanel = function(id, c) {
+    _origOpenPanel(id, c);
+    // Injetar seção MK após o painel ser montado
+    setTimeout(function() {
+      var body = document.getElementById('sp-body');
+      if (!body || !c) return;
+      // Verificar se já foi injetado
+      if (document.getElementById('sp-mk-section')) return;
+
+      // Verificar se há config MK
+      sdrRef('mk_config').once('value').then(function(snap) {
+        var mkCfg = snap.val() || {};
+        var hasMk = !!(mkCfg.token && mkCfg.token !== 'SEU_TOKEN_AQUI');
+        var sp = document.getElementById('sdr-side-panel');
+        if (!sp || !sp.classList.contains('open')) return; // painel fechou
+
+        var mkSection = document.createElement('div');
+        mkSection.id = 'sp-mk-section';
+        mkSection.className = 'sp-section';
+        mkSection.innerHTML = '<div class="sp-section-title"><i class="fas fa-plug" style="color:#7c3aed"></i> MK Solutions'
+          + (hasMk ? '' : ' <span style="font-size:.68rem;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;font-weight:600;margin-left:4px">Token pendente</span>')
+          + '</div>'
+          + (c.mk_id ? '<div class="sp-row"><span class="sp-label">ID no MK</span><span class="sp-val" style="font-family:monospace">' + c.mk_id + '</span></div>' : '')
+          + (c.mk_contrato ? '<div class="sp-row"><span class="sp-label">Contrato</span><span class="sp-val">' + c.mk_contrato + '</span></div>' : '')
+          + (c.mk_vencimento ? '<div class="sp-row"><span class="sp-label">Vencimento</span><span class="sp-val">' + c.mk_vencimento + '</span></div>' : '')
+          + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">'
+          + '<button onclick="sdrMkAbrirOS && sdrMkAbrirOS(\'' + id + '\')" '
+          + 'style="padding:5px 10px;font-size:.75rem;background:#ede9fe;color:#7c3aed;border:1px solid #c4b5fd;border-radius:6px;cursor:pointer'
+          + (hasMk ? '' : ';opacity:.5;cursor:not-allowed') + '" '
+          + (hasMk ? '' : 'title="Configure o token MK em Integração MK" disabled') + '>'
+          + '<i class="fas fa-wrench" style="margin-right:4px"></i>Abrir OS</button>'
+          + '<button onclick="sdrMkDesbloquear && sdrMkDesbloquear(\'' + id + '\')" '
+          + 'style="padding:5px 10px;font-size:.75rem;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:6px;cursor:pointer'
+          + (hasMk ? '' : ';opacity:.5;cursor:not-allowed') + '" '
+          + (hasMk ? '' : 'title="Configure o token MK em Integração MK" disabled') + '>'
+          + '<i class="fas fa-unlock" style="margin-right:4px"></i>Desbloquear</button>'
+          + '<button onclick="sdrTicketAdd && sdrTicketAdd(\'' + id + '\')" '
+          + 'style="padding:5px 10px;font-size:.75rem;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;border-radius:6px;cursor:pointer">'
+          + '<i class="fas fa-ticket-alt" style="margin-right:4px"></i>Abrir Chamado</button>'
+          + '</div>';
+
+        body.appendChild(mkSection);
+      });
+    }, 150);
+  };
+})();
+
+// ── 5. Alerta → criar ticket ──────────────────────────────────────
+window.sdrAlertaAbrirTicket = function(alertId) {
+  sdrRef('alerts/' + alertId).once('value').then(function(snap) {
+    var a = snap.val();
+    if (!a) return;
+    var clientId = a.client_id || '';
+    sdrRef('clients/' + clientId).once('value').then(function(cSnap) {
+      var c = cSnap.val() || {};
+      // Pré-preencher modal de ticket
+      if (typeof sdrTicketAdd === 'function') {
+        sdrTicketAdd(clientId || null);
+        setTimeout(function() {
+          var titleEl = document.getElementById('ticket-title');
+          var descEl  = document.getElementById('ticket-description');
+          var typeEl  = document.getElementById('ticket-type');
+          var prioEl  = document.getElementById('ticket-priority');
+          if (titleEl) titleEl.value = a.title || 'Alerta: ' + (a.severity || '') + ' — ' + (c.name || '');
+          if (descEl)  descEl.value  = a.message || '';
+          if (typeEl)  typeEl.value  = a.title && a.title.includes('Offline') ? 'sem_sinal' : 'sinal_baixo';
+          if (prioEl)  prioEl.value  = a.severity === 'critical' ? 'critical' : 'high';
+        }, 200);
+      }
+    });
+  });
+};
+
+// Injetar botão "Abrir Ticket" nos alertas após render
+var _origAlertasRender8 = window.sdrAlertasRender;
+window.sdrAlertasRender = function() {
+  _origAlertasRender8();
+  setTimeout(function() {
+    var lista = document.getElementById('alertas-lista');
+    if (!lista) return;
+    // Adicionar coluna de ação nas linhas de alertas já renderizadas
+    lista.querySelectorAll('tr[data-alert-id]').forEach(function(row) {
+      if (row.querySelector('.alerta-ticket-btn')) return;
+      var aid = row.getAttribute('data-alert-id');
+      var td = document.createElement('td');
+      td.innerHTML = '<button class="alerta-ticket-btn" onclick="sdrAlertaAbrirTicket(\'' + aid + '\')" '
+        + 'style="padding:3px 8px;font-size:.72rem;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;border-radius:5px;cursor:pointer">'
+        + '<i class="fas fa-ticket-alt"></i> Ticket</button>';
+      row.appendChild(td);
+    });
+  }, 300);
+};
+
+// Override sdrAlertasRender para injetar data-alert-id nas linhas
+(function _sdrPatchAlertasTable() {
+  var _origAlRender = window.sdrAlertasRender;
+  window.sdrAlertasRender = function() {
+    // Chamar o original
+    _origAlRender();
+    // Após render, adicionar data-alert-id se possível (a tabela usa entries)
+    // A versão de sprint4 do alertasRender usa 'alertas-lista' com rows sem IDs
+    // Vamos sobrescrever o render completamente para incluir o botão ticket
+  };
+  window.sdrAlertasRender = _origAlRender; // restaurar — vamos fazer de outro jeito
+})();
+
+// Render de alertas melhorado — com botão de ticket em cada linha
+window.sdrAlertasRender = function() {
+  sdrRef('alerts').once('value').then(function(snap) {
+    var alerts = snap.val() || {};
+    var lista = document.getElementById('alertas-lista');
+    if (!lista) return;
+
+    var entries = Object.entries(alerts);
+    if (entries.length === 0) {
+      lista.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">'
+        + '<i class="fas fa-check-circle" style="font-size:2.5rem;color:#22c55e;margin-bottom:10px;display:block"></i>'
+        + '<p>Nenhum alerta ativo — rede estável.</p></div>';
+      _sdrUpdateAlertBadge(0);
+      return;
+    }
+
+    var activeAlerts = entries.filter(function(e) { return e[1] && e[1].is_active; });
+    var inactiveAlerts = entries.filter(function(e) { return e[1] && !e[1].is_active; });
+    _sdrUpdateAlertBadge(activeAlerts.length);
+
+    var sevColor  = { critical:'#dc2626', warning:'#d97706', info:'#2563eb' };
+    var sevLabel  = { critical:'Crítico',  warning:'Atenção',  info:'Info' };
+    var sevBg     = { critical:'#fee2e2',  warning:'#fef3c7',  info:'#dbeafe' };
+
+    function renderGroup(label, arr) {
+      if (!arr.length) return '';
+      var rows = arr.map(function(e) {
+        var id = e[0], a = e[1];
+        var sc = sevColor[a.severity] || '#94a3b8';
+        var sl = sevLabel[a.severity] || a.severity;
+        var sb = sevBg[a.severity]   || '#f8fafc';
+        var dt = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR') : '';
+        return '<tr data-alert-id="' + id + '" style="border-bottom:1px solid #f1f5f9">'
+          + '<td style="padding:8px 10px"><span style="background:' + sb + ';color:' + sc + ';padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700">' + sl + '</span></td>'
+          + '<td style="padding:8px 10px;font-weight:600">' + (a.title || 'Alerta') + '</td>'
+          + '<td style="padding:8px 10px;font-size:.78rem;color:var(--muted)">' + (a.message || '') + '</td>'
+          + '<td style="padding:8px 10px;font-size:.75rem;color:var(--muted);white-space:nowrap">' + dt + '</td>'
+          + '<td style="padding:8px 10px;text-align:right;white-space:nowrap">'
+          + (a.is_active
+            ? '<button onclick="sdrAlertaAck(\'' + id + '\')" style="padding:3px 8px;font-size:.72rem;background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;border-radius:5px;cursor:pointer;margin-right:4px"><i class="fas fa-check"></i> ACK</button>'
+            : '')
+          + '<button onclick="sdrAlertaAbrirTicket(\'' + id + '\')" style="padding:3px 8px;font-size:.72rem;background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd;border-radius:5px;cursor:pointer">'
+          + '<i class="fas fa-ticket-alt"></i> Ticket</button>'
+          + '</td></tr>';
+      }).join('');
+      return '<div style="font-size:.75rem;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px">' + label + ' (' + arr.length + ')</div>'
+        + '<table style="width:100%;border-collapse:collapse;font-size:.83rem;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">'
+        + '<thead><tr style="background:#f8fafc"><th style="padding:8px 10px;text-align:left">Severity</th><th style="padding:8px 10px;text-align:left">Título</th>'
+        + '<th style="padding:8px 10px;text-align:left">Mensagem</th><th style="padding:8px 10px;text-align:left">Data</th><th style="padding:8px 10px"></th></tr></thead>'
+        + '<tbody>' + rows + '</tbody></table>';
+    }
+
+    lista.innerHTML = renderGroup('Alertas Ativos', activeAlerts)
+      + renderGroup('Histórico (Reconhecidos)', inactiveAlerts.slice(0, 20));
+  });
+};
+
+// ── 6. Auto-refresh Dashboard a cada 60s ─────────────────────────
+var _sdrDashInterval = null;
+(function _sdrPatchDashPage() {
+  var _orig9 = window.showPage;
+  if (typeof _orig9 !== 'function' || _orig9._sdr9Patched) return;
+  var _w9 = function(name) {
+    _orig9(name);
+    if (name === 'dash-rede') {
+      if (_sdrDashInterval) clearInterval(_sdrDashInterval);
+      _sdrDashInterval = setInterval(function() {
+        if (document.querySelector('#page-dash-rede.active') && typeof sdrDashRedeRender === 'function') {
+          sdrDashRedeRender();
+        } else {
+          clearInterval(_sdrDashInterval);
+          _sdrDashInterval = null;
+        }
+      }, 60000); // 60 segundos
+    } else {
+      if (_sdrDashInterval) { clearInterval(_sdrDashInterval); _sdrDashInterval = null; }
+    }
+  };
+  _w9._sdrPatched = _w9._sdr9Patched = true;
+  window.showPage = _w9;
+})();
+
+// ── 7. Botão "Export CSV" nos templates de página ─────────────────
+// Substituir templates para incluir botão export
+window._sdrHtml_clientes = function() {
+  return '<div style="max-width:1100px;margin:0 auto">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-users" style="color:var(--primary)"></i> Clientes FTTH</h2>'
+    +'<input id="clientes-search" type="text" placeholder="Buscar cliente..." oninput="sdrClientesFilter()" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;width:200px">'
+    +'<select id="clientes-filter-status" onchange="sdrClientesFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem">'
+    +'<option value="">Todos</option><option value="adimplente">Adimplentes</option><option value="inadimplente">Inadimplentes</option></select>'
+    +'<button class="btn-map" onclick="sdrClienteAdd()" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Novo</button>'
+    +'<button class="btn-map" onclick="document.getElementById(\'clientes-import-input\').click()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-file-import"></i> Importar</button>'
+    +'<button class="btn-map" onclick="sdrAutoLinkCTO()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-link"></i> Auto-Link</button>'
+    +'<button class="btn-map" onclick="sdrExportClientesCSV()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-file-csv"></i> CSV</button>'
+    +'<button class="btn-map" onclick="sdrRelatorioInadimplentes()" style="padding:6px 14px;font-size:.8rem;background:#dc2626;color:#fff;border-color:#b91c1c" title="Relatório de Inadimplentes"><i class="fas fa-exclamation-triangle"></i> Inadimplentes</button>'
+    +'<input type="file" id="clientes-import-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="sdrImportClientes(this)">'
+    +'</div>'
+    +'<div id="clientes-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
+    +'<div id="clientes-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
+    +'</div>';
+};
+
+window._sdrHtml_onus = function() {
+  return '<div style="max-width:1100px;margin:0 auto">'
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-router" style="color:var(--primary)"></i> ONUs</h2>'
+    +'<input id="onus-search" type="text" placeholder="Buscar serial, modelo..." oninput="sdrOnusFilter()" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;width:200px">'
+    +'<select id="onus-filter-olt" onchange="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todas as OLTs</option></select>'
+    +'<select id="onus-filter-status" onchange="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todos Status</option><option value="online">Online</option><option value="offline">Offline</option><option value="degraded">Degradado</option></select>'
+    +'<button class="btn-map" onclick="sdrOnusRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
+    +'<button class="btn-map" onclick="sdrOnuAdd()" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Nova ONU</button>'
+    +'<button class="btn-map" onclick="sdrExportOnusCSV()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-file-csv"></i> CSV</button>'
+    +'</div>'
+    +'<div id="onus-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
+    +'<div id="onus-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
+    +'</div>';
+};
+
+// Fix: search para tabela de ONUs (igual ao de clientes)
+window.sdrOnusFiltrar = function(q) {
+  q = (q || '').toLowerCase().trim();
+  var rows = document.querySelectorAll('#onus-lista tbody tr');
+  rows.forEach(function(row) {
+    var text = row.textContent.toLowerCase();
+    row.style.display = (!q || text.includes(q)) ? '' : 'none';
+  });
+};
+
+// ── 8. Alertas: template melhorado com indicador de tempo real ────
+window._sdrHtml_alertas = function() {
+  return '<div style="max-width:1000px;margin:0 auto">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap">'
+    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-bell" style="color:#d97706"></i> Alertas de Rede</h2>'
+    +'<span id="sdr-rt-indicator" style="font-size:.72rem;color:#16a34a;background:#d1fae5;padding:3px 10px;border-radius:10px;display:none"><i class="fas fa-circle" style="font-size:.55rem;margin-right:4px"></i>Tempo real ativo</span>'
+    +'<button class="btn-map" onclick="sdrCheckAlerts()" style="padding:6px 14px;font-size:.8rem;background:#d97706;color:#fff;border-color:#b45309"><i class="fas fa-search"></i> Verificar Agora</button>'
+    +'<button class="btn-map" onclick="sdrAlertasRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
+    +'</div>'
+    +'<div id="alertas-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
+    +'</div>';
+};
+
+// Mostrar indicador de real-time quando alertas estiver ativo
+var _origAlertasShow = window.showPage;
+if (typeof _origAlertasShow === 'function' && !_origAlertasShow._sdrRtPatched) {
+  var _wRt = function(name) {
+    _origAlertasShow(name);
+    if (name === 'alertas') {
+      setTimeout(function() {
+        var ind = document.getElementById('sdr-rt-indicator');
+        if (ind && _sdrRealtimeActive) ind.style.display = 'inline-block';
+      }, 400);
+    }
+  };
+  _wRt._sdrPatched = _wRt._sdrRtPatched = true;
+  window.showPage = _wRt;
+}
 
 // Fecha a IIFE (function(){"use strict"; ...}) que envolve todo o codigo SDR
 }());
