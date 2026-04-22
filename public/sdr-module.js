@@ -17,6 +17,7 @@
       + '<div class="tb-group">'
       + '<button class="btn-map" onclick="sdrImportKMZ()" style="background:#f59e0b;color:#fff;border-color:#d97706;padding:6px 10px;font-size:.78rem"><i class="fas fa-file-import"></i> KMZ</button>'
       + '<button class="btn-map" id="btn-draw-mode" onclick="sdrDrawModeToggle()" style="padding:6px 10px;font-size:.78rem"><i class="fas fa-pencil-alt"></i> Desenhar</button>'
+      + '<button class="btn-map" id="btn-viabilidade" onclick="sdrViabilidadeToggle()" style="padding:6px 10px;font-size:.78rem" title="Verificar viabilidade comercial (CTOs próximas + power budget)"><i class="fas fa-search-location"></i> Viabilidade</button>'
       + '</div>'
       + '<div style="flex:1"></div>'
       + '<div class="tb-group">'
@@ -2528,6 +2529,701 @@ window.sdrOltInlineRender = function(oltId) {
     }, 300);
   });
 };
+
+// ── OLT Chassis + Lightpath + Slots (branch main) ────────────────────────
+window.sdrOltChassisPreview = function() {
+  var brand  = (document.getElementById('sdr-olt-brand')  || {}).value || '';
+  var model  = (document.getElementById('sdr-olt-model-sel') || {}).value || '';
+  var bd = (SDR_OLT_MODELS[brand] || {});
+  var md = (bd.models || {})[model] || {};
+  var prev = document.getElementById('olt-chassis-prev');
+  if (!prev) return;
+
+  var slots   = parseInt((document.getElementById('sdr-olt-slots')  || {}).value) || md.slots  || 4;
+  var gbics   = parseInt((document.getElementById('sdr-olt-gbics')  || {}).value) || md.gbics  || 8;
+  var orient  = (document.getElementById('sdr-olt-orient') || {}).value || md.orient || 'deitada';
+  var chassis = md.chassis || '#0d1117';
+  var plate   = md.plate   || '#1e3a5f';
+  var bColor  = bd.brandColor || '#374151';
+  var bLabel  = bd.label || 'OLT';
+  var prCount = Math.min(gbics, md.ports_per_row || gbics); // portas por linha no preview
+  var isVert  = orient === 'pe';
+
+  var rows = '';
+  if (!isVert) {
+    // Deitada: slots em linhas
+    var show = Math.min(slots, 8);
+    for (var s = 1; s <= show; s++) {
+      rows += '<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">'
+        + '<div style="width:8px;height:14px;background:' + plate + ';border-radius:1px;flex-shrink:0"></div>'
+        + '<div style="background:' + plate + '22;border:1px solid ' + plate + '55;border-radius:2px;padding:2px 3px;display:flex;gap:2px;flex:1">';
+      for (var p = 1; p <= Math.min(prCount, 16); p++) {
+        rows += '<div style="width:8px;height:10px;border-radius:1px;background:' + plate + '66;border:1px solid ' + plate + '99"></div>';
+      }
+      if (prCount > 16) rows += '<span style="font-size:.5rem;color:' + plate + ';align-self:center">+' + (prCount-16) + '</span>';
+      rows += '</div></div>';
+    }
+    if (slots > 8) rows += '<div style="font-size:.6rem;color:#475569;text-align:center">... +' + (slots-8) + ' slots</div>';
+  } else {
+    // Em pé: slots em colunas
+    rows += '<div style="display:flex;gap:3px;align-items:flex-start">';
+    var showS = Math.min(slots, 8);
+    for (var s = 1; s <= showS; s++) {
+      rows += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
+        + '<div style="font-size:.5rem;color:#64748b">S' + s + '</div>'
+        + '<div style="background:' + plate + '33;border:1px solid ' + plate + '55;border-radius:2px;padding:2px;display:flex;flex-direction:column;gap:2px">';
+      for (var p = 1; p <= Math.min(gbics, 8); p++) {
+        rows += '<div style="width:10px;height:8px;border-radius:1px;background:' + plate + '66;border:1px solid ' + plate + '99"></div>';
+      }
+      rows += '</div></div>';
+    }
+    if (slots > 8) rows += '<div style="font-size:.55rem;color:#475569;align-self:center">+' + (slots-8) + '</div>';
+    rows += '</div>';
+  }
+
+  prev.innerHTML =
+    // Frame do chassis
+    '<div style="background:' + chassis + ';border:2px solid ' + plate + '55;border-radius:6px;padding:6px 8px;font-family:monospace">'
+    // Barra superior: logo + LEDs
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
+    + '<div style="display:flex;align-items:center;gap:4px">'
+    + '<div style="width:4px;height:14px;background:' + bColor + ';border-radius:1px"></div>'
+    + '<span style="font-size:.65rem;font-weight:700;color:' + bColor + ';letter-spacing:.04em">' + bLabel.toUpperCase() + '</span>'
+    + '<span style="font-size:.6rem;color:#475569;margin-left:3px">' + (model || '') + '</span>'
+    + '</div>'
+    + '<div style="display:flex;gap:3px;align-items:center">'
+    + '<div title="PWR" style="width:5px;height:5px;border-radius:50%;background:#16a34a;box-shadow:0 0 3px #16a34a"></div>'
+    + '<div title="ALM" style="width:5px;height:5px;border-radius:50%;background:#374151"></div>'
+    + '<div title="SYN" style="width:5px;height:5px;border-radius:50%;background:#2563eb;box-shadow:0 0 3px #2563eb66"></div>'
+    + '</div></div>'
+    // Slots
+    + rows
+    // Rodapé: capacidade
+    + '<div style="margin-top:5px;font-size:.62rem;color:#475569;text-align:center">'
+    + slots + ' slots · ' + gbics + ' GBICs/slot · <b style="color:' + bColor + '">' + (slots*gbics) + ' PON total</b>'
+    + '</div>'
+    + '</div>';
+
+  // Atualiza contador de capacidade
+  var cap = document.getElementById('olt-cap-calc');
+  if (cap) cap.textContent = (slots * gbics) + ' GBICs';
+};
+
+// Ao trocar marca, atualiza lista de modelos e auto-preenche
+window.sdrOltBrandChange = function() {
+  var brand = (document.getElementById('sdr-olt-brand') || {}).value || '';
+  var bd = SDR_OLT_MODELS[brand] || {};
+  var modelSel = document.getElementById('sdr-olt-model-sel');
+  if (!modelSel) return;
+  modelSel.innerHTML = Object.entries(bd.models || {}).map(function(e) {
+    return '<option value="' + e[0] + '">' + e[0] + ' — ' + e[1].desc + '</option>';
+  }).join('') || '<option value="">Personalizado</option>';
+  window.sdrOltModelChange();
+};
+
+// Ao trocar modelo, preenche campos e atualiza preview
+window.sdrOltModelChange = function() {
+  var brand = (document.getElementById('sdr-olt-brand') || {}).value || '';
+  var model = (document.getElementById('sdr-olt-model-sel') || {}).value || '';
+  var md = ((SDR_OLT_MODELS[brand] || {}).models || {})[model] || {};
+  if (!md.slots) { window.sdrOltChassisPreview(); return; }
+  var s = document.getElementById('sdr-olt-slots');
+  var g = document.getElementById('sdr-olt-gbics');
+  var o = document.getElementById('sdr-olt-orient');
+  var nm = document.getElementById('sdr-olt-model');
+  if (s) s.value = md.slots;
+  if (g) g.value = md.gbics;
+  if (o) o.value = md.orient || 'deitada';
+  if (nm) nm.value = model;
+  window.sdrOltChassisPreview();
+};
+
+// Modal dedicado para OLT
+
+function _sdrInjectLightCSS() {
+  if (document.getElementById('sdr-lp-css')) return;
+  var s = document.createElement('style'); s.id = 'sdr-lp-css';
+  s.textContent = [
+    '@keyframes sdr-cord{to{stroke-dashoffset:-36}}',
+    '@keyframes sdr-glow{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(1.08)}}',
+    '.sdr-port-lit{outline:3px solid #818cf8!important;box-shadow:0 0 10px #6366f1!important;animation:sdr-glow .9s ease-in-out infinite;z-index:5;position:relative}',
+    '.sdr-fib-lit {outline:3px solid #fbbf24!important;box-shadow:0 0 10px #f59e0b!important;animation:sdr-glow .9s ease-in-out infinite;z-index:5;position:relative}',
+    '.sdr-cord-active{stroke-dasharray:12 6!important;animation:sdr-cord .45s linear infinite;filter:drop-shadow(0 0 4px #6366f1)!important}',
+    '.sdr-lp-selected{outline:3px solid #f59e0b!important;box-shadow:0 0 14px #f59e0baa!important;animation:sdr-glow .8s ease-in-out infinite;z-index:5;position:relative}',
+    '.sdr-fib-connectable{box-shadow:0 0 7px #f59e0b88!important;border-color:#f59e0b!important;cursor:pointer!important;animation:sdr-glow 1.2s ease-in-out infinite}'
+  ].join('');
+  document.head.appendChild(s);
+}
+
+function _dbtS(color) {
+  return 'background:' + color + '22;color:' + color + ';border:1px solid ' + color + '44';
+}
+
+window.sdrOltLightpathModal = function(oltId) {
+  _sdrInjectLightCSS();
+  var _inlineEl = document.getElementById('olt-panel-content');
+  Promise.all([
+    sdrRef('olt_connections/' + oltId).once('value'),
+    sdrRef('olt_connections/' + oltId + '/pons').once('value'),
+    sdrRef('infrastructure').once('value'),
+    sdrRef('onus').once('value')
+  ]).then(function(snaps) {
+    var olt   = snaps[0].val() || {};
+    var pons  = snaps[1].val() || {};
+    var infra = snaps[2].val() || {};
+    var onus  = snaps[3].val() || {};
+
+    // DGOs desta OLT — vinculados por olt_id ou por conexão de PON
+    var dgos = {};
+    Object.entries(infra).forEach(function(e) {
+      var d = e[1];
+      if (!d || d.type !== 'dgo') return;
+      var linked = d.olt_id === oltId;
+      if (!linked) linked = Object.values(pons).some(function(p){ return p && p.dgo_id === e[0]; });
+      if (linked) dgos[e[0]] = d;
+    });
+
+    // ONUs por PON key
+    var onusByPon = {};
+    Object.values(onus).forEach(function(u) {
+      if (u && u.olt_id === oltId && u.slot != null && u.port != null) {
+        var k = 's' + u.slot + '_p' + u.port;
+        if (!onusByPon[k]) onusByPon[k] = [];
+        onusByPon[k].push(u);
+      }
+    });
+
+    var slotCount  = olt.slot_count  || 4;
+    var ponPerSlot = olt.pon_per_slot || olt.gbics_per_slot || 8;
+    var orientIcon = olt.orientation === 'pe' ? '┃ Placas em pé' : '━ Placas deitadas';
+
+    // ── OLT chassis HTML ─────────────────────────────────────────
+    var oltHtml = '';
+    for (var sl = 1; sl <= slotCount; sl++) {
+      oltHtml += '<div style="margin-bottom:12px">'
+        + '<div style="font-size:.6rem;font-weight:700;color:#475569;letter-spacing:.1em;margin-bottom:5px;padding:2px 6px;background:#1a2a40;border-radius:3px;display:inline-block">SLOT ' + sl + '</div>'
+        + '<div style="display:flex;gap:3px;flex-wrap:wrap;background:#0a1628;padding:6px;border-radius:6px;border:1px solid #1e3a5f">';
+      var portCount = ((olt.slots || {})[sl] || {}).pon_count || ponPerSlot;
+      for (var po = 1; po <= portCount; po++) {
+        var pkey = 's' + sl + '_p' + po;
+        var cfg  = pons[pkey] || {};
+        var portOnus = onusByPon[pkey] || [];
+        var isConn   = !!(cfg.active && cfg.dgo_id);
+        var offCount = portOnus.filter(function(u){ return u.status === 'offline'; }).length;
+        var hasAlarm = offCount > 0;
+        // Rompimento: TODAS as ONUs da porta estão offline (≥1 ONU) → cabo rompido
+        var isRomped = portOnus.length >= 1 && offCount === portOnus.length;
+        var bg, bdr, clkAttr = '', extraBtn = '';
+        if (!cfg.active)  { bg='#0d1a2e'; bdr='#1e3a5f'; }
+        else if (isConn)  {
+          if (isRomped)      { bg='#7f1d1d'; bdr='#ef4444'; }
+          else if (hasAlarm) { bg='#431407'; bdr='#f97316'; }
+          else               { bg='#14532d'; bdr='#22c55e'; }
+          // 1×clique = iluminar cordão | 2×clique = desconectar
+          clkAttr = 'data-dgo="' + cfg.dgo_id + '" data-fiber="' + (cfg.dgo_fiber_key||'') + '"'
+            + ' onclick="sdrLpHighlight(\'pon\',\'' + sl + '_' + po + '\')"'
+            + ' ondblclick="event.stopPropagation();sdrLpDisconnect(\'' + oltId + '\',' + sl + ',' + po + ')"';
+        } else {
+          // Ativa sem DGO → 1×clique seleciona para conectar
+          bg='#1c1500'; bdr='#f59e0b';
+          clkAttr = 'onclick="sdrLpPonSelect(\'' + oltId + '\',' + sl + ',' + po + ')"';
+        }
+        // Stub — pequena linha saindo da direita da porta (indica saída do cordão)
+        var stub = isConn
+          ? '<div style="position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:6px;height:2px;background:' + bdr + ';opacity:.9"></div>'
+          : '';
+        var ponTitle = isConn
+          ? (isRomped ? '⚡ ROMPIMENTO — ' : '') + 'Slot '+sl+' PON '+po+' → '+(dgos[cfg.dgo_id]||{}).nome+' / '+cfg.dgo_fiber_key
+            + ' · '+offCount+'/'+portOnus.length+' offline'
+            + ' | 1×clique ilumina · 2×clique desconecta'
+          : (cfg.active ? 'Slot '+sl+' PON '+po+' — livre · clique para conectar' : 'Slot '+sl+' PON '+po+' — Inativa');
+        oltHtml += '<div id="lp-pon-' + sl + '_' + po + '" ' + clkAttr
+          + ' title="' + ponTitle + '"'
+          + ' style="position:relative;width:30px;height:30px;border-radius:4px;background:' + bg + ';border:2px solid ' + bdr + ';cursor:' + (cfg.active?'pointer':'default') + ';display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#e2e8f0;font-weight:700;flex-shrink:0;user-select:none;transition:transform .12s" '
+          + 'onmouseover="if(this.style.cursor!==\'default\')this.style.transform=\'scale(1.15)\'" '
+          + 'onmouseout="this.style.transform=\'\'">'
+          + po + stub + '</div>';
+      }
+      oltHtml += '</div></div>';
+    }
+
+    // ── DGO panels HTML ───────────────────────────────────────────
+    var TC = ['#64748b','#fb923c','#84cc16','#38bdf8','#facc15','#c084fc','#f87171','#4ade80','#a16207','#2dd4bf','#818cf8','#fb7185'];
+    var TN = ['Cinza','Laranja','Verde','Azul','Amarelo','Violeta','Vermelho','V.Claro','Marrom','Teal','Índigo','Rosa'];
+    var dgoHtml = '';
+    var dgoEntries = Object.entries(dgos);
+
+    if (!dgoEntries.length) {
+      dgoHtml = '<div style="text-align:center;padding:40px;color:#334155;font-size:.82rem">'
+        + '<i class="fas fa-network-wired" style="font-size:2.5rem;display:block;margin-bottom:10px;opacity:.2"></i>'
+        + 'Nenhum DGO cadastrado<br><span style="font-size:.72rem">Clique em "Novo DGO" para criar</span></div>';
+    } else {
+      dgoEntries.forEach(function(de) {
+        var did = de[0], d = de[1];
+        var fibers = d.fibers || {};
+        var tCount = d.tube_count || 12, fpt = d.fiber_per_tube || 12;
+        var totalF = tCount * fpt;
+        var usedF  = Object.values(fibers).filter(function(f){ return f && f.status === 'used'; }).length;
+        var freeF  = totalF - usedF;
+        var dgoOrient = d.orientation === 'deitado' ? '📦' : '🗂';
+        var freeBadge = '<span style="font-size:.6rem;color:' + (freeF > 0 ? '#4ade80' : '#64748b') + ';margin-left:auto">'
+          + freeF + ' livres</span>';
+        dgoHtml += '<div style="margin-bottom:16px;background:#0a1628;border-radius:10px;padding:10px;border:1px solid #1e3a5f">'
+          + '<div style="font-size:.78rem;font-weight:700;color:#60a5fa;margin-bottom:8px;display:flex;align-items:center;gap:6px">'
+          + '<i class="fas fa-network-wired"></i> ' + (d.nome || did)
+          + ' <span style="font-size:.65rem;font-weight:400;color:#475569">' + dgoOrient + ' · ' + totalF + 'F</span>'
+          + freeBadge + '</div>';
+        for (var t2 = 1; t2 <= tCount; t2++) {
+          dgoHtml += '<div style="margin-bottom:5px">'
+            + '<div style="font-size:.6rem;color:#475569;margin-bottom:3px;display:flex;align-items:center;gap:3px">'
+            + '<span style="display:inline-block;width:7px;height:7px;border-radius:1px;background:' + TC[t2-1] + '"></span>'
+            + 'T' + t2 + ' ' + TN[t2-1] + '</div>'
+            + '<div style="display:flex;gap:2px;flex-wrap:wrap">';
+          for (var f2 = 1; f2 <= fpt; f2++) {
+            var fkey2 = 't' + t2 + 'f' + f2;
+            var fib2  = fibers[fkey2] || {};
+            var isFree = fib2.status !== 'used';
+            var fBg   = isFree ? '#050e1c' : '#0e2a1a';
+            var fBdr  = isFree ? TC[t2-1] + '44' : '#22c55e';
+            var fClr  = isFree ? TC[t2-1] + '88' : '#4ade80';
+            var fTip  = isFree
+              ? ('T'+t2+'F'+f2+' — Livre (selecione uma PON e clique aqui para conectar)')
+              : ('T'+t2+'F'+f2+' → Slot '+(fib2.slot||'?')+' PON '+(fib2.port||'?')+' · Clique para iluminar');
+            var stubL = !isFree ? '<div style="position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:6px;height:3px;background:' + fBdr + ';border-radius:2px 0 0 2px"></div>' : '';
+            var clkF  = isFree
+              ? ('class="lp-free-fiber" onclick="sdrLpFiberConnect(\'' + oltId + '\',\'' + did + '\',' + t2 + ',' + f2 + ')"')
+              : ('data-dgo="'+did+'" data-fiber="'+fkey2+'" data-slot="'+(fib2.slot||'')+'" data-port="'+(fib2.port||'')+'" onclick="sdrLpHighlight(\'fib\',\''+did+'_'+fkey2+'\')"');
+            dgoHtml += '<div id="lp-fib-' + did + '_' + fkey2 + '" ' + clkF
+              + ' title="' + fTip + '"'
+              + ' style="position:relative;width:22px;height:22px;border-radius:3px;background:' + fBg + ';border:1.5px solid ' + fBdr + ';cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:' + fClr + ';font-weight:700;transition:transform .1s" '
+              + 'onmouseover="this.style.transform=\'scale(1.2)\'" onmouseout="this.style.transform=\'\'">'
+              + f2 + stubL + '</div>';
+          }
+          dgoHtml += '</div></div>';
+        }
+        dgoHtml += '</div>';
+      });
+    }
+
+    // ── HTML compartilhado: status bar + 3 colunas + legenda ────────
+    var _sharedBody =
+      // Status bar (visível só no modo de conexão)
+      '<div id="lp-status" style="display:none;background:#1c1500;border-bottom:1px solid #f59e0b44;padding:7px 16px;font-size:.78rem;color:#fbbf24;align-items:center;gap:8px;flex-shrink:0"></div>'
+      // Body 3 colunas: OLT | Zona de Cordões | DGO
+      + '<div id="lp-body" style="flex:1;display:flex;overflow:hidden;position:relative;min-height:0">'
+      + '<svg id="lp-svg" style="position:absolute;inset:0;pointer-events:none;z-index:1;overflow:visible" width="100%" height="100%"></svg>'
+      + '<div id="lp-olt-panel" style="position:relative;z-index:2;width:310px;flex-shrink:0;overflow-y:auto;padding:10px 4px 10px 12px;background:#060d1c;border-right:1px solid #0f172a">'
+      + '<div style="font-size:.65rem;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<span><i class="fas fa-server"></i> OLT — EM PÉ</span>'
+      + '<span style="font-size:.57rem;font-weight:400;color:#374151">🟡 1×clique=conectar &nbsp;2×clique=desconectar</span></div>'
+      + oltHtml
+      + '</div>'
+      + '<div id="lp-cord-zone" style="position:relative;z-index:2;width:72px;flex-shrink:0;background:#020810;display:flex;align-items:center;justify-content:center;border-left:1px solid #0c1525;border-right:1px solid #0c1525;overflow:hidden">'
+      + '<span style="writing-mode:vertical-rl;font-size:.52rem;letter-spacing:.18em;color:#0f2040;user-select:none;font-weight:700">CORDÕES</span>'
+      + '</div>'
+      + '<div id="lp-dgo-panel" style="position:relative;z-index:2;flex:1;overflow-y:auto;padding:10px 12px 10px 4px;background:#030b18;border-left:1px solid #0f172a">'
+      + '<div style="font-size:.65rem;font-weight:700;color:#3b82f6;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<span><i class="fas fa-network-wired"></i> DGO — EM PÉ</span>'
+      + '<span style="font-size:.57rem;font-weight:400;color:#334155">1×clique=conectar</span></div>'
+      + dgoHtml
+      + '</div>'
+      + '</div>'
+      // Legenda
+      + '<div style="background:#1e293b;padding:6px 14px;display:flex;gap:12px;font-size:.67rem;color:#475569;flex-shrink:0;flex-wrap:wrap;border-top:1px solid #334155;align-items:center">'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#0e2a1a;border:1.5px solid #22c55e;border-radius:2px;margin-right:3px"></span>OK</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#431407;border:1.5px solid #f97316;border-radius:2px;margin-right:3px"></span>🟠 Rompimento parcial</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#7f1d1d;border:1.5px solid #ef4444;border-radius:2px;margin-right:3px"></span>🔴 Rompimento total</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#1c1500;border:1.5px solid #f59e0b;border-radius:2px;margin-right:3px"></span>Livre → conectar</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#0d1a2e;border:1.5px solid #1e3a5f;border-radius:2px;margin-right:3px"></span>Inativa</span>'
+      + '<span style="margin-left:auto;color:#f59e0b;font-size:.65rem"><i class="fas fa-plug"></i> 1×clique numa PON 🟡 → clique na fibra livre · 2×clique numa PON 🟢 → desconecta</span>'
+      + '</div>';
+
+    if (_inlineEl) {
+      // ── MODO INLINE — renderiza dentro da aba da página OLTs ──────
+      _inlineEl.innerHTML =
+        '<div style="height:100%;display:flex;flex-direction:column;background:#0f172a;overflow:hidden">'
+        // Header da aba com botões de ação
+        + '<div style="background:#1e293b;padding:9px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #334155;flex-wrap:wrap">'
+        + '<div style="width:26px;height:26px;background:linear-gradient(135deg,#6366f1,#7c3aed);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-project-diagram" style="color:#fff;font-size:.75rem"></i></div>'
+        + '<div style="min-width:0">'
+        + '<div style="font-weight:700;font-size:.85rem;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (olt.name || oltId) + '</div>'
+        + '<div style="font-size:.62rem;color:#475569">' + orientIcon + ' · ' + slotCount + ' slots · ' + (olt.gbics_per_slot || ponPerSlot) + ' GBICs/slot · IP: ' + (olt.ip_address || '—') + '</div>'
+        + '</div>'
+        + '<div style="margin-left:auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
+        + '<button onclick="sdrOltAddModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Editar dados da OLT"><i class="fas fa-edit"></i> Editar</button>'
+        + '<button onclick="sdrOltVisualModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Visualização do chassis"><i class="fas fa-th"></i> Chassis</button>'
+        + '<button onclick="sdrOltSlotAdd(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Gerenciar slots do chassis"><i class="fas fa-layer-group"></i> Slots</button>'
+        + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:#1e3a8a;border:1px solid #3b82f6;color:#93c5fd;border-radius:5px;cursor:pointer"><i class="fas fa-plus"></i> Novo DGO</button>'
+        + '<button onclick="sdrOltStartMapPlace(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:#14532d;border:1px solid #22c55e;color:#4ade80;border-radius:5px;cursor:pointer" title="Posicionar esta OLT no mapa"><i class="fas fa-map-marker-alt"></i> Posicionar</button>'
+        + '<button onclick="sdrOltTabSwitch(\'' + oltId + '\')" style="padding:4px 9px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#64748b;border-radius:5px;cursor:pointer" title="Atualizar painel"><i class="fas fa-sync-alt"></i></button>'
+        + '<button onclick="sdrOltDelete(\'' + oltId + '\')" style="padding:4px 9px;font-size:.72rem;background:#450a0a;border:1px solid #ef4444;color:#f87171;border-radius:5px;cursor:pointer" title="Excluir OLT"><i class="fas fa-trash"></i></button>'
+        + '</div></div>'
+        + _sharedBody
+        + '</div>';
+    } else {
+      // ── MODO MODAL — fallback quando a página OLTs não está ativa ──
+      var html = '<div id="sdr-lp-modal" style="position:fixed;inset:0;z-index:50002;background:rgba(2,6,23,.88);display:flex;align-items:stretch;justify-content:center;padding:8px">'
+        + '<div style="background:#0f172a;border-radius:14px;width:100%;max-width:1200px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.9)">'
+        + '<div style="background:#1e293b;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #334155">'
+        + '<div style="width:32px;height:32px;background:linear-gradient(135deg,#6366f1,#7c3aed);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-project-diagram" style="color:#fff;font-size:.85rem"></i></div>'
+        + '<div><div style="font-weight:700;font-size:.9rem;color:#f1f5f9">Painel de Conexão — ' + (olt.name || oltId) + '</div>'
+        + '<div style="font-size:.7rem;color:#64748b">' + orientIcon + ' · ' + slotCount + ' slots · ' + (olt.gbics_per_slot || ponPerSlot) + ' GBICs/slot</div></div>'
+        + '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">'
+        + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="background:#1e3a8a;border:1px solid #3b82f6;color:#93c5fd;padding:5px 11px;border-radius:6px;font-size:.73rem;cursor:pointer;white-space:nowrap"><i class="fas fa-plus"></i> Novo DGO</button>'
+        + '<button onclick="document.getElementById(\'sdr-lp-modal\').remove()" style="background:#ef4444;border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center">&times;</button>'
+        + '</div></div>'
+        + _sharedBody
+        + '</div></div>';
+      var prev = document.getElementById('sdr-lp-modal');
+      if (prev) prev.remove();
+      document.body.insertAdjacentHTML('beforeend', html);
+    }
+
+    // Desenha cordões após render
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { _sdrDrawAllCords(pons, dgos); });
+    });
+  });
+};
+
+// Desenha cordões com roteamento ortogonal (linhas retas + curvas de 90°)
+// Cordões saem pela LATERAL direita da OLT e entram pela LATERAL esquerda do DGO
+// Roteamento: porta → stub horizontal direita → zona de cordões (vertical) → stub horizontal esquerda → fibra
+function _sdrDrawAllCords(pons, dgos) {
+  var svg      = document.getElementById('lp-svg');
+  var body     = document.getElementById('lp-body');
+  var oltPanel = document.getElementById('lp-olt-panel');
+  var dgoPanel = document.getElementById('lp-dgo-panel');
+  var cordZone = document.getElementById('lp-cord-zone');
+  if (!svg || !body) return;
+
+  var br       = body.getBoundingClientRect();
+  // Limites da zona de cordões
+  var zoneL = cordZone ? cordZone.getBoundingClientRect().left  - br.left + 4 : (oltPanel ? oltPanel.getBoundingClientRect().right - br.left + 4 : 310);
+  var zoneR = cordZone ? cordZone.getBoundingClientRect().right - br.left - 4 : zoneL + 64;
+  var zoneW = Math.max(zoneR - zoneL, 10);
+
+  svg.innerHTML = ''; // limpa tudo
+
+  // Coleta todos os cordões existentes
+  var cords = [];
+  Object.entries(pons).forEach(function(e) {
+    var pkey = e[0], cfg = e[1];
+    if (!cfg || !cfg.active || !cfg.dgo_id || !cfg.dgo_fiber_key) return;
+    var m = pkey.match(/^s(\d+)_p(\d+)$/);
+    if (!m) return;
+    var ponEl = document.getElementById('lp-pon-' + m[1] + '_' + m[2]);
+    var fibEl = document.getElementById('lp-fib-' + cfg.dgo_id + '_' + cfg.dgo_fiber_key);
+    if (!ponEl || !fibEl) return;
+    var pr = ponEl.getBoundingClientRect();
+    var fr = fibEl.getBoundingClientRect();
+    cords.push({
+      id : m[1] + '_' + m[2],
+      x1 : pr.right - br.left,           // ponta direita da porta OLT
+      y1 : pr.top + pr.height / 2 - br.top,
+      x2 : fr.left  - br.left,           // ponta esquerda da fibra DGO
+      y2 : fr.top + fr.height / 2 - br.top
+    });
+  });
+
+  if (!cords.length) return;
+
+  // Distribui cordões em "lanes" dentro da zona para evitar sobreposição
+  // Ordena por y1 para atribuir lanes sequenciais
+  cords.sort(function(a, b) { return a.y1 - b.y1; });
+  var maxLanes  = Math.max(1, Math.min(cords.length, Math.floor(zoneW / 6)));
+  var laneStep  = zoneW / maxLanes;
+
+  cords.forEach(function(c, i) {
+    // X do segmento vertical dentro da zona (lane distribuída)
+    var laneX = zoneL + laneStep * (i % maxLanes) + laneStep / 2;
+    var r     = 7; // raio das curvas de 90°
+    var dy    = c.y2 - c.y1;
+    var d;
+
+    if (Math.abs(dy) < 2) {
+      // Mesmo Y — linha reta horizontal
+      d = 'M' + c.x1 + ',' + c.y1 + ' H' + c.x2;
+    } else {
+      var dir = dy > 0 ? 1 : -1;
+      var ar  = Math.min(r, Math.abs(dy) / 2); // raio adaptativo
+      // Caminho: saída direita → curva 90° para baixo/cima → vertical → curva 90° → entrada esquerda
+      d = 'M'  + c.x1              + ',' + c.y1
+        + ' H' + (laneX - ar)
+        + ' Q' + laneX + ',' + c.y1 + ' ' + laneX + ',' + (c.y1 + dir * ar)
+        + ' V' + (c.y2 - dir * ar)
+        + ' Q' + laneX + ',' + c.y2 + ' ' + (laneX + ar) + ',' + c.y2
+        + ' H' + c.x2;
+    }
+
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('id',           'lp-cord-' + c.id);
+    path.setAttribute('d',            d);
+    path.setAttribute('fill',         'none');
+    path.setAttribute('stroke',       '#1e3a5f');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('opacity',      '0.8');
+    svg.appendChild(path);
+  });
+}
+
+// Ilumina o caminho ao clicar numa porta ou fibra
+window.sdrLpHighlight = function(type, id) {
+  _sdrInjectLightCSS();
+  // Limpa highlights anteriores
+  document.querySelectorAll('.sdr-port-lit,.sdr-fib-lit').forEach(function(el){
+    el.classList.remove('sdr-port-lit','sdr-fib-lit');
+  });
+  var svg = document.getElementById('lp-svg');
+  if (svg) {
+    svg.querySelectorAll('[data-lit]').forEach(function(p){
+      p.removeAttribute('data-lit');
+      p.setAttribute('stroke', '#1e3a5f');
+      p.setAttribute('stroke-width', '1.5');
+      p.setAttribute('opacity', '0.55');
+      p.classList.remove('sdr-cord-active');
+    });
+  }
+
+  var ponEl, fibEl, cordId;
+  if (type === 'pon') {
+    ponEl = document.getElementById('lp-pon-' + id);
+    if (!ponEl) return;
+    var dgoId2  = ponEl.dataset.dgo;
+    var fibKey2 = ponEl.dataset.fiber;
+    if (!dgoId2 || !fibKey2) return;
+    fibEl  = document.getElementById('lp-fib-' + dgoId2 + '_' + fibKey2);
+    cordId = 'lp-cord-' + id;
+  } else {
+    fibEl = document.getElementById('lp-fib-' + id);
+    if (!fibEl) return;
+    var sl2 = fibEl.dataset.slot, po2 = fibEl.dataset.port;
+    if (!sl2 || !po2) return;
+    ponEl  = document.getElementById('lp-pon-' + sl2 + '_' + po2);
+    cordId = 'lp-cord-' + sl2 + '_' + po2;
+  }
+
+  if (ponEl) ponEl.classList.add('sdr-port-lit');
+  if (fibEl) fibEl.classList.add('sdr-fib-lit');
+  var cord = cordId ? document.getElementById(cordId) : null;
+  if (cord) {
+    cord.setAttribute('stroke', '#818cf8');
+    cord.setAttribute('stroke-width', '3.5');
+    cord.setAttribute('opacity', '1');
+    cord.setAttribute('data-lit', '1');
+    cord.classList.add('sdr-cord-active');
+    cord.setAttribute('stroke-dasharray', '12 5');
+  }
+  if (fibEl) { try { fibEl.scrollIntoView({behavior:'smooth',block:'nearest'}); } catch(ex){} }
+  if (ponEl) { try { ponEl.scrollIntoView({behavior:'smooth',block:'nearest'}); } catch(ex){} }
+};
+
+// ── Estado de conexão interativa no painel lightpath ──────────────────
+var _sdrLpConnState = null; // { oltId, sl, po }
+
+// 1. Seleciona uma PON para entrar em modo de conexão
+window.sdrLpPonSelect = function(oltId, sl, po) {
+  _sdrInjectLightCSS();
+  // Limpa highlights de caminho óptico
+  document.querySelectorAll('.sdr-port-lit,.sdr-fib-lit').forEach(function(el){
+    el.classList.remove('sdr-port-lit','sdr-fib-lit');
+  });
+  var svg = document.getElementById('lp-svg');
+  if (svg) svg.querySelectorAll('[data-lit]').forEach(function(p){
+    p.removeAttribute('data-lit'); p.setAttribute('stroke','#1e3a5f');
+    p.setAttribute('stroke-width','1.5'); p.setAttribute('opacity','0.55');
+    p.classList.remove('sdr-cord-active');
+  });
+  var statusEl = document.getElementById('lp-status');
+  // Toggle: desseleciona se já está selecionada
+  if (_sdrLpConnState && _sdrLpConnState.sl == sl && _sdrLpConnState.po == po) {
+    var prevEl = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
+    if (prevEl) prevEl.classList.remove('sdr-lp-selected');
+    _sdrLpConnState = null;
+    if (statusEl) statusEl.style.display = 'none';
+    document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.remove('sdr-fib-connectable'); });
+    return;
+  }
+  // Remove seleção anterior
+  if (_sdrLpConnState) {
+    var prevEl2 = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
+    if (prevEl2) prevEl2.classList.remove('sdr-lp-selected');
+  }
+  _sdrLpConnState = { oltId: oltId, sl: sl, po: po };
+  // Destaca porta selecionada
+  var ponEl = document.getElementById('lp-pon-' + sl + '_' + po);
+  if (ponEl) ponEl.classList.add('sdr-lp-selected');
+  // Mostra barra de status
+  if (statusEl) {
+    statusEl.innerHTML = '<i class="fas fa-plug" style="color:#f59e0b"></i>'
+      + '&nbsp;<b style="color:#fbbf24">Slot ' + sl + ' · PON ' + po + '</b>'
+      + '<span style="color:#94a3b8;margin:0 10px">aguardando fibra</span>'
+      + '→ clique em uma <b style="color:#4ade80">fibra livre</b> no DGO para conectar o cordão'
+      + '<button onclick="_sdrLpCancelSelect()" style="margin-left:auto;background:none;border:1px solid #ef4444;color:#ef4444;border-radius:4px;padding:2px 10px;font-size:.7rem;cursor:pointer"><i class="fas fa-times"></i> Cancelar</button>';
+    statusEl.style.display = 'flex';
+  }
+  // Pulsa fibras livres como clicáveis
+  document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.add('sdr-fib-connectable'); });
+};
+
+// Cancela modo de conexão
+window._sdrLpCancelSelect = function() {
+  if (_sdrLpConnState) {
+    var el = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
+    if (el) el.classList.remove('sdr-lp-selected');
+  }
+  _sdrLpConnState = null;
+  document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.remove('sdr-fib-connectable'); });
+  var statusEl = document.getElementById('lp-status');
+  if (statusEl) statusEl.style.display = 'none';
+};
+
+// 2. Conecta a PON selecionada a uma fibra livre do DGO
+window.sdrLpFiberConnect = function(oltId, did, t, f) {
+  if (!_sdrLpConnState) return; // só age se houver PON selecionada
+  var sl = _sdrLpConnState.sl, po = _sdrLpConnState.po;
+  var fkey = 't' + t + 'f' + f;
+  var ponKey = 's' + sl + '_p' + po;
+  var ponRef   = sdrRef('olt_connections/' + oltId + '/pons/' + ponKey);
+  var fiberRef = sdrRef('infrastructure/' + did + '/fibers/' + fkey);
+  // Libera fibra anterior desta PON, se houver
+  ponRef.once('value').then(function(snap) {
+    var prev = snap.val() || {};
+    var chain = Promise.resolve();
+    if (prev.dgo_id && prev.dgo_fiber_key) {
+      chain = sdrRef('infrastructure/' + prev.dgo_id + '/fibers/' + prev.dgo_fiber_key)
+        .update({ status: 'free', olt_id: null, slot: null, port: null, label: null });
+    }
+    return chain;
+  }).then(function() {
+    return fiberRef.set({
+      status: 'used', olt_id: oltId,
+      slot: parseInt(sl), port: parseInt(po),
+      label: 'OLT Slot' + sl + '/PON' + po,
+      connected_at: new Date().toISOString()
+    });
+  }).then(function() {
+    return ponRef.update({
+      dgo_id: did, dgo_fiber_key: fkey,
+      active: true, updated_at: new Date().toISOString()
+    });
+  }).then(function() {
+    _sdrLpConnState = null;
+    if (typeof toast === 'function') toast('Cordão: Slot ' + sl + ' PON ' + po + ' → T' + t + 'F' + f, 'success');
+    sdrOltLightpathModal(oltId);
+  }).catch(function(err) {
+    if (typeof toast === 'function') toast('Erro: ' + (err.message || err), 'error');
+  });
+};
+
+// 3. Desconecta uma PON (remove do Firebase e atualiza fibra do DGO para livre)
+window.sdrLpDisconnect = function(oltId, sl, po) {
+  if (!confirm('Desconectar Slot ' + sl + ' PON ' + po + '?\nA fibra do DGO ficará livre.')) return;
+  var ponKey = 's' + sl + '_p' + po;
+  var ponRef = sdrRef('olt_connections/' + oltId + '/pons/' + ponKey);
+  ponRef.once('value').then(function(snap) {
+    var cfg = snap.val() || {};
+    var chain = Promise.resolve();
+    if (cfg.dgo_id && cfg.dgo_fiber_key) {
+      chain = sdrRef('infrastructure/' + cfg.dgo_id + '/fibers/' + cfg.dgo_fiber_key)
+        .update({ status: 'free', olt_id: null, slot: null, port: null, label: null });
+    }
+    return chain;
+  }).then(function() {
+    return ponRef.update({ dgo_id: null, dgo_fiber_key: null });
+  }).then(function() {
+    if (typeof toast === 'function') toast('PON desconectada · Slot ' + sl + ' PON ' + po, 'success');
+    sdrOltLightpathModal(oltId);
+  }).catch(function(err) {
+    if (typeof toast === 'function') toast('Erro: ' + (err.message || err), 'error');
+  });
+};
+
+
+window.sdrOltSlotInsert = function(oltId) {
+  var pos   = parseInt(document.getElementById('slot-pos').value);
+  var gbics = parseInt(document.getElementById('slot-gbics').value) || 8;
+  sdrRef('olt_connections/' + oltId).once('value').then(function(snap) {
+    var olt = snap.val() || {};
+    var slotCount = olt.slot_count || 4;
+    var pons = olt.pons || {};
+    var slots = olt.slots || {};
+    // Desloca todos os slots >= pos uma posição para cima
+    var updates = {};
+    for (var s = slotCount; s >= pos; s--) {
+      // Move PONs do slot s para s+1
+      var slotPons = {};
+      Object.entries(pons).forEach(function(e) {
+        var m = e[0].match(/^s(\d+)_p(\d+)$/);
+        if (m && parseInt(m[1]) === s) {
+          updates['olt_connections/' + oltId + '/pons/s' + (s+1) + '_p' + m[2]] = e[1];
+          updates['olt_connections/' + oltId + '/pons/' + e[0]] = null; // remove antigo
+        }
+      });
+      // Move config do slot
+      if (slots[s]) {
+        updates['olt_connections/' + oltId + '/slots/' + (s+1)] = slots[s];
+        updates['olt_connections/' + oltId + '/slots/' + s] = null;
+      }
+    }
+    // Insere o novo slot na posição
+    updates['olt_connections/' + oltId + '/slots/' + pos] = { pon_count: gbics };
+    updates['olt_connections/' + oltId + '/slot_count'] = slotCount + 1;
+    return firebase.database().ref().update(updates);
+  }).then(function() {
+    if (typeof toast === 'function') toast('Slot inserido na posição ' + pos + '!', 'success');
+    document.getElementById('sdr-slot-modal') && document.getElementById('sdr-slot-modal').remove();
+    sdrOltLightpathModal(oltId);
+  }).catch(function(e) { if (typeof toast === 'function') toast('Erro: ' + e.message, 'error'); });
+};
+
+// Remove um slot do chassis (desconecta PONs do slot)
+window.sdrOltSlotRemove = function(oltId) {
+  var slotNum = parseInt(document.getElementById('slot-remove-num').value);
+  if (!confirm('Remover Slot ' + slotNum + '? As PONs serão desconectadas.')) return;
+  sdrRef('olt_connections/' + oltId).once('value').then(function(snap) {
+    var olt = snap.val() || {};
+    var slotCount = olt.slot_count || 4;
+    var pons = olt.pons || {};
+    var slots = olt.slots || {};
+    var updates = {};
+    // Libera fibras do DGO das PONs deste slot
+    var fiberFrees = [];
+    Object.entries(pons).forEach(function(e) {
+      var m = e[0].match(/^s(\d+)_p(\d+)$/);
+      if (!m) return;
+      var s = parseInt(m[1]);
+      if (s === slotNum) {
+        // Remove PON e libera fibra do DGO
+        updates['olt_connections/' + oltId + '/pons/' + e[0]] = null;
+        var cfg = e[1] || {};
+        if (cfg.dgo_id && cfg.dgo_fiber_key) {
+          fiberFrees.push(sdrRef('infrastructure/' + cfg.dgo_id + '/fibers/' + cfg.dgo_fiber_key)
+            .update({ status:'free', olt_id:null, slot:null, port:null, label:null }));
+        }
+      } else if (s > slotNum) {
+        // Desloca slots superiores uma posição para baixo
+        updates['olt_connections/' + oltId + '/pons/s' + (s-1) + '_p' + m[2]] = e[1];
+        updates['olt_connections/' + oltId + '/pons/' + e[0]] = null;
+      }
+    });
+    // Desloca configs de slots
+    for (var i = slotNum + 1; i <= slotCount; i++) {
+      if (slots[i]) updates['olt_connections/' + oltId + '/slots/' + (i-1)] = slots[i];
+      updates['olt_connections/' + oltId + '/slots/' + i] = null;
+    }
+    updates['olt_connections/' + oltId + '/slots/' + slotNum] = null;
+    updates['olt_connections/' + oltId + '/slot_count'] = slotCount - 1;
+    return Promise.all(fiberFrees).then(function() {
+      return firebase.database().ref().update(updates);
+    });
+  }).then(function() {
+    if (typeof toast === 'function') toast('Slot ' + slotNum + ' removido!', 'success');
+    document.getElementById('sdr-slot-modal') && document.getElementById('sdr-slot-modal').remove();
+    sdrOltLightpathModal(oltId);
+  }).catch(function(e) { if (typeof toast === 'function') toast('Erro: ' + e.message, 'error'); });
+};
+
 
 // Redesenhar cordões ao redimensionar janela (zoom, resize)
 (function() {
@@ -5683,42 +6379,121 @@ let _sdrPolyArea        = null;
 let _sdrTmpMkrs         = [];
 window._sdrPendingDrawPoints = null;
 
+
+// ── GIS Draw Mode avançado (branch main) ─────────────────────────────────
 window.sdrDrawModeToggle = function() {
   if (!sdrMapReady || !sdrMap) { toast('Aguarde o mapa carregar', 'warning'); return; }
   if (document.getElementById('sdr-draw-panel')) { window._sdrCloseDrawMode(); return; }
   _sdrOpenDrawPanel();
 };
 
+// Estado global das novas ferramentas
+let _sdrSnapEnabled = false;
+let _sdrMoveSelected = null;
+let _sdrMoveSelMarker = null;
+let _sdrMeasurePts  = [];
+let _sdrMeasureLine = null;
+let _sdrMeasurePop  = null;
+let _sdrEditMode    = null; // 'move' | 'delete'
+
 function _sdrOpenDrawPanel() {
   const btn = document.getElementById('btn-draw-mode');
   if (btn) { btn.style.background = '#2563eb'; btn.innerHTML = '<i class="fas fa-times"></i> Fechar'; }
   const mapContainer = document.getElementById('sdr-map');
   if (!mapContainer) return;
+
+  // Inject button CSS once
+  if (!document.getElementById('sdr-dbt-css')) {
+    var s = document.createElement('style'); s.id = 'sdr-dbt-css';
+    s.textContent = [
+      '.sdr-dbt{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 4px 6px;border-radius:7px;cursor:pointer;font-size:.7rem;transition:all .12s;user-select:none}',
+      '.sdr-dbt b{font-weight:700;font-size:.73rem;line-height:1}',
+      '.sdr-dbt small{font-size:.58rem;opacity:.65;line-height:1}',
+      '.sdr-dbt.active{outline:2px solid #fff!important;transform:scale(.94);opacity:1!important}'
+    ].join('');
+    document.head.appendChild(s);
+  }
+
   const panel = document.createElement('div');
   panel.id = 'sdr-draw-panel';
-  panel.style.cssText = 'position:absolute;top:60px;left:10px;z-index:1000;background:#1e293b;color:#f1f5f9;border-radius:10px;padding:14px;width:230px;box-shadow:0 4px 24px rgba(0,0,0,.6);font-family:sans-serif';
+  panel.style.cssText = 'position:absolute;top:8px;left:8px;z-index:1000;background:#1e293b;color:#f1f5f9;border-radius:12px;padding:12px;width:248px;box-shadow:0 6px 28px rgba(0,0,0,.7);font-family:sans-serif';
   panel.innerHTML =
-    '<div style="font-weight:700;margin-bottom:12px;font-size:.88rem;color:#94a3b8"><i class="fas fa-draw-polygon"></i>&nbsp; MODO DESENHO — FTTH</div>' +
-    '<div style="display:flex;flex-direction:column;gap:8px">' +
-      '<button onclick="window._sdrStartDraw(\'cable\')" style="background:#0ea5e9;color:#fff;border:none;padding:9px 12px;border-radius:7px;cursor:pointer;text-align:left;font-size:.82rem">' +
-        '<i class="fas fa-minus"></i> <b>Cabo de Fibra Óptica</b><br><span style="font-size:.71rem;opacity:.8">Clique pontos • duplo-clique finaliza</span>' +
-      '</button>' +
-      '<button onclick="window._sdrStartDraw(\'cto\')" style="background:#7c3aed;color:#fff;border:none;padding:9px 12px;border-radius:7px;cursor:pointer;text-align:left;font-size:.82rem">' +
-        '<i class="fas fa-circle"></i> <b>CTO / Splitter</b><br><span style="font-size:.71rem;opacity:.8">Clique para posicionar no mapa</span>' +
-      '</button>' +
-      '<button onclick="window._sdrStartDraw(\'area\')" style="background:#059669;color:#fff;border:none;padding:9px 12px;border-radius:7px;cursor:pointer;text-align:left;font-size:.82rem">' +
-        '<i class="fas fa-vector-square"></i> <b>Área de Cobertura</b><br><span style="font-size:.71rem;opacity:.8">Clique pontos • duplo-clique fecha</span>' +
-      '</button>' +
-    '</div>' +
-    '<div id="sdr-draw-hint" style="margin-top:12px;font-size:.73rem;color:#64748b;min-height:28px;line-height:1.4"></div>' +
-    '<button onclick="window._sdrCloseDrawMode()" style="margin-top:10px;width:100%;background:#ef4444;color:#fff;border:none;padding:7px;border-radius:7px;cursor:pointer;font-size:.79rem">' +
-      '<i class="fas fa-times"></i> Cancelar / Fechar' +
-    '</button>';
+    // Título
+    '<div style="font-weight:700;font-size:.8rem;color:#60a5fa;display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    + '<span><i class="fas fa-tools"></i> EDIÇÃO GIS — FTTH</span>'
+    + '<button onclick="window._sdrCloseDrawMode()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:1.1rem;padding:0 2px;line-height:1">×</button>'
+    + '</div>'
+    // --- CRIAR ---
+    + '<div style="font-size:.6rem;color:#475569;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px">Criar</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:8px">'
+    + '<button id="dbt-cable"   class="sdr-dbt" onclick="window._sdrStartDraw(\'cable\')"   style="' + _dbtS('#0ea5e9') + '"><i class="fas fa-minus"></i><b>Cabo FO</b><small>pts+duplo</small></button>'
+    + '<button id="dbt-cto"     class="sdr-dbt" onclick="window._sdrStartDraw(\'cto\')"     style="' + _dbtS('#7c3aed') + '"><i class="fas fa-dot-circle"></i><b>CTO</b><small>1 clique</small></button>'
+    + '<button id="dbt-pole"    class="sdr-dbt" onclick="window._sdrStartDraw(\'pole\')"    style="' + _dbtS('#d97706') + '"><i class="fas fa-bolt"></i><b>Poste</b><small>1 clique</small></button>'
+    + '<button id="dbt-area"    class="sdr-dbt" onclick="window._sdrStartDraw(\'area\')"    style="' + _dbtS('#059669') + '"><i class="fas fa-vector-square"></i><b>Área</b><small>pts+duplo</small></button>'
+    + '<button id="dbt-measure" class="sdr-dbt" onclick="window._sdrStartDraw(\'measure\')" style="' + _dbtS('#f59e0b') + '"><i class="fas fa-ruler-combined"></i><b>Medir</b><small>2+ pts</small></button>'
+    + '</div>'
+    // --- EDITAR ---
+    + '<div style="font-size:.6rem;color:#475569;text-transform:uppercase;letter-spacing:.09em;margin-bottom:5px;padding-top:6px;border-top:1px solid #334155">Editar</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px">'
+    + '<button id="dbt-move"   class="sdr-dbt" onclick="window._sdrStartEditMode(\'move\')"   style="' + _dbtS('#06b6d4') + '"><i class="fas fa-arrows-alt"></i><b>Mover</b><small>selec+drag</small></button>'
+    + '<button id="dbt-delete" class="sdr-dbt" onclick="window._sdrStartEditMode(\'delete\')" style="' + _dbtS('#ef4444') + '"><i class="fas fa-trash-alt"></i><b>Deletar</b><small>1 clique</small></button>'
+    + '</div>'
+    // --- SNAP ---
+    + '<div style="display:flex;align-items:center;gap:7px;padding:5px 7px;background:#0f172a;border-radius:6px;cursor:pointer;margin-bottom:8px" onclick="window._sdrToggleSnap()">'
+    + '<div id="snap-tog" style="width:30px;height:16px;background:#334155;border-radius:8px;position:relative;transition:.2s;flex-shrink:0">'
+    + '<div id="snap-thm" style="width:12px;height:12px;background:#64748b;border-radius:50%;position:absolute;top:2px;left:2px;transition:.2s"></div></div>'
+    + '<span style="font-size:.73rem;color:#94a3b8"><i class="fas fa-magnet" style="color:#60a5fa;margin-right:3px"></i>Snap a elementos</span>'
+    + '</div>'
+    // --- HINT ---
+    + '<div id="sdr-draw-hint" style="font-size:.72rem;color:#60a5fa;min-height:0;margin-bottom:5px;line-height:1.4;padding:4px 7px;background:#0f172a;border-radius:5px;display:none"></div>'
+    // --- STATS ---
+    + '<div id="sdr-draw-stats" style="font-size:.7rem;color:#94a3b8;margin-bottom:7px;display:none;gap:10px">'
+    + '<span>Pts: <b id="dp-count">0</b></span><span>Dist: <b id="dp-dist">0.00</b> km</span>'
+    + '</div>'
+    // --- UNDO + FINALIZAR ---
+    + '<div style="display:flex;gap:5px;margin-bottom:8px">'
+    + '<button onclick="window._sdrUndoPt()" title="Ctrl+Z" style="flex:1;background:#374151;color:#f1f5f9;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:.73rem"><i class="fas fa-undo"></i> Desfazer</button>'
+    + '<button onclick="window._sdrFinalizeDraw()" title="Enter" style="flex:1;background:#16a34a;color:#fff;border:none;padding:6px;border-radius:6px;cursor:pointer;font-size:.73rem"><i class="fas fa-check"></i> Finalizar</button>'
+    + '</div>'
+    // --- ATALHOS ---
+    + '<div style="font-size:.62rem;color:#334155;text-align:center">'
+    + '<kbd style="background:#334155;border-radius:3px;padding:1px 4px;color:#94a3b8">Esc</kbd> cancela &nbsp;'
+    + '<kbd style="background:#334155;border-radius:3px;padding:1px 4px;color:#94a3b8">Enter</kbd> finaliza &nbsp;'
+    + '<kbd style="background:#334155;border-radius:3px;padding:1px 4px;color:#94a3b8">Ctrl+Z</kbd> desfaz'
+    + '</div>';
+
   mapContainer.appendChild(panel);
+
+  // Atalhos de teclado
+  window._sdrDrawKeyHandler = function(ev) {
+    if (ev.key === 'Escape') { window._sdrCloseDrawMode(); }
+    if (ev.key === 'Enter')  { window._sdrFinalizeDraw(); }
+    if ((ev.key === 'z' || ev.key === 'Z') && ev.ctrlKey) { ev.preventDefault(); window._sdrUndoPt(); }
+  };
+  document.addEventListener('keydown', window._sdrDrawKeyHandler);
 }
 
 window._sdrCloseDrawMode = function() {
   _sdrCancelCurrentDraw();
+  // Limpa modo de edição
+  _sdrEditMode = null;
+  _sdrMoveSelected = null;
+  if (_sdrMoveSelMarker) { try { sdrMap.removeLayer(_sdrMoveSelMarker); } catch(e){} _sdrMoveSelMarker = null; }
+  // Limpa medida
+  if (_sdrMeasureLine) { try { sdrMap.removeLayer(_sdrMeasureLine); } catch(e){} _sdrMeasureLine = null; }
+  if (_sdrMeasurePop)  { try { sdrMap.closePopup(_sdrMeasurePop); } catch(e){} _sdrMeasurePop = null; }
+  _sdrMeasurePts = [];
+  // Remove listeners de edição
+  if (sdrMap) {
+    sdrMap.off('click', _sdrMoveModeClick);
+    sdrMap.off('click', _sdrDeleteModeClick);
+    sdrMap.off('click', _sdrMeasureClick);
+  }
+  // Remove teclado
+  if (window._sdrDrawKeyHandler) {
+    document.removeEventListener('keydown', window._sdrDrawKeyHandler);
+    window._sdrDrawKeyHandler = null;
+  }
   const panel = document.getElementById('sdr-draw-panel');
   if (panel) panel.remove();
   const btn = document.getElementById('btn-draw-mode');
@@ -5726,6 +6501,187 @@ window._sdrCloseDrawMode = function() {
   sdrDrawModeActive = false;
   _sdrDrawCurrentMode = null;
   if (sdrMap) sdrMap.getContainer().style.cursor = '';
+};
+
+
+window._sdrToggleSnap = function() {
+  _sdrSnapEnabled = !_sdrSnapEnabled;
+  var tog = document.getElementById('snap-tog');
+  var thm = document.getElementById('snap-thm');
+  if (tog)  tog.style.background  = _sdrSnapEnabled ? '#2563eb' : '#334155';
+  if (thm)  { thm.style.background = _sdrSnapEnabled ? '#fff' : '#64748b'; thm.style.left = _sdrSnapEnabled ? '16px' : '2px'; }
+  toast(_sdrSnapEnabled ? '🧲 Snap ativo' : 'Snap desativado', 'info');
+};
+
+// Desfaz o último ponto
+window._sdrUndoPt = function() {
+  if (!_sdrDrawPts.length) return;
+  _sdrDrawPts.pop();
+  var m = _sdrTmpMkrs.pop();
+  if (m) { try { sdrMap.removeLayer(m); } catch(e){} }
+  if (_sdrPolyPrev) { try { sdrMap.removeLayer(_sdrPolyPrev); } catch(e){} _sdrPolyPrev = null; }
+  if (_sdrPolyArea) { try { sdrMap.removeLayer(_sdrPolyArea); } catch(e){} _sdrPolyArea = null; }
+  if (_sdrDrawCurrentMode === 'cable' && _sdrDrawPts.length >= 2) {
+    _sdrPolyPrev = L.polyline(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#0ea5e9',weight:3,dashArray:'8,4',opacity:.85}).addTo(sdrMap);
+  }
+  if (_sdrDrawCurrentMode === 'area' && _sdrDrawPts.length >= 2) {
+    _sdrPolyArea = L.polygon(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#059669',fillColor:'#059669',fillOpacity:.15,weight:2,dashArray:'6,3'}).addTo(sdrMap);
+  }
+  _sdrUpdateDrawStats();
+  toast('Ponto removido', 'info');
+};
+
+// Finaliza o desenho atual
+window._sdrFinalizeDraw = function() {
+  if (_sdrDrawCurrentMode === 'measure') { _sdrMeasureReset(); return; }
+  if (_sdrDrawCurrentMode && _sdrDrawPts.length >= 2) {
+    _sdrFinalizeDrawing(_sdrDrawPts.slice());
+  } else if (_sdrDrawPts.length < 2) {
+    toast('Adicione pelo menos 2 pontos para finalizar', 'warning');
+  }
+};
+
+// Atualiza contador de pontos e distância no painel
+function _sdrUpdateDrawStats() {
+  var cnt   = document.getElementById('dp-count');
+  var dist  = document.getElementById('dp-dist');
+  var stats = document.getElementById('sdr-draw-stats');
+  if (cnt) cnt.textContent = _sdrDrawPts.length;
+  if (_sdrDrawPts.length >= 2) {
+    var total = 0;
+    for (var i = 1; i < _sdrDrawPts.length; i++) total += _haversineM(_sdrDrawPts[i-1], _sdrDrawPts[i]);
+    if (dist)  dist.textContent  = (total/1000).toFixed(2);
+    if (stats) stats.style.display = 'flex';
+  } else {
+    if (stats) stats.style.display = 'none';
+  }
+}
+
+// Ferramenta MEDIR — clique acumula pontos e mostra distância
+function _sdrMeasureClick(e) {
+  L.DomEvent.stop(e);
+  var snapped = _sdrSnapToNearest(e.latlng.lat, e.latlng.lng);
+  var lat = snapped.lat, lng = snapped.lng;
+  _sdrMeasurePts.push({lat:lat, lng:lng});
+  var m = L.circleMarker([lat,lng], {radius:5,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:1,weight:2}).addTo(sdrMap);
+  _sdrTmpMkrs.push(m);
+  if (_sdrMeasurePts.length >= 2) {
+    if (_sdrMeasureLine) sdrMap.removeLayer(_sdrMeasureLine);
+    _sdrMeasureLine = L.polyline(_sdrMeasurePts.map(function(p){return [p.lat,p.lng];}), {color:'#f59e0b',weight:2,dashArray:'6,3',opacity:.9}).addTo(sdrMap);
+    var total = 0;
+    for (var i=1;i<_sdrMeasurePts.length;i++) total += _haversineM(_sdrMeasurePts[i-1], _sdrMeasurePts[i]);
+    var midIdx = Math.floor((_sdrMeasurePts.length-1)/2);
+    var midPt  = _sdrMeasurePts[midIdx];
+    if (_sdrMeasurePop) sdrMap.closePopup(_sdrMeasurePop);
+    _sdrMeasurePop = L.popup({closeOnClick:false, autoClose:false, className:'sdr-measure-pop'})
+      .setLatLng([midPt.lat, midPt.lng])
+      .setContent('<div style="font-size:.9rem;font-weight:700;color:#f59e0b">'
+        + (total < 1000 ? Math.round(total)+'m' : (total/1000).toFixed(2)+'km') + '</div>'
+        + '<div style="font-size:.7rem;color:#94a3b8">' + _sdrMeasurePts.length + ' pontos</div>')
+      .openOn(sdrMap);
+    // Atualiza hint
+    var hint = document.getElementById('sdr-draw-hint');
+    if (hint) hint.innerHTML = '<i class="fas fa-ruler-combined" style="color:#f59e0b"></i> <b>'
+      + (total < 1000 ? Math.round(total)+'m' : (total/1000).toFixed(2)+'km') + '</b> · clique para mais pontos';
+  }
+}
+
+function _sdrMeasureReset() {
+  _sdrMeasurePts = [];
+  _sdrTmpMkrs.forEach(function(m){ try{ sdrMap.removeLayer(m); }catch(e){} });
+  _sdrTmpMkrs = [];
+  if (_sdrMeasureLine) { try{ sdrMap.removeLayer(_sdrMeasureLine); }catch(e){} _sdrMeasureLine = null; }
+  if (_sdrMeasurePop)  { try{ sdrMap.closePopup(_sdrMeasurePop); }catch(e){} _sdrMeasurePop = null; }
+  var hint = document.getElementById('sdr-draw-hint');
+  if (hint) hint.innerHTML = '<i class="fas fa-ruler-combined" style="color:#f59e0b"></i> <b>Clique</b> para medir distâncias.';
+  toast('Medição zerada', 'info');
+}
+
+// Modo MOVER — 1º clique seleciona, 2º clique move
+function _sdrMoveModeClick(e) {
+  L.DomEvent.stop(e);
+  var lat = e.latlng.lat, lng = e.latlng.lng;
+  if (!_sdrMoveSelected) {
+    // Seleciona elemento mais próximo
+    var bestId = null, bestItem = null, bestDist2 = Infinity;
+    Object.entries(sdrInfraCache).forEach(function(kv) {
+      var item = kv[1];
+      if (!item || !item.lat || !item.lng) return;
+      var d = _haversineM({lat:lat,lng:lng}, {lat:item.lat,lng:item.lng});
+      if (d < bestDist2) { bestDist2=d; bestId=kv[0]; bestItem=item; }
+    });
+    if (!bestId || bestDist2 > 80) { toast('Nenhum elemento próximo. Clique mais perto de um elemento.', 'warning'); return; }
+    _sdrMoveSelected = {id:bestId, item:bestItem};
+    if (_sdrMoveSelMarker) try{ sdrMap.removeLayer(_sdrMoveSelMarker); }catch(e){}
+    _sdrMoveSelMarker = L.circleMarker([bestItem.lat,bestItem.lng], {radius:14,color:'#06b6d4',fillOpacity:0,weight:3,dashArray:'5,3'}).addTo(sdrMap);
+    var hint = document.getElementById('sdr-draw-hint');
+    if (hint) { hint.style.display='block'; hint.innerHTML='<i class="fas fa-arrows-alt" style="color:#06b6d4"></i> <b>'+(bestItem.name||bestItem.nome||bestId)+'</b> selecionado — clique no novo local.'; }
+    toast('Selecionado: ' + (bestItem.name||bestItem.nome||bestId), 'info');
+  } else {
+    // Move para nova posição
+    var snapped2 = _sdrSnapToNearest(lat, lng);
+    var newLat = snapped2.lat, newLng = snapped2.lng;
+    var id = _sdrMoveSelected.id;
+    var itm = _sdrMoveSelected.item;
+    sdrRef('infrastructure/' + id).update({lat:newLat, lng:newLng, updated_at:new Date().toISOString()}).then(function(){
+      toast((itm.name||itm.nome||id) + ' movido!', 'success');
+      if (_sdrMoveSelMarker) { try{ sdrMap.removeLayer(_sdrMoveSelMarker); }catch(e){} _sdrMoveSelMarker=null; }
+      _sdrMoveSelected = null;
+      var hint = document.getElementById('sdr-draw-hint');
+      if (hint) { hint.innerHTML='<i class="fas fa-arrows-alt" style="color:#06b6d4"></i> Clique em outro elemento para mover.'; }
+      sdrMapReloadData();
+    }).catch(function(err){ toast('Erro: ' + err.message, 'error'); });
+  }
+}
+
+// Modo DELETAR — clique no elemento o deleta
+function _sdrDeleteModeClick(e) {
+  L.DomEvent.stop(e);
+  var lat = e.latlng.lat, lng = e.latlng.lng;
+  var bestId = null, bestItem = null, bestDist3 = Infinity;
+  Object.entries(sdrInfraCache).forEach(function(kv) {
+    var item = kv[1];
+    if (!item || !item.lat || !item.lng) return;
+    var d = _haversineM({lat:lat,lng:lng},{lat:item.lat,lng:item.lng});
+    if (d < bestDist3) { bestDist3=d; bestId=kv[0]; bestItem=item; }
+  });
+  if (!bestId || bestDist3 > 80) { toast('Nenhum elemento próximo.', 'warning'); return; }
+  var nome = bestItem.name || bestItem.nome || bestId;
+  if (!confirm('Deletar "' + nome + '"?\n\nEsta ação não pode ser desfeita.')) return;
+  sdrRef('infrastructure/' + bestId).remove().then(function(){
+    delete sdrInfraCache[bestId];
+    toast('"' + nome + '" deletado', 'success');
+    sdrMapReloadData();
+  }).catch(function(err){ toast('Erro: ' + err.message, 'error'); });
+}
+
+// Ativa modo de edição (mover / deletar)
+window._sdrStartEditMode = function(mode) {
+  _sdrCancelCurrentDraw();
+  _sdrDrawCurrentMode = null;
+  _sdrEditMode = mode;
+  _sdrMoveSelected = null;
+  // Destaca botão
+  document.querySelectorAll('.sdr-dbt').forEach(function(b){ b.classList.remove('active'); });
+  var dbt = document.getElementById('dbt-' + mode);
+  if (dbt) dbt.classList.add('active');
+  if (sdrMap) {
+    sdrMap.off('click', _sdrOnDrawClick);
+    sdrMap.off('click', _sdrMoveModeClick);
+    sdrMap.off('click', _sdrDeleteModeClick);
+    sdrMap.off('click', _sdrMeasureClick);
+    sdrMap.getContainer().style.cursor = mode === 'delete' ? 'crosshair' : 'move';
+    if (mode === 'move')   sdrMap.on('click', _sdrMoveModeClick);
+    if (mode === 'delete') sdrMap.on('click', _sdrDeleteModeClick);
+  }
+  var hint = document.getElementById('sdr-draw-hint');
+  if (hint) {
+    hint.style.display = 'block';
+    hint.innerHTML = mode === 'move'
+      ? '<i class="fas fa-arrows-alt" style="color:#06b6d4"></i> 1º clique: selecionar. 2º clique: mover para o novo local.'
+      : '<i class="fas fa-trash-alt" style="color:#ef4444"></i> Clique em um elemento do mapa para deletá-lo.';
+  }
+  toast('Modo ' + (mode === 'move' ? 'Mover' : 'Deletar') + ' ativo', 'info');
 };
 
 window._sdrStartDraw = function(mode) {
@@ -5748,6 +6704,7 @@ window._sdrStartDraw = function(mode) {
   const labels = { cable: 'Cabo', cto: 'CTO', area: 'Área' };
   toast('Ferramenta ' + (labels[mode] || mode) + ' ativa. Clique no mapa.', 'info');
 };
+
 
 function _sdrOnDrawClick(e) {
   if (!_sdrDrawCurrentMode) return;
@@ -6022,6 +6979,92 @@ function _haversineM(a,b) {
 }
 
 // ── Renderização do mapa (Sprint 5 sobrescreve) ──
+
+// ── Power Budget + Viabilidade (branch main) ─────────────────────────────
+window.sdrPowerBudgetCalc = function(itemId, oltBudgetDb) {
+  const budget = oltBudgetDb || SDR_OLT_BUDGET.default;
+  const path = _sdrTracePath(itemId);
+  let totalLoss = SDR_PERDAS.conector_par;
+  const detail = [{ label:'Conectores OLT+ONU (par)', loss: SDR_PERDAS.conector_par }];
+
+  path.forEach(({ id, item }, idx) => {
+    if (!item) return;
+    // Splitter: usa ratio definido no item
+    if ((item.type==='splitter'||item.type==='cto') && item.ratio) {
+      const loss = SDR_PERDAS.splitter[item.ratio] || 0;
+      if (loss > 0) {
+        totalLoss += loss;
+        detail.push({ label:`Splitter ${item.ratio} — ${item.nome||item.name||id}`, loss });
+      }
+    }
+    // Cabo com comprimento real
+    if (item.type==='cable' && item.length_m) {
+      const loss = +(( item.length_m / 1000) * SDR_PERDAS.cabo_db_km).toFixed(2);
+      totalLoss += loss;
+      detail.push({ label:`Cabo ${item.name||id} (${Math.round(item.length_m)}m)`, loss });
+      return;
+    }
+    // Estimativa pelo gap geográfico para o próximo elemento
+    if (item.lat && item.lng && idx < path.length - 1) {
+      const nxt = path[idx+1]?.item;
+      if (nxt?.lat && nxt?.lng) {
+        const dm = _haversineM({lat:item.lat,lng:item.lng},{lat:nxt.lat,lng:nxt.lng});
+        if (dm > 20) {
+          const loss = +((dm/1000)*SDR_PERDAS.cabo_db_km).toFixed(2);
+          totalLoss += loss;
+          detail.push({ label:`Cabo estimado ~${Math.round(dm)}m`, loss });
+        }
+      }
+    }
+  });
+
+  const margem = +(budget - totalLoss).toFixed(2);
+  const status = margem < 0 ? 'crit' : margem < SDR_PERDAS.margem_min ? 'warn' : 'ok';
+  return { totalLoss:+totalLoss.toFixed(2), margem, budget, status, detail, hops:path.length };
+};
+
+// ════════════════════════════════════════════════════
+// MODAL DE PORTAS DA CTO — click na CTO no mapa
+// ════════════════════════════════════════════════════
+
+window.sdrViabilidadeToggle = function() {
+  _sdrViabMode = !_sdrViabMode;
+  const btn = document.getElementById('btn-viabilidade');
+  if (btn) {
+    btn.style.background = _sdrViabMode ? '#16a34a' : '';
+    btn.style.color      = _sdrViabMode ? '#fff'    : '';
+    btn.style.borderColor= _sdrViabMode ? '#15803d' : '';
+  }
+  if (sdrMap) sdrMap.getContainer().style.cursor = _sdrViabMode ? 'crosshair' : '';
+  if (!_sdrViabMode && _sdrViabMarker) { sdrMap.removeLayer(_sdrViabMarker); _sdrViabMarker=null; }
+  const ex = document.getElementById('viab-modal-ov');
+  if (!_sdrViabMode && ex) ex.remove();
+  toast(_sdrViabMode ? '📍 Clique no mapa para verificar viabilidade' : 'Modo viabilidade desativado', 'info');
+};
+
+window.sdrViabilidadeCheck = function(lat, lng, radiusM) {
+  radiusM = radiusM || 500;
+  const results = [];
+  Object.entries(sdrInfraCache).forEach(([id,item]) => {
+    if (!item || !item.lat || !item.lng) return;
+    if (item.type!=='cto' && item.type!=='splitter') return;
+    const dist = Math.round(_haversineM({lat,lng},{lat:item.lat,lng:item.lng}));
+    if (dist > radiusM) return;
+    const cap    = parseInt(item.total_ports)||0;
+    const used   = parseInt(item.used_ports)||0;
+    const livres = Math.max(0, cap-used);
+    const pct    = cap>0 ? Math.round((used/cap)*100) : 0;
+    const pb     = sdrPowerBudgetCalc(id);
+    results.push({id,item,dist,cap,used,livres,pct,pb});
+  });
+  // Ranking: prioriza portas livres + sinal OK + distância curta
+  results.sort((a,b) => {
+    const s = r => (r.livres>0?0:2) + (r.pb.status==='ok'?0:r.pb.status==='warn'?.5:1) + (r.dist/500);
+    return s(a)-s(b);
+  });
+  _sdrViabModal(lat, lng, results.slice(0,12), radiusM);
+};
+
 window.sdrMapRenderInfra = function() {
   sdrLayers.poles.clearLayers();
   sdrLayers.ctos.clearLayers();
