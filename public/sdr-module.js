@@ -304,11 +304,15 @@
 const SDR_TENANT = 'default_tenant';
 const SDR_BASE = `sdr_comercial/${SDR_TENANT}`;
 const INFRA_TYPES = {
-  pole:     {label:'Poste',    icon:'fa-bolt',         color:'#d97706', iconClass:'pole'},
-  cto:      {label:'CTO',      icon:'fa-box',          color:'#2563eb', iconClass:'cto'},
-  cable:    {label:'Cabo',     icon:'fa-wave-square',  color:'#16a34a', iconClass:'cable'},
-  splitter: {label:'Splitter', icon:'fa-code-branch',  color:'#9333ea', iconClass:'splitter'},
-  olt:      {label:'OLT',      icon:'fa-server',       color:'#dc2626', iconClass:'olt'}
+  pole:     {label:'Poste',             icon:'fa-bolt',           color:'#d97706', iconClass:'pole'},
+  cto:      {label:'CTO',               icon:'fa-box',            color:'#2563eb', iconClass:'cto'},
+  ceo:      {label:'CEO',               icon:'fa-project-diagram',color:'#2563eb', iconClass:'cto'},
+  rt:       {label:'Reserva Técnica',   icon:'fa-tape',           color:'#16a34a', iconClass:'cable'},
+  emd:      {label:'Emenda',            icon:'fa-link',           color:'#0891b2', iconClass:'cto'},
+  spl:      {label:'Splitter',          icon:'fa-code-branch',    color:'#9333ea', iconClass:'splitter'},
+  cable:    {label:'Cabo',              icon:'fa-wave-square',    color:'#16a34a', iconClass:'cable'},
+  splitter: {label:'Splitter',          icon:'fa-code-branch',    color:'#9333ea', iconClass:'splitter'},
+  olt:      {label:'OLT',               icon:'fa-server',         color:'#dc2626', iconClass:'olt'}
 };
 
 // ── PADRÃO DE CORES DE FIBRA ──
@@ -802,6 +806,29 @@ window.sdrOpenInfraPanel = function(id, item) {
   if (!spTitle || !spBody || !spPanel) { console.warn('[SDR] Side panel elements not found'); return; }
   spTitle.textContent = `${cfg.label}: ${item.name||item.code||''}`;
   let html = '';
+
+  // Reserva Técnica — exibe apenas metragem
+  var isRT = item.cto_type === 'rt' || (item.name || '').toUpperCase() === 'RT';
+  if (isRT) {
+    var metros = item.comprimento_m || item.metragem_m || item.length_m || '';
+    html += '<div class="sp-section">'
+      + '<div class="sp-section-title"><i class="fas fa-tape" style="color:#16a34a"></i> Reserva Técnica de Cabo</div>'
+      + '<div style="text-align:center;padding:18px 0">'
+      + '<div style="font-size:2.5rem;font-weight:800;color:#16a34a">' + (metros || '—') + (metros ? '<span style="font-size:1rem;font-weight:400;color:#64748b"> m</span>' : '') + '</div>'
+      + '<div style="font-size:.8rem;color:#64748b;margin-top:4px">Metragem reservada</div>'
+      + '</div>'
+      + (item.lat && item.lng ? '<div class="sp-row"><span class="sp-label">Coordenadas</span><span class="sp-val">' + item.lat.toFixed(5) + ', ' + item.lng.toFixed(5) + '</span></div>' : '')
+      + (item.notes ? '<div class="sp-row"><span class="sp-label">Observações</span><span class="sp-val">' + item.notes + '</span></div>' : '')
+      + '</div>'
+      + '<div style="display:flex;gap:8px;margin-top:16px">'
+      + '<button class="btn-primary" onclick="sdrRtEditMetragem('' + id + '',' + (metros||0) + ')" style="flex:1;padding:8px"><i class="fas fa-ruler"></i> Definir Metragem</button>'
+      + '<button class="btn-primary" onclick="sdrInfraEdit('' + id + '')" style="padding:8px 14px"><i class="fas fa-edit"></i></button>'
+      + '<button class="btn-danger" onclick="sdrInfraDelete('' + id + '')" style="padding:8px 16px"><i class="fas fa-trash"></i></button>'
+      + '</div>';
+    document.getElementById('sp-body').innerHTML = html;
+    document.getElementById('sdr-side-panel').classList.add('open');
+    return;
+  }
 
   html += `<div class="sp-section">
     <div class="sp-section-title"><i class="fas ${cfg.icon}" style="color:${cfg.color}"></i> Informações</div>
@@ -9020,6 +9047,106 @@ if (typeof _origAlertasShow === 'function' && !_origAlertasShow._sdrRtPatched) {
   _wRt._sdrPatched = _wRt._sdrRtPatched = true;
   window.showPage = _wRt;
 }
+
+// Edita metragem de Reserva Técnica
+window.sdrRtEditMetragem = function(id, metrosAtual) {
+  var val = prompt('Metragem da Reserva Técnica (em metros):', metrosAtual || '');
+  if (val === null) return;
+  var metros = parseFloat(val);
+  if (isNaN(metros) || metros < 0) { alert('Valor inválido. Digite apenas números.'); return; }
+  sdrRef('infrastructure/' + id + '/comprimento_m').set(metros).then(function() {
+    if (window.sdrInfraCache && window.sdrInfraCache[id]) {
+      window.sdrInfraCache[id].comprimento_m = metros;
+    }
+    // Reabre o painel com valor atualizado
+    if (typeof sdrOpenInfraPanel === 'function') {
+      sdrOpenInfraPanel(id, window.sdrInfraCache[id] || {comprimento_m: metros});
+    }
+  }).catch(function(e) { alert('Erro ao salvar: ' + e.message); });
+};
+
+
+// ── FERRAMENTAS DE CONVERSÃO BULK ─────────────────────────────────────────
+// Converte itens CEO com nome prefixado "CTO..." → "CEO..."
+window.sdrConverterCtoCeo = function() {
+  var infra = window.sdrInfraCache || {};
+  var candidatos = Object.entries(infra).filter(function(e) {
+    var i = e[1];
+    return i.cto_type === 'ceo' && (i.name || '').match(/^CTO/i);
+  });
+
+  if (candidatos.length === 0) {
+    alert('Nenhum item CEO com nome "CTO..." encontrado.');
+    return;
+  }
+
+  if (!confirm('Converter ' + candidatos.length + ' itens:\n' +
+    candidatos.slice(0,5).map(function(e){ return '  ' + e[1].name; }).join('\n') +
+    (candidatos.length > 5 ? '\n  ...e mais ' + (candidatos.length - 5) : '') +
+    '\n\nTrocar prefixo CTO → CEO no nome?')) return;
+
+  var total = candidatos.length, feitos = 0, erros = 0;
+  candidatos.forEach(function(entry) {
+    var id = entry[0], item = entry[1];
+    var novoNome = item.name.replace(/^CTO/i, 'CEO');
+    sdrRef('infrastructure/' + id + '/name').set(novoNome)
+      .then(function() {
+        feitos++;
+        window.sdrInfraCache[id].name = novoNome;
+        if (feitos + erros === total) {
+          alert('Conversão concluída!\n' + feitos + ' renomeados' + (erros ? ', ' + erros + ' erros' : '') + '.\nRecarregue o mapa para ver as mudanças.');
+          if (typeof sdrLoadInfra === 'function') sdrLoadInfra();
+        }
+      })
+      .catch(function() {
+        erros++;
+        if (feitos + erros === total) {
+          alert('Concluído com ' + erros + ' erros. ' + feitos + ' renomeados.');
+        }
+      });
+  });
+};
+
+// Converte itens RT (Reserva Técnica) com nome "RT" → nome descritivo
+window.sdrConverterRtNome = function() {
+  var infra = window.sdrInfraCache || {};
+  // RT: items com name === 'RT' ou que começam com 'RT'
+  var candidatos = Object.entries(infra).filter(function(e) {
+    var i = e[1];
+    return (i.name || '').match(/^RT$/i) || (i.cto_type === 'rt' && (i.name || '').match(/^RT/i));
+  });
+
+  if (candidatos.length === 0) {
+    alert('Nenhum item RT encontrado.');
+    return;
+  }
+
+  var novoNome = prompt(
+    'Encontrados ' + candidatos.length + ' itens com nome "RT".\n' +
+    'Digite o prefixo para o novo nome (ex: "Reserva Técnica"):',
+    'Reserva Técnica'
+  );
+  if (!novoNome) return;
+
+  var total = candidatos.length, feitos = 0, erros = 0;
+  candidatos.forEach(function(entry) {
+    var id = entry[0], item = entry[1];
+    // Se nome é só "RT", substitui por novoNome; senão, troca prefixo RT por novoNome
+    var nomeAtual = item.name || 'RT';
+    var nomeFinal = nomeAtual === 'RT' ? novoNome : nomeAtual.replace(/^RT/i, novoNome);
+    sdrRef('infrastructure/' + id + '/name').set(nomeFinal)
+      .then(function() {
+        feitos++;
+        window.sdrInfraCache[id].name = nomeFinal;
+        if (feitos + erros === total) {
+          alert('Conversão RT concluída!\n' + feitos + ' renomeados.');
+          if (typeof sdrLoadInfra === 'function') sdrLoadInfra();
+        }
+      })
+      .catch(function() { erros++; });
+  });
+};
+
 
 // Fecha a IIFE (function(){"use strict"; ...}) que envolve todo o codigo SDR
 }());

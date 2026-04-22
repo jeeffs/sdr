@@ -15,6 +15,12 @@ cálculo financeiro, relatórios, EPI/segurança e assinatura digital.
 
 ---
 
+## 🌐 IDIOMA
+
+**Sempre escreva em Português Brasil** — código, comentários, mensagens ao usuário, respostas no chat, tudo. Sem exceções.
+
+---
+
 ## ⚠️ REGRAS DE OURO — NUNCA VIOLE
 
 ### 1. O app está SEMPRE em uso — nunca pode parar
