@@ -541,6 +541,11 @@ let sdrInfraCache = {};
 let sdrClientesCache = {};
 let sdrOltsCache = {};
 let sdrAlertasCache = {};
+// Expoe caches no window para acesso em onclick inline
+window.sdrInfraCache    = sdrInfraCache;
+window.sdrClientesCache = sdrClientesCache;
+window.sdrOltsCache     = sdrOltsCache;
+window.sdrAlertasCache  = sdrAlertasCache;
 
 // ── REFERÊNCIAS FIREBASE ──
 function sdrRef(path) { return db.ref(`${SDR_BASE}/${path}`); }
@@ -594,25 +599,10 @@ window.sdrMapInit = function() {
   sdrMapReady = true;
   setTimeout(() => sdrMap.invalidateSize(), 200);
 
-  // Listener de clique no mapa — capturar coords (edição) OU verificar viabilidade
+  // Listener de clique no mapa — capturar coordenadas quando card de edição está aberto
   sdrMap.on('click', function(e) {
-    const lat = e.latlng.lat, lng = e.latlng.lng;
     if (window.sdrMapClickCapture) {
-      window.sdrMapClickCapture(lat, lng);
-      return;
-    }
-    if (_sdrViabMode) {
-      // Remove marcador anterior
-      if (_sdrViabMarker) sdrMap.removeLayer(_sdrViabMarker);
-      _sdrViabMarker = L.marker([lat, lng], {
-        icon: L.divIcon({
-          className: '',
-          html: '<div style="width:20px;height:20px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>',
-          iconSize: [20,20], iconAnchor: [10,10]
-        }),
-        zIndexOffset: 9999
-      }).addTo(sdrMap);
-      sdrViabilidadeCheck(lat, lng, 500);
+      window.sdrMapClickCapture(e.latlng.lat, e.latlng.lng);
     }
   });
 
@@ -625,18 +615,21 @@ function sdrMapReloadData() {
   // Carregar infra
   sdrRef('infrastructure').once('value').then(snap => {
     sdrInfraCache = snap.val() || {};
+    window.sdrInfraCache = sdrInfraCache;
     sdrMapRenderInfra();
     sdrUpdateMapInfo();
   });
   // Carregar clientes
   sdrRef('clients').once('value').then(snap => {
     sdrClientesCache = snap.val() || {};
+    window.sdrClientesCache = sdrClientesCache;
     sdrMapRenderClients();
     sdrUpdateMapInfo();
   });
   // Carregar OLTs
   sdrRef('olt_connections').once('value').then(snap => {
     sdrOltsCache = snap.val() || {};
+    window.sdrOltsCache = sdrOltsCache;
     sdrMapRenderOlts();
     sdrUpdateMapInfo();
   });
@@ -930,23 +923,6 @@ window.sdrToggleMapClickMode = function() {
 
 // Chamado pelo listener de clique no mapa (registrado em sdrRenderMap)
 window.sdrMapClickCapture = function(lat, lng) {
-  // Modo de posicionamento de OLT — salva lat/lng direto no Firebase
-  if (_sdrOltPlaceMode) {
-    var mode = _sdrOltPlaceMode;
-    _sdrOltPlaceMode = null;
-    var _placeMapEl = document.getElementById('sdr-map');
-    if (_placeMapEl) _placeMapEl.style.cursor = '';
-    var _placeBanner = document.getElementById('sdr-olt-place-banner');
-    if (_placeBanner) _placeBanner.remove();
-    sdrRef('olt_connections/' + mode.oltId).update({ lat: lat, lng: lng }).then(function() {
-      if (typeof toast === 'function') toast('📍 ' + mode.name + ' posicionada no mapa!', 'success');
-      if (typeof sdrLoadInfra === 'function') sdrLoadInfra();
-      else if (typeof sdrMap !== 'undefined' && typeof sdrMapRenderOlts === 'function') sdrMapRenderOlts();
-    }).catch(function(e) {
-      if (typeof toast === 'function') toast('Erro ao salvar posição: ' + e.message, 'error');
-    });
-    return true;
-  }
   if (!_sdrMapClickMode) return false;
   const latEl = document.getElementById('sdr-f-lat');
   const lngEl = document.getElementById('sdr-f-lng');
@@ -1327,6 +1303,7 @@ window.sdrInfraRender = function() {
   // Carregar dados
   sdrRef('infrastructure').once('value').then(snap => {
     sdrInfraCache = snap.val() || {};
+    window.sdrInfraCache = sdrInfraCache;
     _renderInfraGrid();
   });
 };
@@ -1406,6 +1383,7 @@ window.sdrInfraAdd = function() {
 window.sdrClientesRender = function() {
   sdrRef('clients').once('value').then(snap => {
     sdrClientesCache = snap.val() || {};
+    window.sdrClientesCache = sdrClientesCache;
     _renderClientesLista();
   });
 };
@@ -1645,6 +1623,7 @@ window.sdrClienteDelete = async function(id) {
 window.sdrOltsRender = function() {
   sdrRef('olt_connections').once('value').then(snap => {
     sdrOltsCache = snap.val() || {};
+    window.sdrOltsCache = sdrOltsCache;
     const el = document.getElementById('olts-lista');
     if (!el) return;
     const items = Object.entries(sdrOltsCache);
@@ -1686,6 +1665,7 @@ window.sdrOltAdd = function() {
 window.sdrAlertasRender = function() {
   sdrRef('alerts').once('value').then(snap => {
     sdrAlertasCache = snap.val() || {};
+    window.sdrAlertasCache = sdrAlertasCache;
     const el = document.getElementById('alertas-lista');
     if (!el) return;
     const items = Object.entries(sdrAlertasCache).sort((a,b) => (b[1].created_at||'').localeCompare(a[1].created_at||''));
@@ -2097,6 +2077,7 @@ window.sdrOpenClientePanel = function(id, c) {
   if (Object.keys(sdrInfraCache).length === 0) {
     sdrRef('infrastructure').once('value').then(snap => {
       sdrInfraCache = snap.val() || {};
+    window.sdrInfraCache = sdrInfraCache;
       _buildClientePanel(id, c);
     });
   } else {
@@ -2276,10 +2257,6 @@ window.sdrAutoLinkCTO = async function() {
 };
 
 // ════════════════════════════════════════════════════
-<<<<<<< HEAD
-// ════════════════════════════════════════════════════
-// OLTs — ABA PRINCIPAL (sistema de abas por OLT)
-=======
 // SPRINT 4 — OLTs TAB INTERFACE + CHASSIS INLINE + CORD DRAWING
 // ════════════════════════════════════════════════════
 
@@ -2565,6 +2542,701 @@ window.sdrOltInlineRender = function(oltId) {
     }, 300);
   });
 };
+
+// ── OLT Chassis + Lightpath + Slots (branch main) ────────────────────────
+window.sdrOltChassisPreview = function() {
+  var brand  = (document.getElementById('sdr-olt-brand')  || {}).value || '';
+  var model  = (document.getElementById('sdr-olt-model-sel') || {}).value || '';
+  var bd = (SDR_OLT_MODELS[brand] || {});
+  var md = (bd.models || {})[model] || {};
+  var prev = document.getElementById('olt-chassis-prev');
+  if (!prev) return;
+
+  var slots   = parseInt((document.getElementById('sdr-olt-slots')  || {}).value) || md.slots  || 4;
+  var gbics   = parseInt((document.getElementById('sdr-olt-gbics')  || {}).value) || md.gbics  || 8;
+  var orient  = (document.getElementById('sdr-olt-orient') || {}).value || md.orient || 'deitada';
+  var chassis = md.chassis || '#0d1117';
+  var plate   = md.plate   || '#1e3a5f';
+  var bColor  = bd.brandColor || '#374151';
+  var bLabel  = bd.label || 'OLT';
+  var prCount = Math.min(gbics, md.ports_per_row || gbics); // portas por linha no preview
+  var isVert  = orient === 'pe';
+
+  var rows = '';
+  if (!isVert) {
+    // Deitada: slots em linhas
+    var show = Math.min(slots, 8);
+    for (var s = 1; s <= show; s++) {
+      rows += '<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">'
+        + '<div style="width:8px;height:14px;background:' + plate + ';border-radius:1px;flex-shrink:0"></div>'
+        + '<div style="background:' + plate + '22;border:1px solid ' + plate + '55;border-radius:2px;padding:2px 3px;display:flex;gap:2px;flex:1">';
+      for (var p = 1; p <= Math.min(prCount, 16); p++) {
+        rows += '<div style="width:8px;height:10px;border-radius:1px;background:' + plate + '66;border:1px solid ' + plate + '99"></div>';
+      }
+      if (prCount > 16) rows += '<span style="font-size:.5rem;color:' + plate + ';align-self:center">+' + (prCount-16) + '</span>';
+      rows += '</div></div>';
+    }
+    if (slots > 8) rows += '<div style="font-size:.6rem;color:#475569;text-align:center">... +' + (slots-8) + ' slots</div>';
+  } else {
+    // Em pé: slots em colunas
+    rows += '<div style="display:flex;gap:3px;align-items:flex-start">';
+    var showS = Math.min(slots, 8);
+    for (var s = 1; s <= showS; s++) {
+      rows += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
+        + '<div style="font-size:.5rem;color:#64748b">S' + s + '</div>'
+        + '<div style="background:' + plate + '33;border:1px solid ' + plate + '55;border-radius:2px;padding:2px;display:flex;flex-direction:column;gap:2px">';
+      for (var p = 1; p <= Math.min(gbics, 8); p++) {
+        rows += '<div style="width:10px;height:8px;border-radius:1px;background:' + plate + '66;border:1px solid ' + plate + '99"></div>';
+      }
+      rows += '</div></div>';
+    }
+    if (slots > 8) rows += '<div style="font-size:.55rem;color:#475569;align-self:center">+' + (slots-8) + '</div>';
+    rows += '</div>';
+  }
+
+  prev.innerHTML =
+    // Frame do chassis
+    '<div style="background:' + chassis + ';border:2px solid ' + plate + '55;border-radius:6px;padding:6px 8px;font-family:monospace">'
+    // Barra superior: logo + LEDs
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
+    + '<div style="display:flex;align-items:center;gap:4px">'
+    + '<div style="width:4px;height:14px;background:' + bColor + ';border-radius:1px"></div>'
+    + '<span style="font-size:.65rem;font-weight:700;color:' + bColor + ';letter-spacing:.04em">' + bLabel.toUpperCase() + '</span>'
+    + '<span style="font-size:.6rem;color:#475569;margin-left:3px">' + (model || '') + '</span>'
+    + '</div>'
+    + '<div style="display:flex;gap:3px;align-items:center">'
+    + '<div title="PWR" style="width:5px;height:5px;border-radius:50%;background:#16a34a;box-shadow:0 0 3px #16a34a"></div>'
+    + '<div title="ALM" style="width:5px;height:5px;border-radius:50%;background:#374151"></div>'
+    + '<div title="SYN" style="width:5px;height:5px;border-radius:50%;background:#2563eb;box-shadow:0 0 3px #2563eb66"></div>'
+    + '</div></div>'
+    // Slots
+    + rows
+    // Rodapé: capacidade
+    + '<div style="margin-top:5px;font-size:.62rem;color:#475569;text-align:center">'
+    + slots + ' slots · ' + gbics + ' GBICs/slot · <b style="color:' + bColor + '">' + (slots*gbics) + ' PON total</b>'
+    + '</div>'
+    + '</div>';
+
+  // Atualiza contador de capacidade
+  var cap = document.getElementById('olt-cap-calc');
+  if (cap) cap.textContent = (slots * gbics) + ' GBICs';
+};
+
+// Ao trocar marca, atualiza lista de modelos e auto-preenche
+window.sdrOltBrandChange = function() {
+  var brand = (document.getElementById('sdr-olt-brand') || {}).value || '';
+  var bd = SDR_OLT_MODELS[brand] || {};
+  var modelSel = document.getElementById('sdr-olt-model-sel');
+  if (!modelSel) return;
+  modelSel.innerHTML = Object.entries(bd.models || {}).map(function(e) {
+    return '<option value="' + e[0] + '">' + e[0] + ' — ' + e[1].desc + '</option>';
+  }).join('') || '<option value="">Personalizado</option>';
+  window.sdrOltModelChange();
+};
+
+// Ao trocar modelo, preenche campos e atualiza preview
+window.sdrOltModelChange = function() {
+  var brand = (document.getElementById('sdr-olt-brand') || {}).value || '';
+  var model = (document.getElementById('sdr-olt-model-sel') || {}).value || '';
+  var md = ((SDR_OLT_MODELS[brand] || {}).models || {})[model] || {};
+  if (!md.slots) { window.sdrOltChassisPreview(); return; }
+  var s = document.getElementById('sdr-olt-slots');
+  var g = document.getElementById('sdr-olt-gbics');
+  var o = document.getElementById('sdr-olt-orient');
+  var nm = document.getElementById('sdr-olt-model');
+  if (s) s.value = md.slots;
+  if (g) g.value = md.gbics;
+  if (o) o.value = md.orient || 'deitada';
+  if (nm) nm.value = model;
+  window.sdrOltChassisPreview();
+};
+
+// Modal dedicado para OLT
+
+function _sdrInjectLightCSS() {
+  if (document.getElementById('sdr-lp-css')) return;
+  var s = document.createElement('style'); s.id = 'sdr-lp-css';
+  s.textContent = [
+    '@keyframes sdr-cord{to{stroke-dashoffset:-36}}',
+    '@keyframes sdr-glow{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(1.08)}}',
+    '.sdr-port-lit{outline:3px solid #818cf8!important;box-shadow:0 0 10px #6366f1!important;animation:sdr-glow .9s ease-in-out infinite;z-index:5;position:relative}',
+    '.sdr-fib-lit {outline:3px solid #fbbf24!important;box-shadow:0 0 10px #f59e0b!important;animation:sdr-glow .9s ease-in-out infinite;z-index:5;position:relative}',
+    '.sdr-cord-active{stroke-dasharray:12 6!important;animation:sdr-cord .45s linear infinite;filter:drop-shadow(0 0 4px #6366f1)!important}',
+    '.sdr-lp-selected{outline:3px solid #f59e0b!important;box-shadow:0 0 14px #f59e0baa!important;animation:sdr-glow .8s ease-in-out infinite;z-index:5;position:relative}',
+    '.sdr-fib-connectable{box-shadow:0 0 7px #f59e0b88!important;border-color:#f59e0b!important;cursor:pointer!important;animation:sdr-glow 1.2s ease-in-out infinite}'
+  ].join('');
+  document.head.appendChild(s);
+}
+
+function _dbtS(color) {
+  return 'background:' + color + '22;color:' + color + ';border:1px solid ' + color + '44';
+}
+
+window.sdrOltLightpathModal = function(oltId) {
+  _sdrInjectLightCSS();
+  var _inlineEl = document.getElementById('olt-panel-content');
+  Promise.all([
+    sdrRef('olt_connections/' + oltId).once('value'),
+    sdrRef('olt_connections/' + oltId + '/pons').once('value'),
+    sdrRef('infrastructure').once('value'),
+    sdrRef('onus').once('value')
+  ]).then(function(snaps) {
+    var olt   = snaps[0].val() || {};
+    var pons  = snaps[1].val() || {};
+    var infra = snaps[2].val() || {};
+    var onus  = snaps[3].val() || {};
+
+    // DGOs desta OLT — vinculados por olt_id ou por conexão de PON
+    var dgos = {};
+    Object.entries(infra).forEach(function(e) {
+      var d = e[1];
+      if (!d || d.type !== 'dgo') return;
+      var linked = d.olt_id === oltId;
+      if (!linked) linked = Object.values(pons).some(function(p){ return p && p.dgo_id === e[0]; });
+      if (linked) dgos[e[0]] = d;
+    });
+
+    // ONUs por PON key
+    var onusByPon = {};
+    Object.values(onus).forEach(function(u) {
+      if (u && u.olt_id === oltId && u.slot != null && u.port != null) {
+        var k = 's' + u.slot + '_p' + u.port;
+        if (!onusByPon[k]) onusByPon[k] = [];
+        onusByPon[k].push(u);
+      }
+    });
+
+    var slotCount  = olt.slot_count  || 4;
+    var ponPerSlot = olt.pon_per_slot || olt.gbics_per_slot || 8;
+    var orientIcon = olt.orientation === 'pe' ? '┃ Placas em pé' : '━ Placas deitadas';
+
+    // ── OLT chassis HTML ─────────────────────────────────────────
+    var oltHtml = '';
+    for (var sl = 1; sl <= slotCount; sl++) {
+      oltHtml += '<div style="margin-bottom:12px">'
+        + '<div style="font-size:.6rem;font-weight:700;color:#475569;letter-spacing:.1em;margin-bottom:5px;padding:2px 6px;background:#1a2a40;border-radius:3px;display:inline-block">SLOT ' + sl + '</div>'
+        + '<div style="display:flex;gap:3px;flex-wrap:wrap;background:#0a1628;padding:6px;border-radius:6px;border:1px solid #1e3a5f">';
+      var portCount = ((olt.slots || {})[sl] || {}).pon_count || ponPerSlot;
+      for (var po = 1; po <= portCount; po++) {
+        var pkey = 's' + sl + '_p' + po;
+        var cfg  = pons[pkey] || {};
+        var portOnus = onusByPon[pkey] || [];
+        var isConn   = !!(cfg.active && cfg.dgo_id);
+        var offCount = portOnus.filter(function(u){ return u.status === 'offline'; }).length;
+        var hasAlarm = offCount > 0;
+        // Rompimento: TODAS as ONUs da porta estão offline (≥1 ONU) → cabo rompido
+        var isRomped = portOnus.length >= 1 && offCount === portOnus.length;
+        var bg, bdr, clkAttr = '', extraBtn = '';
+        if (!cfg.active)  { bg='#0d1a2e'; bdr='#1e3a5f'; }
+        else if (isConn)  {
+          if (isRomped)      { bg='#7f1d1d'; bdr='#ef4444'; }
+          else if (hasAlarm) { bg='#431407'; bdr='#f97316'; }
+          else               { bg='#14532d'; bdr='#22c55e'; }
+          // 1×clique = iluminar cordão | 2×clique = desconectar
+          clkAttr = 'data-dgo="' + cfg.dgo_id + '" data-fiber="' + (cfg.dgo_fiber_key||'') + '"'
+            + ' onclick="sdrLpHighlight(\'pon\',\'' + sl + '_' + po + '\')"'
+            + ' ondblclick="event.stopPropagation();sdrLpDisconnect(\'' + oltId + '\',' + sl + ',' + po + ')"';
+        } else {
+          // Ativa sem DGO → 1×clique seleciona para conectar
+          bg='#1c1500'; bdr='#f59e0b';
+          clkAttr = 'onclick="sdrLpPonSelect(\'' + oltId + '\',' + sl + ',' + po + ')"';
+        }
+        // Stub — pequena linha saindo da direita da porta (indica saída do cordão)
+        var stub = isConn
+          ? '<div style="position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:6px;height:2px;background:' + bdr + ';opacity:.9"></div>'
+          : '';
+        var ponTitle = isConn
+          ? (isRomped ? '⚡ ROMPIMENTO — ' : '') + 'Slot '+sl+' PON '+po+' → '+(dgos[cfg.dgo_id]||{}).nome+' / '+cfg.dgo_fiber_key
+            + ' · '+offCount+'/'+portOnus.length+' offline'
+            + ' | 1×clique ilumina · 2×clique desconecta'
+          : (cfg.active ? 'Slot '+sl+' PON '+po+' — livre · clique para conectar' : 'Slot '+sl+' PON '+po+' — Inativa');
+        oltHtml += '<div id="lp-pon-' + sl + '_' + po + '" ' + clkAttr
+          + ' title="' + ponTitle + '"'
+          + ' style="position:relative;width:30px;height:30px;border-radius:4px;background:' + bg + ';border:2px solid ' + bdr + ';cursor:' + (cfg.active?'pointer':'default') + ';display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#e2e8f0;font-weight:700;flex-shrink:0;user-select:none;transition:transform .12s" '
+          + 'onmouseover="if(this.style.cursor!==\'default\')this.style.transform=\'scale(1.15)\'" '
+          + 'onmouseout="this.style.transform=\'\'">'
+          + po + stub + '</div>';
+      }
+      oltHtml += '</div></div>';
+    }
+
+    // ── DGO panels HTML ───────────────────────────────────────────
+    var TC = ['#64748b','#fb923c','#84cc16','#38bdf8','#facc15','#c084fc','#f87171','#4ade80','#a16207','#2dd4bf','#818cf8','#fb7185'];
+    var TN = ['Cinza','Laranja','Verde','Azul','Amarelo','Violeta','Vermelho','V.Claro','Marrom','Teal','Índigo','Rosa'];
+    var dgoHtml = '';
+    var dgoEntries = Object.entries(dgos);
+
+    if (!dgoEntries.length) {
+      dgoHtml = '<div style="text-align:center;padding:40px;color:#334155;font-size:.82rem">'
+        + '<i class="fas fa-network-wired" style="font-size:2.5rem;display:block;margin-bottom:10px;opacity:.2"></i>'
+        + 'Nenhum DGO cadastrado<br><span style="font-size:.72rem">Clique em "Novo DGO" para criar</span></div>';
+    } else {
+      dgoEntries.forEach(function(de) {
+        var did = de[0], d = de[1];
+        var fibers = d.fibers || {};
+        var tCount = d.tube_count || 12, fpt = d.fiber_per_tube || 12;
+        var totalF = tCount * fpt;
+        var usedF  = Object.values(fibers).filter(function(f){ return f && f.status === 'used'; }).length;
+        var freeF  = totalF - usedF;
+        var dgoOrient = d.orientation === 'deitado' ? '📦' : '🗂';
+        var freeBadge = '<span style="font-size:.6rem;color:' + (freeF > 0 ? '#4ade80' : '#64748b') + ';margin-left:auto">'
+          + freeF + ' livres</span>';
+        dgoHtml += '<div style="margin-bottom:16px;background:#0a1628;border-radius:10px;padding:10px;border:1px solid #1e3a5f">'
+          + '<div style="font-size:.78rem;font-weight:700;color:#60a5fa;margin-bottom:8px;display:flex;align-items:center;gap:6px">'
+          + '<i class="fas fa-network-wired"></i> ' + (d.nome || did)
+          + ' <span style="font-size:.65rem;font-weight:400;color:#475569">' + dgoOrient + ' · ' + totalF + 'F</span>'
+          + freeBadge + '</div>';
+        for (var t2 = 1; t2 <= tCount; t2++) {
+          dgoHtml += '<div style="margin-bottom:5px">'
+            + '<div style="font-size:.6rem;color:#475569;margin-bottom:3px;display:flex;align-items:center;gap:3px">'
+            + '<span style="display:inline-block;width:7px;height:7px;border-radius:1px;background:' + TC[t2-1] + '"></span>'
+            + 'T' + t2 + ' ' + TN[t2-1] + '</div>'
+            + '<div style="display:flex;gap:2px;flex-wrap:wrap">';
+          for (var f2 = 1; f2 <= fpt; f2++) {
+            var fkey2 = 't' + t2 + 'f' + f2;
+            var fib2  = fibers[fkey2] || {};
+            var isFree = fib2.status !== 'used';
+            var fBg   = isFree ? '#050e1c' : '#0e2a1a';
+            var fBdr  = isFree ? TC[t2-1] + '44' : '#22c55e';
+            var fClr  = isFree ? TC[t2-1] + '88' : '#4ade80';
+            var fTip  = isFree
+              ? ('T'+t2+'F'+f2+' — Livre (selecione uma PON e clique aqui para conectar)')
+              : ('T'+t2+'F'+f2+' → Slot '+(fib2.slot||'?')+' PON '+(fib2.port||'?')+' · Clique para iluminar');
+            var stubL = !isFree ? '<div style="position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:6px;height:3px;background:' + fBdr + ';border-radius:2px 0 0 2px"></div>' : '';
+            var clkF  = isFree
+              ? ('class="lp-free-fiber" onclick="sdrLpFiberConnect(\'' + oltId + '\',\'' + did + '\',' + t2 + ',' + f2 + ')"')
+              : ('data-dgo="'+did+'" data-fiber="'+fkey2+'" data-slot="'+(fib2.slot||'')+'" data-port="'+(fib2.port||'')+'" onclick="sdrLpHighlight(\'fib\',\''+did+'_'+fkey2+'\')"');
+            dgoHtml += '<div id="lp-fib-' + did + '_' + fkey2 + '" ' + clkF
+              + ' title="' + fTip + '"'
+              + ' style="position:relative;width:22px;height:22px;border-radius:3px;background:' + fBg + ';border:1.5px solid ' + fBdr + ';cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:' + fClr + ';font-weight:700;transition:transform .1s" '
+              + 'onmouseover="this.style.transform=\'scale(1.2)\'" onmouseout="this.style.transform=\'\'">'
+              + f2 + stubL + '</div>';
+          }
+          dgoHtml += '</div></div>';
+        }
+        dgoHtml += '</div>';
+      });
+    }
+
+    // ── HTML compartilhado: status bar + 3 colunas + legenda ────────
+    var _sharedBody =
+      // Status bar (visível só no modo de conexão)
+      '<div id="lp-status" style="display:none;background:#1c1500;border-bottom:1px solid #f59e0b44;padding:7px 16px;font-size:.78rem;color:#fbbf24;align-items:center;gap:8px;flex-shrink:0"></div>'
+      // Body 3 colunas: OLT | Zona de Cordões | DGO
+      + '<div id="lp-body" style="flex:1;display:flex;overflow:hidden;position:relative;min-height:0">'
+      + '<svg id="lp-svg" style="position:absolute;inset:0;pointer-events:none;z-index:1;overflow:visible" width="100%" height="100%"></svg>'
+      + '<div id="lp-olt-panel" style="position:relative;z-index:2;width:310px;flex-shrink:0;overflow-y:auto;padding:10px 4px 10px 12px;background:#060d1c;border-right:1px solid #0f172a">'
+      + '<div style="font-size:.65rem;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<span><i class="fas fa-server"></i> OLT — EM PÉ</span>'
+      + '<span style="font-size:.57rem;font-weight:400;color:#374151">🟡 1×clique=conectar &nbsp;2×clique=desconectar</span></div>'
+      + oltHtml
+      + '</div>'
+      + '<div id="lp-cord-zone" style="position:relative;z-index:2;width:72px;flex-shrink:0;background:#020810;display:flex;align-items:center;justify-content:center;border-left:1px solid #0c1525;border-right:1px solid #0c1525;overflow:hidden">'
+      + '<span style="writing-mode:vertical-rl;font-size:.52rem;letter-spacing:.18em;color:#0f2040;user-select:none;font-weight:700">CORDÕES</span>'
+      + '</div>'
+      + '<div id="lp-dgo-panel" style="position:relative;z-index:2;flex:1;overflow-y:auto;padding:10px 12px 10px 4px;background:#030b18;border-left:1px solid #0f172a">'
+      + '<div style="font-size:.65rem;font-weight:700;color:#3b82f6;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
+      + '<span><i class="fas fa-network-wired"></i> DGO — EM PÉ</span>'
+      + '<span style="font-size:.57rem;font-weight:400;color:#334155">1×clique=conectar</span></div>'
+      + dgoHtml
+      + '</div>'
+      + '</div>'
+      // Legenda
+      + '<div style="background:#1e293b;padding:6px 14px;display:flex;gap:12px;font-size:.67rem;color:#475569;flex-shrink:0;flex-wrap:wrap;border-top:1px solid #334155;align-items:center">'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#0e2a1a;border:1.5px solid #22c55e;border-radius:2px;margin-right:3px"></span>OK</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#431407;border:1.5px solid #f97316;border-radius:2px;margin-right:3px"></span>🟠 Rompimento parcial</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#7f1d1d;border:1.5px solid #ef4444;border-radius:2px;margin-right:3px"></span>🔴 Rompimento total</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#1c1500;border:1.5px solid #f59e0b;border-radius:2px;margin-right:3px"></span>Livre → conectar</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#0d1a2e;border:1.5px solid #1e3a5f;border-radius:2px;margin-right:3px"></span>Inativa</span>'
+      + '<span style="margin-left:auto;color:#f59e0b;font-size:.65rem"><i class="fas fa-plug"></i> 1×clique numa PON 🟡 → clique na fibra livre · 2×clique numa PON 🟢 → desconecta</span>'
+      + '</div>';
+
+    if (_inlineEl) {
+      // ── MODO INLINE — renderiza dentro da aba da página OLTs ──────
+      _inlineEl.innerHTML =
+        '<div style="height:100%;display:flex;flex-direction:column;background:#0f172a;overflow:hidden">'
+        // Header da aba com botões de ação
+        + '<div style="background:#1e293b;padding:9px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #334155;flex-wrap:wrap">'
+        + '<div style="width:26px;height:26px;background:linear-gradient(135deg,#6366f1,#7c3aed);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-project-diagram" style="color:#fff;font-size:.75rem"></i></div>'
+        + '<div style="min-width:0">'
+        + '<div style="font-weight:700;font-size:.85rem;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (olt.name || oltId) + '</div>'
+        + '<div style="font-size:.62rem;color:#475569">' + orientIcon + ' · ' + slotCount + ' slots · ' + (olt.gbics_per_slot || ponPerSlot) + ' GBICs/slot · IP: ' + (olt.ip_address || '—') + '</div>'
+        + '</div>'
+        + '<div style="margin-left:auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
+        + '<button onclick="sdrOltAddModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Editar dados da OLT"><i class="fas fa-edit"></i> Editar</button>'
+        + '<button onclick="sdrOltVisualModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Visualização do chassis"><i class="fas fa-th"></i> Chassis</button>'
+        + '<button onclick="sdrOltSlotAdd(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Gerenciar slots do chassis"><i class="fas fa-layer-group"></i> Slots</button>'
+        + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:#1e3a8a;border:1px solid #3b82f6;color:#93c5fd;border-radius:5px;cursor:pointer"><i class="fas fa-plus"></i> Novo DGO</button>'
+        + '<button onclick="sdrOltStartMapPlace(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:#14532d;border:1px solid #22c55e;color:#4ade80;border-radius:5px;cursor:pointer" title="Posicionar esta OLT no mapa"><i class="fas fa-map-marker-alt"></i> Posicionar</button>'
+        + '<button onclick="sdrOltTabSwitch(\'' + oltId + '\')" style="padding:4px 9px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#64748b;border-radius:5px;cursor:pointer" title="Atualizar painel"><i class="fas fa-sync-alt"></i></button>'
+        + '<button onclick="sdrOltDelete(\'' + oltId + '\')" style="padding:4px 9px;font-size:.72rem;background:#450a0a;border:1px solid #ef4444;color:#f87171;border-radius:5px;cursor:pointer" title="Excluir OLT"><i class="fas fa-trash"></i></button>'
+        + '</div></div>'
+        + _sharedBody
+        + '</div>';
+    } else {
+      // ── MODO MODAL — fallback quando a página OLTs não está ativa ──
+      var html = '<div id="sdr-lp-modal" style="position:fixed;inset:0;z-index:50002;background:rgba(2,6,23,.88);display:flex;align-items:stretch;justify-content:center;padding:8px">'
+        + '<div style="background:#0f172a;border-radius:14px;width:100%;max-width:1200px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.9)">'
+        + '<div style="background:#1e293b;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #334155">'
+        + '<div style="width:32px;height:32px;background:linear-gradient(135deg,#6366f1,#7c3aed);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-project-diagram" style="color:#fff;font-size:.85rem"></i></div>'
+        + '<div><div style="font-weight:700;font-size:.9rem;color:#f1f5f9">Painel de Conexão — ' + (olt.name || oltId) + '</div>'
+        + '<div style="font-size:.7rem;color:#64748b">' + orientIcon + ' · ' + slotCount + ' slots · ' + (olt.gbics_per_slot || ponPerSlot) + ' GBICs/slot</div></div>'
+        + '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">'
+        + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="background:#1e3a8a;border:1px solid #3b82f6;color:#93c5fd;padding:5px 11px;border-radius:6px;font-size:.73rem;cursor:pointer;white-space:nowrap"><i class="fas fa-plus"></i> Novo DGO</button>'
+        + '<button onclick="document.getElementById(\'sdr-lp-modal\').remove()" style="background:#ef4444;border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center">&times;</button>'
+        + '</div></div>'
+        + _sharedBody
+        + '</div></div>';
+      var prev = document.getElementById('sdr-lp-modal');
+      if (prev) prev.remove();
+      document.body.insertAdjacentHTML('beforeend', html);
+    }
+
+    // Desenha cordões após render
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() { _sdrDrawAllCords(pons, dgos); });
+    });
+  });
+};
+
+// Desenha cordões com roteamento ortogonal (linhas retas + curvas de 90°)
+// Cordões saem pela LATERAL direita da OLT e entram pela LATERAL esquerda do DGO
+// Roteamento: porta → stub horizontal direita → zona de cordões (vertical) → stub horizontal esquerda → fibra
+function _sdrDrawAllCords(pons, dgos) {
+  var svg      = document.getElementById('lp-svg');
+  var body     = document.getElementById('lp-body');
+  var oltPanel = document.getElementById('lp-olt-panel');
+  var dgoPanel = document.getElementById('lp-dgo-panel');
+  var cordZone = document.getElementById('lp-cord-zone');
+  if (!svg || !body) return;
+
+  var br       = body.getBoundingClientRect();
+  // Limites da zona de cordões
+  var zoneL = cordZone ? cordZone.getBoundingClientRect().left  - br.left + 4 : (oltPanel ? oltPanel.getBoundingClientRect().right - br.left + 4 : 310);
+  var zoneR = cordZone ? cordZone.getBoundingClientRect().right - br.left - 4 : zoneL + 64;
+  var zoneW = Math.max(zoneR - zoneL, 10);
+
+  svg.innerHTML = ''; // limpa tudo
+
+  // Coleta todos os cordões existentes
+  var cords = [];
+  Object.entries(pons).forEach(function(e) {
+    var pkey = e[0], cfg = e[1];
+    if (!cfg || !cfg.active || !cfg.dgo_id || !cfg.dgo_fiber_key) return;
+    var m = pkey.match(/^s(\d+)_p(\d+)$/);
+    if (!m) return;
+    var ponEl = document.getElementById('lp-pon-' + m[1] + '_' + m[2]);
+    var fibEl = document.getElementById('lp-fib-' + cfg.dgo_id + '_' + cfg.dgo_fiber_key);
+    if (!ponEl || !fibEl) return;
+    var pr = ponEl.getBoundingClientRect();
+    var fr = fibEl.getBoundingClientRect();
+    cords.push({
+      id : m[1] + '_' + m[2],
+      x1 : pr.right - br.left,           // ponta direita da porta OLT
+      y1 : pr.top + pr.height / 2 - br.top,
+      x2 : fr.left  - br.left,           // ponta esquerda da fibra DGO
+      y2 : fr.top + fr.height / 2 - br.top
+    });
+  });
+
+  if (!cords.length) return;
+
+  // Distribui cordões em "lanes" dentro da zona para evitar sobreposição
+  // Ordena por y1 para atribuir lanes sequenciais
+  cords.sort(function(a, b) { return a.y1 - b.y1; });
+  var maxLanes  = Math.max(1, Math.min(cords.length, Math.floor(zoneW / 6)));
+  var laneStep  = zoneW / maxLanes;
+
+  cords.forEach(function(c, i) {
+    // X do segmento vertical dentro da zona (lane distribuída)
+    var laneX = zoneL + laneStep * (i % maxLanes) + laneStep / 2;
+    var r     = 7; // raio das curvas de 90°
+    var dy    = c.y2 - c.y1;
+    var d;
+
+    if (Math.abs(dy) < 2) {
+      // Mesmo Y — linha reta horizontal
+      d = 'M' + c.x1 + ',' + c.y1 + ' H' + c.x2;
+    } else {
+      var dir = dy > 0 ? 1 : -1;
+      var ar  = Math.min(r, Math.abs(dy) / 2); // raio adaptativo
+      // Caminho: saída direita → curva 90° para baixo/cima → vertical → curva 90° → entrada esquerda
+      d = 'M'  + c.x1              + ',' + c.y1
+        + ' H' + (laneX - ar)
+        + ' Q' + laneX + ',' + c.y1 + ' ' + laneX + ',' + (c.y1 + dir * ar)
+        + ' V' + (c.y2 - dir * ar)
+        + ' Q' + laneX + ',' + c.y2 + ' ' + (laneX + ar) + ',' + c.y2
+        + ' H' + c.x2;
+    }
+
+    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('id',           'lp-cord-' + c.id);
+    path.setAttribute('d',            d);
+    path.setAttribute('fill',         'none');
+    path.setAttribute('stroke',       '#1e3a5f');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('opacity',      '0.8');
+    svg.appendChild(path);
+  });
+}
+
+// Ilumina o caminho ao clicar numa porta ou fibra
+window.sdrLpHighlight = function(type, id) {
+  _sdrInjectLightCSS();
+  // Limpa highlights anteriores
+  document.querySelectorAll('.sdr-port-lit,.sdr-fib-lit').forEach(function(el){
+    el.classList.remove('sdr-port-lit','sdr-fib-lit');
+  });
+  var svg = document.getElementById('lp-svg');
+  if (svg) {
+    svg.querySelectorAll('[data-lit]').forEach(function(p){
+      p.removeAttribute('data-lit');
+      p.setAttribute('stroke', '#1e3a5f');
+      p.setAttribute('stroke-width', '1.5');
+      p.setAttribute('opacity', '0.55');
+      p.classList.remove('sdr-cord-active');
+    });
+  }
+
+  var ponEl, fibEl, cordId;
+  if (type === 'pon') {
+    ponEl = document.getElementById('lp-pon-' + id);
+    if (!ponEl) return;
+    var dgoId2  = ponEl.dataset.dgo;
+    var fibKey2 = ponEl.dataset.fiber;
+    if (!dgoId2 || !fibKey2) return;
+    fibEl  = document.getElementById('lp-fib-' + dgoId2 + '_' + fibKey2);
+    cordId = 'lp-cord-' + id;
+  } else {
+    fibEl = document.getElementById('lp-fib-' + id);
+    if (!fibEl) return;
+    var sl2 = fibEl.dataset.slot, po2 = fibEl.dataset.port;
+    if (!sl2 || !po2) return;
+    ponEl  = document.getElementById('lp-pon-' + sl2 + '_' + po2);
+    cordId = 'lp-cord-' + sl2 + '_' + po2;
+  }
+
+  if (ponEl) ponEl.classList.add('sdr-port-lit');
+  if (fibEl) fibEl.classList.add('sdr-fib-lit');
+  var cord = cordId ? document.getElementById(cordId) : null;
+  if (cord) {
+    cord.setAttribute('stroke', '#818cf8');
+    cord.setAttribute('stroke-width', '3.5');
+    cord.setAttribute('opacity', '1');
+    cord.setAttribute('data-lit', '1');
+    cord.classList.add('sdr-cord-active');
+    cord.setAttribute('stroke-dasharray', '12 5');
+  }
+  if (fibEl) { try { fibEl.scrollIntoView({behavior:'smooth',block:'nearest'}); } catch(ex){} }
+  if (ponEl) { try { ponEl.scrollIntoView({behavior:'smooth',block:'nearest'}); } catch(ex){} }
+};
+
+// ── Estado de conexão interativa no painel lightpath ──────────────────
+var _sdrLpConnState = null; // { oltId, sl, po }
+
+// 1. Seleciona uma PON para entrar em modo de conexão
+window.sdrLpPonSelect = function(oltId, sl, po) {
+  _sdrInjectLightCSS();
+  // Limpa highlights de caminho óptico
+  document.querySelectorAll('.sdr-port-lit,.sdr-fib-lit').forEach(function(el){
+    el.classList.remove('sdr-port-lit','sdr-fib-lit');
+  });
+  var svg = document.getElementById('lp-svg');
+  if (svg) svg.querySelectorAll('[data-lit]').forEach(function(p){
+    p.removeAttribute('data-lit'); p.setAttribute('stroke','#1e3a5f');
+    p.setAttribute('stroke-width','1.5'); p.setAttribute('opacity','0.55');
+    p.classList.remove('sdr-cord-active');
+  });
+  var statusEl = document.getElementById('lp-status');
+  // Toggle: desseleciona se já está selecionada
+  if (_sdrLpConnState && _sdrLpConnState.sl == sl && _sdrLpConnState.po == po) {
+    var prevEl = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
+    if (prevEl) prevEl.classList.remove('sdr-lp-selected');
+    _sdrLpConnState = null;
+    if (statusEl) statusEl.style.display = 'none';
+    document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.remove('sdr-fib-connectable'); });
+    return;
+  }
+  // Remove seleção anterior
+  if (_sdrLpConnState) {
+    var prevEl2 = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
+    if (prevEl2) prevEl2.classList.remove('sdr-lp-selected');
+  }
+  _sdrLpConnState = { oltId: oltId, sl: sl, po: po };
+  // Destaca porta selecionada
+  var ponEl = document.getElementById('lp-pon-' + sl + '_' + po);
+  if (ponEl) ponEl.classList.add('sdr-lp-selected');
+  // Mostra barra de status
+  if (statusEl) {
+    statusEl.innerHTML = '<i class="fas fa-plug" style="color:#f59e0b"></i>'
+      + '&nbsp;<b style="color:#fbbf24">Slot ' + sl + ' · PON ' + po + '</b>'
+      + '<span style="color:#94a3b8;margin:0 10px">aguardando fibra</span>'
+      + '→ clique em uma <b style="color:#4ade80">fibra livre</b> no DGO para conectar o cordão'
+      + '<button onclick="_sdrLpCancelSelect()" style="margin-left:auto;background:none;border:1px solid #ef4444;color:#ef4444;border-radius:4px;padding:2px 10px;font-size:.7rem;cursor:pointer"><i class="fas fa-times"></i> Cancelar</button>';
+    statusEl.style.display = 'flex';
+  }
+  // Pulsa fibras livres como clicáveis
+  document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.add('sdr-fib-connectable'); });
+};
+
+// Cancela modo de conexão
+window._sdrLpCancelSelect = function() {
+  if (_sdrLpConnState) {
+    var el = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
+    if (el) el.classList.remove('sdr-lp-selected');
+  }
+  _sdrLpConnState = null;
+  document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.remove('sdr-fib-connectable'); });
+  var statusEl = document.getElementById('lp-status');
+  if (statusEl) statusEl.style.display = 'none';
+};
+
+// 2. Conecta a PON selecionada a uma fibra livre do DGO
+window.sdrLpFiberConnect = function(oltId, did, t, f) {
+  if (!_sdrLpConnState) return; // só age se houver PON selecionada
+  var sl = _sdrLpConnState.sl, po = _sdrLpConnState.po;
+  var fkey = 't' + t + 'f' + f;
+  var ponKey = 's' + sl + '_p' + po;
+  var ponRef   = sdrRef('olt_connections/' + oltId + '/pons/' + ponKey);
+  var fiberRef = sdrRef('infrastructure/' + did + '/fibers/' + fkey);
+  // Libera fibra anterior desta PON, se houver
+  ponRef.once('value').then(function(snap) {
+    var prev = snap.val() || {};
+    var chain = Promise.resolve();
+    if (prev.dgo_id && prev.dgo_fiber_key) {
+      chain = sdrRef('infrastructure/' + prev.dgo_id + '/fibers/' + prev.dgo_fiber_key)
+        .update({ status: 'free', olt_id: null, slot: null, port: null, label: null });
+    }
+    return chain;
+  }).then(function() {
+    return fiberRef.set({
+      status: 'used', olt_id: oltId,
+      slot: parseInt(sl), port: parseInt(po),
+      label: 'OLT Slot' + sl + '/PON' + po,
+      connected_at: new Date().toISOString()
+    });
+  }).then(function() {
+    return ponRef.update({
+      dgo_id: did, dgo_fiber_key: fkey,
+      active: true, updated_at: new Date().toISOString()
+    });
+  }).then(function() {
+    _sdrLpConnState = null;
+    if (typeof toast === 'function') toast('Cordão: Slot ' + sl + ' PON ' + po + ' → T' + t + 'F' + f, 'success');
+    sdrOltLightpathModal(oltId);
+  }).catch(function(err) {
+    if (typeof toast === 'function') toast('Erro: ' + (err.message || err), 'error');
+  });
+};
+
+// 3. Desconecta uma PON (remove do Firebase e atualiza fibra do DGO para livre)
+window.sdrLpDisconnect = function(oltId, sl, po) {
+  if (!confirm('Desconectar Slot ' + sl + ' PON ' + po + '?\nA fibra do DGO ficará livre.')) return;
+  var ponKey = 's' + sl + '_p' + po;
+  var ponRef = sdrRef('olt_connections/' + oltId + '/pons/' + ponKey);
+  ponRef.once('value').then(function(snap) {
+    var cfg = snap.val() || {};
+    var chain = Promise.resolve();
+    if (cfg.dgo_id && cfg.dgo_fiber_key) {
+      chain = sdrRef('infrastructure/' + cfg.dgo_id + '/fibers/' + cfg.dgo_fiber_key)
+        .update({ status: 'free', olt_id: null, slot: null, port: null, label: null });
+    }
+    return chain;
+  }).then(function() {
+    return ponRef.update({ dgo_id: null, dgo_fiber_key: null });
+  }).then(function() {
+    if (typeof toast === 'function') toast('PON desconectada · Slot ' + sl + ' PON ' + po, 'success');
+    sdrOltLightpathModal(oltId);
+  }).catch(function(err) {
+    if (typeof toast === 'function') toast('Erro: ' + (err.message || err), 'error');
+  });
+};
+
+
+window.sdrOltSlotInsert = function(oltId) {
+  var pos   = parseInt(document.getElementById('slot-pos').value);
+  var gbics = parseInt(document.getElementById('slot-gbics').value) || 8;
+  sdrRef('olt_connections/' + oltId).once('value').then(function(snap) {
+    var olt = snap.val() || {};
+    var slotCount = olt.slot_count || 4;
+    var pons = olt.pons || {};
+    var slots = olt.slots || {};
+    // Desloca todos os slots >= pos uma posição para cima
+    var updates = {};
+    for (var s = slotCount; s >= pos; s--) {
+      // Move PONs do slot s para s+1
+      var slotPons = {};
+      Object.entries(pons).forEach(function(e) {
+        var m = e[0].match(/^s(\d+)_p(\d+)$/);
+        if (m && parseInt(m[1]) === s) {
+          updates['olt_connections/' + oltId + '/pons/s' + (s+1) + '_p' + m[2]] = e[1];
+          updates['olt_connections/' + oltId + '/pons/' + e[0]] = null; // remove antigo
+        }
+      });
+      // Move config do slot
+      if (slots[s]) {
+        updates['olt_connections/' + oltId + '/slots/' + (s+1)] = slots[s];
+        updates['olt_connections/' + oltId + '/slots/' + s] = null;
+      }
+    }
+    // Insere o novo slot na posição
+    updates['olt_connections/' + oltId + '/slots/' + pos] = { pon_count: gbics };
+    updates['olt_connections/' + oltId + '/slot_count'] = slotCount + 1;
+    return firebase.database().ref().update(updates);
+  }).then(function() {
+    if (typeof toast === 'function') toast('Slot inserido na posição ' + pos + '!', 'success');
+    document.getElementById('sdr-slot-modal') && document.getElementById('sdr-slot-modal').remove();
+    sdrOltLightpathModal(oltId);
+  }).catch(function(e) { if (typeof toast === 'function') toast('Erro: ' + e.message, 'error'); });
+};
+
+// Remove um slot do chassis (desconecta PONs do slot)
+window.sdrOltSlotRemove = function(oltId) {
+  var slotNum = parseInt(document.getElementById('slot-remove-num').value);
+  if (!confirm('Remover Slot ' + slotNum + '? As PONs serão desconectadas.')) return;
+  sdrRef('olt_connections/' + oltId).once('value').then(function(snap) {
+    var olt = snap.val() || {};
+    var slotCount = olt.slot_count || 4;
+    var pons = olt.pons || {};
+    var slots = olt.slots || {};
+    var updates = {};
+    // Libera fibras do DGO das PONs deste slot
+    var fiberFrees = [];
+    Object.entries(pons).forEach(function(e) {
+      var m = e[0].match(/^s(\d+)_p(\d+)$/);
+      if (!m) return;
+      var s = parseInt(m[1]);
+      if (s === slotNum) {
+        // Remove PON e libera fibra do DGO
+        updates['olt_connections/' + oltId + '/pons/' + e[0]] = null;
+        var cfg = e[1] || {};
+        if (cfg.dgo_id && cfg.dgo_fiber_key) {
+          fiberFrees.push(sdrRef('infrastructure/' + cfg.dgo_id + '/fibers/' + cfg.dgo_fiber_key)
+            .update({ status:'free', olt_id:null, slot:null, port:null, label:null }));
+        }
+      } else if (s > slotNum) {
+        // Desloca slots superiores uma posição para baixo
+        updates['olt_connections/' + oltId + '/pons/s' + (s-1) + '_p' + m[2]] = e[1];
+        updates['olt_connections/' + oltId + '/pons/' + e[0]] = null;
+      }
+    });
+    // Desloca configs de slots
+    for (var i = slotNum + 1; i <= slotCount; i++) {
+      if (slots[i]) updates['olt_connections/' + oltId + '/slots/' + (i-1)] = slots[i];
+      updates['olt_connections/' + oltId + '/slots/' + i] = null;
+    }
+    updates['olt_connections/' + oltId + '/slots/' + slotNum] = null;
+    updates['olt_connections/' + oltId + '/slot_count'] = slotCount - 1;
+    return Promise.all(fiberFrees).then(function() {
+      return firebase.database().ref().update(updates);
+    });
+  }).then(function() {
+    if (typeof toast === 'function') toast('Slot ' + slotNum + ' removido!', 'success');
+    document.getElementById('sdr-slot-modal') && document.getElementById('sdr-slot-modal').remove();
+    sdrOltLightpathModal(oltId);
+  }).catch(function(e) { if (typeof toast === 'function') toast('Erro: ' + e.message, 'error'); });
+};
+
 
 // Redesenhar cordões ao redimensionar janela (zoom, resize)
 (function() {
@@ -3861,62 +4533,11 @@ window.sdrMapClickCapture = function(lat, lng) {
 
 // ════════════════════════════════════════════════════
 // SPRINT 3 — OLTs CRUD MELHORADO
->>>>>>> develop
 // ════════════════════════════════════════════════════
 
 let sdrOnusCache = {};
-var _sdrActiveOltTab  = null; // OLT com aba ativa
-var _sdrOltPlaceMode  = null; // { oltId, name } — modo de posicionar OLT no mapa
 
-<<<<<<< HEAD
-// Ativa uma aba de OLT e renderiza o painel inline
-window.sdrOltTabSwitch = function(oltId) {
-  _sdrActiveOltTab = oltId;
-  // Atualiza visual das abas
-  document.querySelectorAll('[id^="olt-tab-"]').forEach(function(btn) {
-    var active = btn.id === 'olt-tab-' + oltId;
-    btn.style.background   = active ? '#1e3a5f' : 'transparent';
-    btn.style.borderBottom = '2px solid ' + (active ? '#6366f1' : 'transparent');
-    btn.style.color        = active ? '#e2e8f0' : '#64748b';
-    btn.style.fontWeight   = active ? '600' : '400';
-  });
-  // Loading rápido antes do fetch
-  var panel = document.getElementById('olt-panel-content');
-  if (panel) panel.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#334155"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem"></i></div>';
-  sdrOltLightpathModal(oltId);
-};
-
-// Inicia modo de posicionamento da OLT no mapa
-window.sdrOltStartMapPlace = function(oltId) {
-  var name = (sdrOltsCache[oltId] || {}).name || 'OLT';
-  _sdrOltPlaceMode = { oltId: oltId, name: name };
-  if (typeof showPage === 'function') showPage('mapa');
-  setTimeout(function() {
-    var mapEl = document.getElementById('sdr-map');
-    if (mapEl) mapEl.style.cursor = 'crosshair';
-    var old = document.getElementById('sdr-olt-place-banner');
-    if (old) old.remove();
-    var banner = document.createElement('div');
-    banner.id = 'sdr-olt-place-banner';
-    banner.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#1c1500;border:2px solid #f59e0b;color:#fbbf24;padding:10px 22px;border-radius:10px;z-index:99999;font-size:.85rem;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.6)';
-    banner.innerHTML = '<i class="fas fa-map-pin"></i> Clique no mapa para posicionar <b style="color:#fff">' + name + '</b>'
-      + ' &nbsp;<button onclick="_sdrCancelOltPlace()" style="margin-left:12px;background:#374151;border:1px solid #6b7280;color:#d1d5db;border-radius:5px;padding:3px 10px;cursor:pointer;font-size:.78rem"><i class="fas fa-times"></i> Cancelar</button>';
-    document.body.appendChild(banner);
-  }, 400);
-};
-
-window._sdrCancelOltPlace = function() {
-  _sdrOltPlaceMode = null;
-  var mapEl = document.getElementById('sdr-map');
-  if (mapEl) mapEl.style.cursor = '';
-  var banner = document.getElementById('sdr-olt-place-banner');
-  if (banner) banner.remove();
-};
-
-// Sobrescrever render de OLTs com versão de ABAS
-=======
 // Render de OLTs — versão Sprint 4 (tab interface)
->>>>>>> develop
 window.sdrOltsRender = function() {
   // Ajustar estilo do page-olts para layout flex sem padding
   var pageEl = document.getElementById('page-olts');
@@ -3935,12 +4556,9 @@ window.sdrOltsRender = function() {
     sdrOltsCache = snaps[0].val() || {};
     sdrOnusCache = snaps[1].val() || {};
 
-<<<<<<< HEAD
-=======
     // Atualizar marcadores OLT no mapa (só se o mapa já foi inicializado)
     try { if (typeof sdrMapRenderOlts === 'function' && window.sdrLayers && sdrLayers.olts) sdrMapRenderOlts(); } catch(e) {}
 
->>>>>>> develop
     var tabBar = document.getElementById('olts-tab-bar');
     var panel  = document.getElementById('olt-panel-content');
     if (!tabBar) return;
@@ -3948,59 +4566,19 @@ window.sdrOltsRender = function() {
     var items = Object.entries(sdrOltsCache);
 
     if (items.length === 0) {
-<<<<<<< HEAD
-      tabBar.innerHTML = '<span style="color:#334155;font-size:.75rem;padding:0 12px">Nenhuma OLT cadastrada</span>';
-      if (panel) panel.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#334155">'
-        + '<i class="fas fa-server" style="font-size:3rem;opacity:.25;margin-bottom:16px"></i>'
-        + '<p style="font-size:.9rem;margin:0">Nenhuma OLT cadastrada</p>'
-        + '<button onclick="sdrOltAddModal()" style="margin-top:14px;padding:8px 22px;background:#4f46e5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.85rem"><i class="fas fa-plus"></i> Cadastrar primeira OLT</button>'
-=======
       tabBar.innerHTML = '';
       if (panel) panel.innerHTML = '<div style="text-align:center;padding:60px 20px;color:#64748b">'
         + '<i class="fas fa-server" style="font-size:3rem;opacity:.3;display:block;margin-bottom:16px"></i>'
         + '<p style="font-size:.9rem;margin-bottom:12px">Nenhuma OLT cadastrada</p>'
         + '<button onclick="sdrOltAddModal()" style="padding:8px 20px;background:#1d4ed8;color:#fff;border:none;border-radius:8px;cursor:pointer"><i class="fas fa-plus"></i> Cadastrar primeira OLT</button>'
->>>>>>> develop
         + '</div>';
       return;
     }
 
-<<<<<<< HEAD
-    // Garante aba ativa válida
-=======
->>>>>>> develop
     if (!_sdrActiveOltTab || !sdrOltsCache[_sdrActiveOltTab]) {
       _sdrActiveOltTab = items[0][0];
     }
 
-<<<<<<< HEAD
-    // Monta barra de abas — uma aba por OLT
-    tabBar.innerHTML = items.map(function(e) {
-      var id = e[0], o = e[1];
-      var onusOlt  = Object.values(sdrOnusCache).filter(function(u){ return u.olt_id === id; });
-      var offCount = onusOlt.filter(function(u){ return u.status === 'offline'; }).length;
-      var romped   = onusOlt.length >= 1 && offCount === onusOlt.length;
-      var alarm    = offCount > 0 && !romped;
-      var dotColor = romped ? '#ef4444' : (alarm ? '#f97316' : (o.is_active ? '#22c55e' : '#475569'));
-      var isActive = id === _sdrActiveOltTab;
-      return '<button id="olt-tab-' + id + '" onclick="sdrOltTabSwitch(\'' + id + '\')"'
-        + ' style="display:inline-flex;align-items:center;gap:6px;padding:10px 16px;'
-        + 'background:' + (isActive ? '#1e3a5f' : 'transparent') + ';'
-        + 'border:none;border-bottom:2px solid ' + (isActive ? '#6366f1' : 'transparent') + ';'
-        + 'cursor:pointer;color:' + (isActive ? '#e2e8f0' : '#64748b') + ';'
-        + 'font-size:.78rem;font-weight:' + (isActive ? '600' : '400') + ';'
-        + 'white-space:nowrap;flex-shrink:0;transition:.15s">'
-        + '<span style="width:7px;height:7px;background:' + dotColor + ';border-radius:50%;flex-shrink:0"></span>'
-        + (o.name || id)
-        + '</button>';
-    }).join('');
-
-    // Renderiza painel da aba ativa
-    sdrOltTabSwitch(_sdrActiveOltTab);
-
-    // Atualizar filtro de OLTs na página ONUs
-    var oltFilter = document.getElementById('onus-filtro-olt') || document.getElementById('onus-filter-olt');
-=======
     tabBar.innerHTML = items.map(function(e) {
       var id = e[0], o = e[1];
       var active     = id === _sdrActiveOltTab;
@@ -4018,7 +4596,6 @@ window.sdrOltsRender = function() {
 
     // Atualizar filtro de OLTs na página ONUs
     var oltFilter = document.getElementById('onus-filter-olt');
->>>>>>> develop
     if (oltFilter) {
       var current = oltFilter.value;
       oltFilter.innerHTML = '<option value="">Todas OLTs</option>'
@@ -4031,288 +4608,8 @@ window.sdrOltsRender = function() {
   });
 };
 
-// ════════════════════════════════════════════════════
-// BANCO DE MODELOS DE OLT — specs reais por marca
-// ════════════════════════════════════════════════════
-const SDR_OLT_MODELS = {
-  fiberhome: {
-    label: 'Fiberhome', brandColor: '#003087', textColor: '#60a5fa',
-    models: {
-      'AN5516-01':  { desc:'Mini · 1U',        slots:1,  gbics:8,  orient:'deitada', chassis:'#0d1117', plate:'#003087', ports_per_row:8  },
-      'AN5516-04':  { desc:'Médio · 4U',       slots:4,  gbics:8,  orient:'deitada', chassis:'#0d1117', plate:'#003087', ports_per_row:8  },
-      'AN5516-04S': { desc:'Médio S · 4U',     slots:4,  gbics:8,  orient:'deitada', chassis:'#111827', plate:'#0a3d91', ports_per_row:8  },
-      'AN5516-06':  { desc:'Grande · 10 slots', slots:10, gbics:16, orient:'deitada', chassis:'#0a0f1e', plate:'#003087', ports_per_row:16 },
-      'AN5516-06B': { desc:'XL · 16 slots',    slots:16, gbics:16, orient:'deitada', chassis:'#0a0f1e', plate:'#003087', ports_per_row:16 },
-      'AN5006-10':  { desc:'EPON · 10 slots',  slots:10, gbics:8,  orient:'deitada', chassis:'#0a0f1e', plate:'#1a4fd6', ports_per_row:8  },
-    }
-  },
-  huawei: {
-    label: 'Huawei', brandColor: '#cf0a2c', textColor: '#f87171',
-    models: {
-      'MA5608T':    { desc:'Compacto · 2U',   slots:2,  gbics:16, orient:'deitada', chassis:'#1a0505', plate:'#8b0000', ports_per_row:16 },
-      'MA5800-X2':  { desc:'Mini 10G · 2U',   slots:2,  gbics:8,  orient:'deitada', chassis:'#1a0505', plate:'#cf0a2c', ports_per_row:8  },
-      'MA5800-X7':  { desc:'Médio 10G · 7U',  slots:7,  gbics:16, orient:'deitada', chassis:'#0f0303', plate:'#cf0a2c', ports_per_row:16 },
-      'MA5800-X15': { desc:'Grande 10G',       slots:15, gbics:16, orient:'deitada', chassis:'#0a0202', plate:'#cf0a2c', ports_per_row:16 },
-      'MA5600T':    { desc:'Alta densidade',   slots:8,  gbics:8,  orient:'pe',      chassis:'#0f0303', plate:'#cf0a2c', ports_per_row:8  },
-      'MA5683T':    { desc:'14 slots blade',   slots:14, gbics:8,  orient:'pe',      chassis:'#0a0202', plate:'#cf0a2c', ports_per_row:8  },
-    }
-  },
-  zte: {
-    label: 'ZTE', brandColor: '#0063cc', textColor: '#60a5fa',
-    models: {
-      'C320':  { desc:'Compacto · 2 slots', slots:2,  gbics:8,  orient:'deitada', chassis:'#050a1a', plate:'#0063cc', ports_per_row:8  },
-      'C600':  { desc:'Mini · 1 slot',      slots:1,  gbics:16, orient:'deitada', chassis:'#050a1a', plate:'#0052a8', ports_per_row:16 },
-      'C650':  { desc:'Médio · 4 slots',    slots:4,  gbics:16, orient:'deitada', chassis:'#050a1a', plate:'#0063cc', ports_per_row:16 },
-      'C300':  { desc:'Grande · 14 slots',  slots:14, gbics:8,  orient:'pe',      chassis:'#030710', plate:'#0063cc', ports_per_row:8  },
-      'C300M': { desc:'XL · 19 slots',      slots:19, gbics:8,  orient:'pe',      chassis:'#030710', plate:'#004fa0', ports_per_row:8  },
-    }
-  },
-  datacom: {
-    label: 'Datacom', brandColor: '#e05a00', textColor: '#fb923c',
-    models: {
-      'DM4610-OLT':  { desc:'Médio · 4 slots', slots:4,  gbics:8,  orient:'deitada', chassis:'#1a0800', plate:'#e05a00', ports_per_row:8  },
-      'DM4612-OLT':  { desc:'Grande · 8 slots', slots:8, gbics:8,  orient:'deitada', chassis:'#110500', plate:'#e05a00', ports_per_row:8  },
-    }
-  },
-  nokia: {
-    label: 'Nokia', brandColor: '#124191', textColor: '#93c5fd',
-    models: {
-      '7360 FX-2':  { desc:'Compacto · 2U',   slots:2,  gbics:8,  orient:'deitada', chassis:'#0a0f1a', plate:'#124191', ports_per_row:8  },
-      '7360 FX-4':  { desc:'Médio · 4U',      slots:4,  gbics:16, orient:'deitada', chassis:'#0a0f1a', plate:'#124191', ports_per_row:16 },
-      '7360 FX-8':  { desc:'Grande · 8U',     slots:8,  gbics:16, orient:'deitada', chassis:'#060c14', plate:'#124191', ports_per_row:16 },
-    }
-  },
-  outro: {
-    label: 'Outro / Personalizado', brandColor: '#4b5563', textColor: '#9ca3af',
-    models: {
-      'Personalizado': { desc:'Configure manualmente', slots:4, gbics:8, orient:'deitada', chassis:'#1e293b', plate:'#374151', ports_per_row:8 }
-    }
-  }
-};
-
-// Gera mini-preview do chassis no formulário
-window.sdrOltChassisPreview = function() {
-  var brand  = (document.getElementById('sdr-olt-brand')  || {}).value || '';
-  var model  = (document.getElementById('sdr-olt-model-sel') || {}).value || '';
-  var bd = (SDR_OLT_MODELS[brand] || {});
-  var md = (bd.models || {})[model] || {};
-  var prev = document.getElementById('olt-chassis-prev');
-  if (!prev) return;
-
-  var slots   = parseInt((document.getElementById('sdr-olt-slots')  || {}).value) || md.slots  || 4;
-  var gbics   = parseInt((document.getElementById('sdr-olt-gbics')  || {}).value) || md.gbics  || 8;
-  var orient  = (document.getElementById('sdr-olt-orient') || {}).value || md.orient || 'deitada';
-  var chassis = md.chassis || '#0d1117';
-  var plate   = md.plate   || '#1e3a5f';
-  var bColor  = bd.brandColor || '#374151';
-  var bLabel  = bd.label || 'OLT';
-  var prCount = Math.min(gbics, md.ports_per_row || gbics); // portas por linha no preview
-  var isVert  = orient === 'pe';
-
-  var rows = '';
-  if (!isVert) {
-    // Deitada: slots em linhas
-    var show = Math.min(slots, 8);
-    for (var s = 1; s <= show; s++) {
-      rows += '<div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">'
-        + '<div style="width:8px;height:14px;background:' + plate + ';border-radius:1px;flex-shrink:0"></div>'
-        + '<div style="background:' + plate + '22;border:1px solid ' + plate + '55;border-radius:2px;padding:2px 3px;display:flex;gap:2px;flex:1">';
-      for (var p = 1; p <= Math.min(prCount, 16); p++) {
-        rows += '<div style="width:8px;height:10px;border-radius:1px;background:' + plate + '66;border:1px solid ' + plate + '99"></div>';
-      }
-      if (prCount > 16) rows += '<span style="font-size:.5rem;color:' + plate + ';align-self:center">+' + (prCount-16) + '</span>';
-      rows += '</div></div>';
-    }
-    if (slots > 8) rows += '<div style="font-size:.6rem;color:#475569;text-align:center">... +' + (slots-8) + ' slots</div>';
-  } else {
-    // Em pé: slots em colunas
-    rows += '<div style="display:flex;gap:3px;align-items:flex-start">';
-    var showS = Math.min(slots, 8);
-    for (var s = 1; s <= showS; s++) {
-      rows += '<div style="display:flex;flex-direction:column;align-items:center;gap:2px">'
-        + '<div style="font-size:.5rem;color:#64748b">S' + s + '</div>'
-        + '<div style="background:' + plate + '33;border:1px solid ' + plate + '55;border-radius:2px;padding:2px;display:flex;flex-direction:column;gap:2px">';
-      for (var p = 1; p <= Math.min(gbics, 8); p++) {
-        rows += '<div style="width:10px;height:8px;border-radius:1px;background:' + plate + '66;border:1px solid ' + plate + '99"></div>';
-      }
-      rows += '</div></div>';
-    }
-    if (slots > 8) rows += '<div style="font-size:.55rem;color:#475569;align-self:center">+' + (slots-8) + '</div>';
-    rows += '</div>';
-  }
-
-  prev.innerHTML =
-    // Frame do chassis
-    '<div style="background:' + chassis + ';border:2px solid ' + plate + '55;border-radius:6px;padding:6px 8px;font-family:monospace">'
-    // Barra superior: logo + LEDs
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">'
-    + '<div style="display:flex;align-items:center;gap:4px">'
-    + '<div style="width:4px;height:14px;background:' + bColor + ';border-radius:1px"></div>'
-    + '<span style="font-size:.65rem;font-weight:700;color:' + bColor + ';letter-spacing:.04em">' + bLabel.toUpperCase() + '</span>'
-    + '<span style="font-size:.6rem;color:#475569;margin-left:3px">' + (model || '') + '</span>'
-    + '</div>'
-    + '<div style="display:flex;gap:3px;align-items:center">'
-    + '<div title="PWR" style="width:5px;height:5px;border-radius:50%;background:#16a34a;box-shadow:0 0 3px #16a34a"></div>'
-    + '<div title="ALM" style="width:5px;height:5px;border-radius:50%;background:#374151"></div>'
-    + '<div title="SYN" style="width:5px;height:5px;border-radius:50%;background:#2563eb;box-shadow:0 0 3px #2563eb66"></div>'
-    + '</div></div>'
-    // Slots
-    + rows
-    // Rodapé: capacidade
-    + '<div style="margin-top:5px;font-size:.62rem;color:#475569;text-align:center">'
-    + slots + ' slots · ' + gbics + ' GBICs/slot · <b style="color:' + bColor + '">' + (slots*gbics) + ' PON total</b>'
-    + '</div>'
-    + '</div>';
-
-  // Atualiza contador de capacidade
-  var cap = document.getElementById('olt-cap-calc');
-  if (cap) cap.textContent = (slots * gbics) + ' GBICs';
-};
-
-// Ao trocar marca, atualiza lista de modelos e auto-preenche
-window.sdrOltBrandChange = function() {
-  var brand = (document.getElementById('sdr-olt-brand') || {}).value || '';
-  var bd = SDR_OLT_MODELS[brand] || {};
-  var modelSel = document.getElementById('sdr-olt-model-sel');
-  if (!modelSel) return;
-  modelSel.innerHTML = Object.entries(bd.models || {}).map(function(e) {
-    return '<option value="' + e[0] + '">' + e[0] + ' — ' + e[1].desc + '</option>';
-  }).join('') || '<option value="">Personalizado</option>';
-  window.sdrOltModelChange();
-};
-
-// Ao trocar modelo, preenche campos e atualiza preview
-window.sdrOltModelChange = function() {
-  var brand = (document.getElementById('sdr-olt-brand') || {}).value || '';
-  var model = (document.getElementById('sdr-olt-model-sel') || {}).value || '';
-  var md = ((SDR_OLT_MODELS[brand] || {}).models || {})[model] || {};
-  if (!md.slots) { window.sdrOltChassisPreview(); return; }
-  var s = document.getElementById('sdr-olt-slots');
-  var g = document.getElementById('sdr-olt-gbics');
-  var o = document.getElementById('sdr-olt-orient');
-  var nm = document.getElementById('sdr-olt-model');
-  if (s) s.value = md.slots;
-  if (g) g.value = md.gbics;
-  if (o) o.value = md.orient || 'deitada';
-  if (nm) nm.value = model;
-  window.sdrOltChassisPreview();
-};
-
 // Modal dedicado para OLT
 window.sdrOltAddModal = function(editId) {
-<<<<<<< HEAD
-  const d = editId ? sdrOltsCache[editId] || {} : {};
-  const isEdit = !!editId;
-  // Detecta marca salva
-  const savedBrand = d.brand || 'fiberhome';
-  const savedModel = d.model || 'AN5516-04';
-
-  // Gera options das marcas
-  const brandOpts = Object.entries(SDR_OLT_MODELS).map(function(e) {
-    return '<option value="' + e[0] + '" ' + (savedBrand === e[0] ? 'selected' : '') + '>' + e[1].label + '</option>';
-  }).join('');
-
-  // Gera options dos modelos da marca salva
-  const brandData = SDR_OLT_MODELS[savedBrand] || SDR_OLT_MODELS.fiberhome;
-  const modelOpts = Object.entries(brandData.models || {}).map(function(e) {
-    return '<option value="' + e[0] + '" ' + (savedModel === e[0] ? 'selected' : '') + '>' + e[0] + ' — ' + e[1].desc + '</option>';
-  }).join('');
-
-  const initSlots = d.slot_count  || (brandData.models[savedModel] || {}).slots  || 4;
-  const initGbics = d.gbics_per_slot || (brandData.models[savedModel] || {}).gbics || 8;
-  const initOrient = d.orientation || (brandData.models[savedModel] || {}).orient || 'deitada';
-
-  let html = `<div class="modal-overlay" id="sdr-modal" onclick="if(event.target===this)this.remove()">
-    <div class="modal-box" style="max-width:560px">
-      <div class="modal-header">
-        <h3><i class="fas fa-server" style="color:#dc2626;margin-right:8px"></i>${isEdit ? 'Editar' : 'Nova'} OLT</h3>
-        <button onclick="document.getElementById('sdr-modal').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">&times;</button>
-      </div>
-      <div class="modal-body">
-
-        <!-- Marca + Modelo -->
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <div class="form-group" style="flex:1">
-            <label>Marca</label>
-            <select id="sdr-olt-brand" onchange="sdrOltBrandChange()">${brandOpts}</select>
-          </div>
-          <div class="form-group" style="flex:2">
-            <label>Modelo</label>
-            <select id="sdr-olt-model-sel" onchange="sdrOltModelChange()">${modelOpts}</select>
-          </div>
-        </div>
-
-        <!-- Preview visual do chassis -->
-        <div id="olt-chassis-prev" style="margin-bottom:12px;border-radius:8px;overflow:hidden"></div>
-
-        <!-- Nome + IP -->
-        <div class="form-group"><label>Nome da OLT</label><input id="sdr-olt-name" value="${d.name || ''}" placeholder="Ex: OLT-01 Central"></div>
-        <div style="display:flex;gap:10px">
-          <div class="form-group" style="flex:2"><label>IP Address</label><input id="sdr-olt-ip" value="${d.ip_address || ''}" placeholder="Ex: 192.168.1.100"></div>
-          <div class="form-group" style="flex:1"><label>Portas PON</label><input id="sdr-olt-pon" type="number" value="${d.total_pon_ports || initSlots * initGbics}"></div>
-        </div>
-
-        <!-- Campos técnicos (preenchidos pelo modelo, ajustáveis) -->
-        <div style="background:#f8fafc;border-radius:8px;padding:10px;margin-bottom:10px">
-          <div style="font-size:.72rem;color:#64748b;font-weight:600;margin-bottom:6px">Especificações do Chassis</div>
-          <div style="display:flex;gap:8px">
-            <div class="form-group" style="flex:1">
-              <label>Placas</label>
-              <select id="sdr-olt-orient" onchange="sdrOltChassisPreview()">
-                <option value="deitada" ${initOrient==='deitada'?'selected':''}>━ Deitadas</option>
-                <option value="pe" ${initOrient==='pe'?'selected':''}>┃ Em pé</option>
-              </select>
-            </div>
-            <div class="form-group" style="flex:1">
-              <label>Nº de Slots</label>
-              <input id="sdr-olt-slots" type="number" min="1" max="32" value="${initSlots}"
-                oninput="sdrOltChassisPreview()">
-            </div>
-            <div class="form-group" style="flex:1">
-              <label>GBICs / Slot</label>
-              <input id="sdr-olt-gbics" type="number" min="1" max="64" value="${initGbics}"
-                oninput="sdrOltChassisPreview()">
-            </div>
-          </div>
-          <div style="font-size:.72rem;color:#15803d">
-            <i class="fas fa-info-circle"></i> Capacidade total: <b id="olt-cap-calc">${initSlots * initGbics} GBICs</b>
-          </div>
-        </div>
-
-        <!-- Hidden: nome do modelo (texto) -->
-        <input type="hidden" id="sdr-olt-model" value="${d.model || savedModel}">
-
-        <!-- SNMP -->
-        <div style="display:flex;gap:10px">
-          <div class="form-group" style="flex:1"><label>SNMP Community</label><input id="sdr-olt-snmp" value="${d.snmp_community || 'public'}" placeholder="public"></div>
-          <div class="form-group" style="flex:1"><label>Versão SNMP</label>
-            <select id="sdr-olt-snmpv">
-              <option value="2c" ${d.snmp_version !== '3' ? 'selected' : ''}>v2c</option>
-              <option value="3" ${d.snmp_version === '3' ? 'selected' : ''}>v3</option>
-            </select>
-          </div>
-        </div>
-        <div style="display:flex;gap:10px">
-          <div class="form-group" style="flex:1"><label>Latitude</label><input id="sdr-olt-lat" type="number" step="any" value="${d.lat || ''}"></div>
-          <div class="form-group" style="flex:1"><label>Longitude</label><input id="sdr-olt-lng" type="number" step="any" value="${d.lng || ''}"></div>
-        </div>
-        <div class="form-group">
-          <label style="display:flex;align-items:center;gap:6px">
-            <input type="checkbox" id="sdr-olt-active" ${d.is_active !== false ? 'checked' : ''}> OLT Ativa
-          </label>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" onclick="document.getElementById('sdr-modal').remove()">Cancelar</button>
-        <button class="btn-primary" onclick="sdrOltSave('${editId || ''}')">${isEdit ? 'Salvar' : 'Cadastrar'}</button>
-      </div>
-    </div>
-  </div>`;
-  document.body.insertAdjacentHTML('beforeend', html);
-  document.getElementById('sdr-modal').classList.add('open');
-  // Renderiza preview inicial
-  setTimeout(function(){ window.sdrOltChassisPreview(); }, 50);
-=======
   // Buscar DGOs disponíveis para seleção antes de abrir o modal
   sdrRef('infrastructure').once('value').then(function(snap) {
     var allInfra = snap.val() || {};
@@ -4423,7 +4720,6 @@ window.sdrOltModalCriarDgo = function(oltIdOrPlaceholder) {
     // Reabrir modal da OLT após a criação do DGO
     setTimeout(function() { sdrOltAddModal(editId || ''); }, 500);
   };
->>>>>>> develop
 };
 
 window.sdrOltSave = async function(editId) {
@@ -4432,31 +4728,8 @@ window.sdrOltSave = async function(editId) {
 
   const dgoIdSelecionado = ((document.getElementById('sdr-olt-dgo-id') || {}).value || '').trim();
 
-  const slotCount  = parseInt(document.getElementById('sdr-olt-slots').value)  || 4;
-  const gbicsSlot  = parseInt(document.getElementById('sdr-olt-gbics').value)  || 8;
-  const brandKey   = (document.getElementById('sdr-olt-brand')     || {}).value || '';
-  const modelSel   = (document.getElementById('sdr-olt-model-sel') || {}).value || '';
-  // Busca specs visuais do modelo para salvar junto
-  const _bSpecs = ((SDR_OLT_MODELS[brandKey] || {}).models || {})[modelSel] || {};
   const data = {
     name,
-<<<<<<< HEAD
-    brand: brandKey,
-    model: modelSel || document.getElementById('sdr-olt-model').value.trim(),
-    chassis_color: _bSpecs.chassis || '#0d1117',
-    plate_color:   _bSpecs.plate   || '#1e3a5f',
-    brand_color:   (SDR_OLT_MODELS[brandKey] || {}).brandColor || '#374151',
-    ip_address: document.getElementById('sdr-olt-ip').value.trim(),
-    total_pon_ports: parseInt(document.getElementById('sdr-olt-pon').value) || 8,
-    orientation: document.getElementById('sdr-olt-orient').value || 'deitada',
-    slot_count: slotCount,
-    gbics_per_slot: gbicsSlot,
-    total_gbics: slotCount * gbicsSlot,
-    snmp_community: document.getElementById('sdr-olt-snmp').value.trim() || 'public',
-    snmp_version: document.getElementById('sdr-olt-snmpv').value,
-    is_active: document.getElementById('sdr-olt-active').checked,
-    updated_at: new Date().toISOString()
-=======
     model:           (document.getElementById('sdr-olt-model')  || {}).value && document.getElementById('sdr-olt-model').value.trim()  || '',
     ip_address:      (document.getElementById('sdr-olt-ip')     || {}).value && document.getElementById('sdr-olt-ip').value.trim()     || '',
     total_pon_ports: parseInt((document.getElementById('sdr-olt-pon') || {}).value) || 8,
@@ -4464,7 +4737,6 @@ window.sdrOltSave = async function(editId) {
     snmp_version:    (document.getElementById('sdr-olt-snmpv')  || {}).value || '2c',
     is_active:       !!(document.getElementById('sdr-olt-active') || {}).checked,
     updated_at:      new Date().toISOString()
->>>>>>> develop
   };
   const lat = parseFloat((document.getElementById('sdr-olt-lat') || {}).value);
   const lng = parseFloat((document.getElementById('sdr-olt-lng') || {}).value);
@@ -4474,29 +4746,6 @@ window.sdrOltSave = async function(editId) {
   if (!editId) data.created_at = new Date().toISOString();
 
   try {
-<<<<<<< HEAD
-    var savedId;
-    if (editId) {
-      await sdrRef(`olt_connections/${editId}`).update(data);
-      savedId = editId;
-      toast('OLT atualizada!', 'success');
-    } else {
-      var newOltRef = await sdrRef('olt_connections').push(data);
-      savedId = newOltRef.key;
-      toast('OLT cadastrada!', 'success');
-    }
-    document.getElementById('sdr-modal').remove();
-    _sdrActiveOltTab = savedId;
-    sdrOltsRender();
-    // Se nova OLT sem coordenadas, oferece posicionamento no mapa
-    if (!editId && !data.lat) {
-      setTimeout(function() {
-        if (confirm('OLT cadastrada!\n\nDeseja posicioná-la no mapa agora?\n(Você poderá fazer isso depois pelo botão "📍 Posicionar" no painel.)')) {
-          sdrOltStartMapPlace(savedId);
-        }
-      }, 500);
-    }
-=======
     var oltId = editId;
 
     if (editId) {
@@ -4543,7 +4792,6 @@ window.sdrOltSave = async function(editId) {
         sdrOltInlineRender(editId);
       }
     }
->>>>>>> develop
   } catch (e) {
     if (typeof toast === 'function') toast('Erro: ' + e.message, 'error');
     console.error('[sdrOltSave]', e);
@@ -4551,13 +4799,11 @@ window.sdrOltSave = async function(editId) {
 };
 
 window.sdrOltDelete = async function(id) {
-  if (!confirm('Excluir esta OLT e todos os seus dados de conexão?')) return;
+  if (!confirm('Excluir esta OLT?')) return;
   try {
     await sdrRef(`olt_connections/${id}`).remove();
     toast('OLT excluída', 'success');
-    if (typeof sdrCloseSidePanel === 'function') sdrCloseSidePanel();
-    // Se era a aba ativa, limpa para selecionar outra
-    if (_sdrActiveOltTab === id) _sdrActiveOltTab = null;
+    sdrCloseSidePanel();
     sdrOltsRender();
   } catch (e) { toast('Erro: ' + e.message, 'error'); }
 };
@@ -4623,7 +4869,6 @@ window.sdrOpenOltPanel = function(id) {
 // ============================================================
 
 window.sdrOltVisualModal = function(oltId) {
-  _sdrInjectLightCSS(); // garante CSS de animação (sdr-glow para rompimento)
   Promise.all([
     sdrRef('olt_connections/' + oltId).once('value'),
     sdrRef('olt_connections/' + oltId + '/pons').once('value'),
@@ -4650,144 +4895,70 @@ window.sdrOltVisualModal = function(oltId) {
     });
 
     var slotCount  = olt.slot_count  || 4;
-    var ponPerSlot = olt.pon_per_slot || olt.gbics_per_slot || 8;
-
-    // Cores do modelo real (salvas no Firebase pelo sdrOltSave)
-    var chassisColor = olt.chassis_color || '#0d1117';
-    var plateColor   = olt.plate_color   || '#1e3a5f';
-    var brandColor   = olt.brand_color   || '#374151';
-    var brandLabel   = (SDR_OLT_MODELS[olt.brand] || {}).label || (olt.brand || '');
-    var modelLabel   = olt.model || '';
+    var ponPerSlot = olt.pon_per_slot || 8;
 
     // DGO summary panel
     var dgoHtml = Object.entries(dgos).map(function(e) {
       var did = e[0], d = e[1];
       var usedFibers = Object.values(d.fibers || {}).filter(function(f){ return f && f.status === 'used'; }).length;
       var total = (d.tube_count || 12) * (d.fiber_per_tube || 12);
-      var dgoOrientIcon = d.orientation === 'deitado' ? '📦' : '🗂';
       return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border-radius:6px;border:1px solid #e5e7eb;font-size:.75rem;cursor:pointer" onclick="sdrDgo144View(\'' + did + '\')">'
         + '<i class="fas fa-network-wired" style="color:#3b82f6"></i>'
         + '<span style="font-weight:600;flex:1">' + (d.nome || did) + '</span>'
-        + '<span title="Orientação" style="font-size:.8rem">' + dgoOrientIcon + '</span>'
         + '<span style="color:#64748b">' + usedFibers + '/' + total + ' fibras</span>'
         + '<i class="fas fa-eye" style="color:#94a3b8;font-size:.7rem"></i>'
         + '</div>';
     }).join('') || '<div style="font-size:.75rem;color:#94a3b8;font-style:italic">Nenhum DGO cadastrado</div>';
 
-    // Build chassis grid — dois modos: deitada (placas horizontais) ou em pé (placas verticais)
-    var isVertical = (olt.orientation === 'pe'); // placas em pé = colunas lado a lado
+    // Build chassis grid
     var chassisHtml = '';
-
-    function _portDiv(oltId2, sl2, po2, pons2, onusByPon2, dgos2, size) {
-      var k    = 's' + sl2 + '_p' + po2;
-      var cfg2 = pons2[k] || {};
-      var onu2 = onusByPon2[k] || [];
-      var offC = onu2.filter(function(u){ return u.status === 'offline'; }).length;
-      // Rompimento: todas ONUs offline (≥1) → cabo rompido
-      var romped = onu2.length >= 1 && offC === onu2.length;
-      var alarm  = offC > 0 && !romped; // parcial
-      var bg2, border2, ttl;
-      if (!cfg2.active) {
-        bg2 = '#334155'; border2 = 'rgba(255,255,255,.08)';
-        ttl = 'PON ' + po2 + ' — Inativa';
-      } else if (cfg2.dgo_id) {
-        var dn = (dgos2[cfg2.dgo_id] || {}).nome || 'DGO';
-        if (romped)     { bg2 = '#7f1d1d'; border2 = '#ef4444'; } // vermelho = rompimento total
-        else if (alarm) { bg2 = '#7c2d12'; border2 = '#f97316'; } // laranja = rompimento parcial
-        else            { bg2 = '#14532d'; border2 = '#22c55e'; } // verde = ok
-        ttl = (romped ? '⚡ ROMPIMENTO — ' : '') + 'PON ' + po2 + ' — ' + dn
-          + ' · ' + (cfg2.dgo_fiber_key || '—')
-          + ' · ' + offC + '/' + onu2.length + ' offline';
-      } else {
-        bg2 = '#1e40af'; border2 = '#3b82f6';
-        ttl = 'PON ' + po2 + ' — Ativa · sem DGO · clique para configurar';
+    for (var sl = 1; sl <= slotCount; sl++) {
+      var slotCfg  = ((olt.slots || {})[sl]) || {};
+      var portCount = slotCfg.pon_count || ponPerSlot;
+      chassisHtml += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'
+        + '<div style="width:58px;font-size:.65rem;font-weight:700;color:#94a3b8;text-align:right;flex-shrink:0">Slot ' + sl + '</div>'
+        + '<div style="background:#0f172a;border:1px solid #334155;border-radius:4px;padding:4px 6px;display:flex;gap:3px;flex:1">';
+      for (var po = 1; po <= portCount; po++) {
+        var key = 's' + sl + '_p' + po;
+        var cfg = pons[key] || {};
+        var portOnus = onusByPon[key] || [];
+        var hasAlarm = portOnus.some(function(u){ return u.status === 'offline'; });
+        var bg, title, lbl;
+        if (!cfg.active) {
+          bg = '#334155'; title = 'PON ' + po + ' — Inativa (clique para configurar)';
+        } else if (cfg.dgo_id) {
+          var dgoName = (dgos[cfg.dgo_id] || {}).nome || 'DGO';
+          bg = hasAlarm ? '#dc2626' : '#16a34a';
+          title = 'PON ' + po + ' — ' + dgoName + ' · ' + (cfg.dgo_fiber_key || '—') + ' · ' + portOnus.length + ' ONUs';
+        } else {
+          bg = '#2563eb'; title = 'PON ' + po + ' — Ativa (sem DGO)';
+        }
+        chassisHtml += '<div onclick="sdrPonConfig(\'' + oltId + '\',' + sl + ',' + po + ')" title="' + title + '" '
+          + 'style="width:26px;height:26px;border-radius:3px;background:' + bg + ';cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.58rem;color:#fff;font-weight:700;border:1px solid rgba(255,255,255,.12);transition:transform .12s" '
+          + 'onmouseover="this.style.transform=\'scale(1.18)\';this.style.zIndex=10" onmouseout="this.style.transform=\'\';this.style.zIndex=\'\'">' + po + '</div>';
       }
-      var s = size || 26;
-      // Efeito de pulso no rompimento via box-shadow animado
-      var extra = romped ? 'animation:sdr-glow .7s ease-in-out infinite;' : '';
-      return '<div onclick="sdrPonConfig(\'' + oltId2 + '\',' + sl2 + ',' + po2 + ')" title="' + ttl + '" '
-        + 'style="width:' + s + 'px;height:' + s + 'px;border-radius:3px;background:' + bg2 + ';cursor:pointer;'
-        + 'display:flex;align-items:center;justify-content:center;font-size:.55rem;color:#fff;font-weight:700;'
-        + 'border:1px solid ' + border2 + ';transition:transform .12s;flex-shrink:0;' + extra + '" '
-        + 'onmouseover="this.style.transform=\'scale(1.2)\';this.style.zIndex=10" '
-        + 'onmouseout="this.style.transform=\'\';this.style.zIndex=\'\'">' + po2 + '</div>';
+      chassisHtml += '</div></div>';
     }
 
-    if (isVertical) {
-      // ── Placas EM PÉ: cada slot é uma coluna, portas empilham de cima pra baixo ──
-      // ── Placas EM PÉ: colunas ──
-      chassisHtml += '<div style="background:' + chassisColor + ';border:2px solid ' + plateColor + '66;border-radius:8px;padding:10px;display:inline-flex;gap:4px;align-items:flex-start">';
-      for (var sl = 1; sl <= slotCount; sl++) {
-        var slotCfg  = ((olt.slots || {})[sl]) || {};
-        var portCount = slotCfg.pon_count || ponPerSlot;
-        chassisHtml += '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
-          + '<div style="font-size:.58rem;font-weight:700;color:' + plateColor + ';padding:2px 4px;background:' + plateColor + '22;border-radius:3px;text-align:center;white-space:nowrap">S' + sl + '</div>'
-          + '<div style="background:' + plateColor + '18;border:1px solid ' + plateColor + '55;border-radius:4px;padding:4px 3px;display:flex;flex-direction:column;gap:3px">';
-        for (var po = 1; po <= portCount; po++) {
-          chassisHtml += _portDiv(oltId, sl, po, pons, onusByPon, dgos, 28);
-        }
-        chassisHtml += '</div></div>';
-      }
-      chassisHtml += '</div>';
-    } else {
-      // ── Placas DEITADAS: linhas — faz parecer com front panel real ──
-      // Frame externo do chassis
-      chassisHtml += '<div style="background:' + chassisColor + ';border:2px solid ' + plateColor + '55;border-radius:8px;padding:8px 10px;overflow:auto">';
-      // Barra de logo/LEDs no topo
-      if (brandLabel) {
-        chassisHtml += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid ' + plateColor + '33">'
-          + '<div style="display:flex;align-items:center;gap:5px">'
-          + '<div style="width:5px;height:18px;background:' + brandColor + ';border-radius:1px"></div>'
-          + '<span style="font-size:.68rem;font-weight:900;color:' + brandColor + ';letter-spacing:.06em">' + brandLabel.toUpperCase() + '</span>'
-          + '<span style="font-size:.6rem;color:#475569;margin-left:4px">' + modelLabel + '</span>'
-          + '</div>'
-          + '<div style="display:flex;gap:4px;align-items:center">'
-          + '<div style="width:6px;height:6px;border-radius:50%;background:#16a34a;box-shadow:0 0 4px #16a34a" title="PWR"></div>'
-          + '<div style="width:6px;height:6px;border-radius:50%;background:#374151" title="ALM"></div>'
-          + '<div style="width:6px;height:6px;border-radius:50%;background:#2563eb;box-shadow:0 0 4px #2563eb66;animation:sdr-glow 2s ease-in-out infinite" title="SYN"></div>'
-          + '</div>'
-          + '</div>';
-      }
-      for (var sl = 1; sl <= slotCount; sl++) {
-        var slotCfg  = ((olt.slots || {})[sl]) || {};
-        var portCount = slotCfg.pon_count || ponPerSlot;
-        // Cada slot = placa física com sua cor
-        chassisHtml += '<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;background:' + plateColor + '15;border:1px solid ' + plateColor + '44;border-radius:4px;padding:3px 6px">'
-          + '<div style="width:4px;height:100%;min-height:28px;background:' + plateColor + ';border-radius:2px;flex-shrink:0"></div>'
-          + '<div style="width:42px;font-size:.6rem;font-weight:700;color:' + plateColor + ';flex-shrink:0;line-height:1.1">SL<br>' + sl + '</div>'
-          + '<div style="display:flex;gap:2px;flex-wrap:wrap;flex:1">';
-        for (var po = 1; po <= portCount; po++) {
-          chassisHtml += _portDiv(oltId, sl, po, pons, onusByPon, dgos, 26);
-        }
-        chassisHtml += '</div></div>';
-      }
-      chassisHtml += '</div>';
-    }
-
-    var legend = '<div style="display:flex;gap:12px;font-size:.7rem;color:#64748b;margin-bottom:10px;flex-wrap:wrap;align-items:center">'
+    var legend = '<div style="display:flex;gap:14px;font-size:.7rem;color:#64748b;margin-bottom:10px;flex-wrap:wrap">'
       + '<span><span style="display:inline-block;width:9px;height:9px;background:#334155;border-radius:2px;margin-right:3px"></span>Inativa</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#1e40af;border:1px solid #3b82f6;border-radius:2px;margin-right:3px"></span>Ativa · sem DGO</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#14532d;border:1px solid #22c55e;border-radius:2px;margin-right:3px"></span>OK</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#7c2d12;border:1px solid #f97316;border-radius:2px;margin-right:3px"></span>🟠 Rompimento parcial</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#7f1d1d;border:1px solid #ef4444;border-radius:2px;margin-right:3px"></span>🔴 Rompimento total</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#2563eb;border-radius:2px;margin-right:3px"></span>Ativa · Sem DGO</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#16a34a;border-radius:2px;margin-right:3px"></span>Ativa · Conectada</span>'
+      + '<span><span style="display:inline-block;width:9px;height:9px;background:#dc2626;border-radius:2px;margin-right:3px"></span>Alarme</span>'
       + '</div>';
 
     var html = '<div class="modal-overlay open" id="sdr-modal-olt-visual" onclick="if(event.target===this)this.remove()">'
-      + '<div class="modal-box" style="max-width:760px;width:96vw">'
-      + '<div class="modal-header" style="background:' + chassisColor + ';border-bottom:2px solid ' + plateColor + '44">'
-      + '<h3 style="display:flex;align-items:center;gap:8px;color:#f1f5f9">'
-      + (brandLabel ? '<span style="display:inline-block;width:4px;height:20px;background:' + brandColor + ';border-radius:2px"></span><span style="color:' + brandColor + ';font-size:.8rem">' + brandLabel + '</span>' : '')
-      + '<i class="fas fa-server" style="color:' + plateColor + ';font-size:.9rem"></i>' + (olt.name || oltId) + '</h3>'
-      + '<button onclick="document.getElementById(\'sdr-modal-olt-visual\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#94a3b8">&times;</button>'
+      + '<div class="modal-box" style="max-width:740px;width:96vw">'
+      + '<div class="modal-header">'
+      + '<h3><i class="fas fa-server" style="color:#dc2626;margin-right:8px"></i>Chassis — ' + (olt.name || oltId) + '</h3>'
+      + '<button onclick="document.getElementById(\'sdr-modal-olt-visual\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--muted)">&times;</button>'
       + '</div>'
       + '<div class="modal-body">'
-      + '<div style="display:flex;gap:14px;margin-bottom:12px;flex-wrap:wrap;font-size:.78rem;align-items:center">'
-      + '<span style="font-family:monospace;color:#94a3b8">' + (olt.ip_address || '—') + '</span>'
-      + '<span><i class="fas fa-circle" style="color:' + (olt.is_active ? '#16a34a' : '#94a3b8') + ';font-size:.5rem;vertical-align:middle"></i> ' + (olt.is_active ? 'Ativa' : 'Inativa') + '</span>'
-      + '<span style="color:#64748b">' + (olt.orientation === 'pe' ? '┃ Em pé' : '━ Deitadas') + '</span>'
-      + '<span><i class="fas fa-th-large" style="color:#7c3aed"></i> ' + slotCount + ' × ' + (olt.gbics_per_slot || ponPerSlot) + ' = <b>' + (slotCount * (olt.gbics_per_slot || ponPerSlot)) + '</b> PON</span>'
+      + '<div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap;font-size:.8rem;align-items:center">'
+      + '<span><i class="fas fa-microchip" style="color:#64748b"></i> ' + (olt.model || '—') + '</span>'
+      + '<span style="font-family:monospace">' + (olt.ip_address || '—') + '</span>'
+      + '<span><i class="fas fa-circle" style="color:' + (olt.is_active ? '#16a34a' : '#94a3b8') + ';font-size:.55rem;vertical-align:middle"></i> ' + (olt.is_active ? 'Ativa' : 'Inativa') + '</span>'
       + '<div style="margin-left:auto;display:flex;gap:6px">'
-      + '<button class="btn-map" onclick="sdrOltLightpathModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.74rem;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;border-color:#4338ca"><i class="fas fa-project-diagram"></i> Diagrama</button>'
       + '<button class="btn-map" onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.74rem"><i class="fas fa-plus"></i> Novo DGO</button>'
       + '<button class="btn-map" onclick="sdrOltSlotAdd(\'' + oltId + '\')" style="padding:4px 10px;font-size:.74rem"><i class="fas fa-plus-square"></i> Slot</button>'
       + '</div></div>'
@@ -4957,509 +5128,6 @@ window.sdrDgo144Modal = function(dgoId, oltId, slot, port) {
 // View-only (sem seleção)
 window.sdrDgo144View = function(dgoId) { sdrDgo144Modal(dgoId, null, null, null); };
 
-// ════════════════════════════════════════════════════════════════
-// DIAGRAMA DE CONEXÃO — OLT ↔ DGO com cordões animados
-// ════════════════════════════════════════════════════════════════
-
-function _sdrInjectLightCSS() {
-  if (document.getElementById('sdr-lp-css')) return;
-  var s = document.createElement('style'); s.id = 'sdr-lp-css';
-  s.textContent = [
-    '@keyframes sdr-cord{to{stroke-dashoffset:-36}}',
-    '@keyframes sdr-glow{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(1.08)}}',
-    '.sdr-port-lit{outline:3px solid #818cf8!important;box-shadow:0 0 10px #6366f1!important;animation:sdr-glow .9s ease-in-out infinite;z-index:5;position:relative}',
-    '.sdr-fib-lit {outline:3px solid #fbbf24!important;box-shadow:0 0 10px #f59e0b!important;animation:sdr-glow .9s ease-in-out infinite;z-index:5;position:relative}',
-    '.sdr-cord-active{stroke-dasharray:12 6!important;animation:sdr-cord .45s linear infinite;filter:drop-shadow(0 0 4px #6366f1)!important}',
-    '.sdr-lp-selected{outline:3px solid #f59e0b!important;box-shadow:0 0 14px #f59e0baa!important;animation:sdr-glow .8s ease-in-out infinite;z-index:5;position:relative}',
-    '.sdr-fib-connectable{box-shadow:0 0 7px #f59e0b88!important;border-color:#f59e0b!important;cursor:pointer!important;animation:sdr-glow 1.2s ease-in-out infinite}'
-  ].join('');
-  document.head.appendChild(s);
-}
-
-function _dbtS(color) {
-  return 'background:' + color + '22;color:' + color + ';border:1px solid ' + color + '44';
-}
-
-window.sdrOltLightpathModal = function(oltId) {
-  _sdrInjectLightCSS();
-  var _inlineEl = document.getElementById('olt-panel-content');
-  Promise.all([
-    sdrRef('olt_connections/' + oltId).once('value'),
-    sdrRef('olt_connections/' + oltId + '/pons').once('value'),
-    sdrRef('infrastructure').once('value'),
-    sdrRef('onus').once('value')
-  ]).then(function(snaps) {
-    var olt   = snaps[0].val() || {};
-    var pons  = snaps[1].val() || {};
-    var infra = snaps[2].val() || {};
-    var onus  = snaps[3].val() || {};
-
-    // DGOs desta OLT — vinculados por olt_id ou por conexão de PON
-    var dgos = {};
-    Object.entries(infra).forEach(function(e) {
-      var d = e[1];
-      if (!d || d.type !== 'dgo') return;
-      var linked = d.olt_id === oltId;
-      if (!linked) linked = Object.values(pons).some(function(p){ return p && p.dgo_id === e[0]; });
-      if (linked) dgos[e[0]] = d;
-    });
-
-    // ONUs por PON key
-    var onusByPon = {};
-    Object.values(onus).forEach(function(u) {
-      if (u && u.olt_id === oltId && u.slot != null && u.port != null) {
-        var k = 's' + u.slot + '_p' + u.port;
-        if (!onusByPon[k]) onusByPon[k] = [];
-        onusByPon[k].push(u);
-      }
-    });
-
-    var slotCount  = olt.slot_count  || 4;
-    var ponPerSlot = olt.pon_per_slot || olt.gbics_per_slot || 8;
-    var orientIcon = olt.orientation === 'pe' ? '┃ Placas em pé' : '━ Placas deitadas';
-
-    // ── OLT chassis HTML ─────────────────────────────────────────
-    var oltHtml = '';
-    for (var sl = 1; sl <= slotCount; sl++) {
-      oltHtml += '<div style="margin-bottom:12px">'
-        + '<div style="font-size:.6rem;font-weight:700;color:#475569;letter-spacing:.1em;margin-bottom:5px;padding:2px 6px;background:#1a2a40;border-radius:3px;display:inline-block">SLOT ' + sl + '</div>'
-        + '<div style="display:flex;gap:3px;flex-wrap:wrap;background:#0a1628;padding:6px;border-radius:6px;border:1px solid #1e3a5f">';
-      var portCount = ((olt.slots || {})[sl] || {}).pon_count || ponPerSlot;
-      for (var po = 1; po <= portCount; po++) {
-        var pkey = 's' + sl + '_p' + po;
-        var cfg  = pons[pkey] || {};
-        var portOnus = onusByPon[pkey] || [];
-        var isConn   = !!(cfg.active && cfg.dgo_id);
-        var offCount = portOnus.filter(function(u){ return u.status === 'offline'; }).length;
-        var hasAlarm = offCount > 0;
-        // Rompimento: TODAS as ONUs da porta estão offline (≥1 ONU) → cabo rompido
-        var isRomped = portOnus.length >= 1 && offCount === portOnus.length;
-        var bg, bdr, clkAttr = '', extraBtn = '';
-        if (!cfg.active)  { bg='#0d1a2e'; bdr='#1e3a5f'; }
-        else if (isConn)  {
-          if (isRomped)      { bg='#7f1d1d'; bdr='#ef4444'; }
-          else if (hasAlarm) { bg='#431407'; bdr='#f97316'; }
-          else               { bg='#14532d'; bdr='#22c55e'; }
-          // 1×clique = iluminar cordão | 2×clique = desconectar
-          clkAttr = 'data-dgo="' + cfg.dgo_id + '" data-fiber="' + (cfg.dgo_fiber_key||'') + '"'
-            + ' onclick="sdrLpHighlight(\'pon\',\'' + sl + '_' + po + '\')"'
-            + ' ondblclick="event.stopPropagation();sdrLpDisconnect(\'' + oltId + '\',' + sl + ',' + po + ')"';
-        } else {
-          // Ativa sem DGO → 1×clique seleciona para conectar
-          bg='#1c1500'; bdr='#f59e0b';
-          clkAttr = 'onclick="sdrLpPonSelect(\'' + oltId + '\',' + sl + ',' + po + ')"';
-        }
-        // Stub — pequena linha saindo da direita da porta (indica saída do cordão)
-        var stub = isConn
-          ? '<div style="position:absolute;right:-6px;top:50%;transform:translateY(-50%);width:6px;height:2px;background:' + bdr + ';opacity:.9"></div>'
-          : '';
-        var ponTitle = isConn
-          ? (isRomped ? '⚡ ROMPIMENTO — ' : '') + 'Slot '+sl+' PON '+po+' → '+(dgos[cfg.dgo_id]||{}).nome+' / '+cfg.dgo_fiber_key
-            + ' · '+offCount+'/'+portOnus.length+' offline'
-            + ' | 1×clique ilumina · 2×clique desconecta'
-          : (cfg.active ? 'Slot '+sl+' PON '+po+' — livre · clique para conectar' : 'Slot '+sl+' PON '+po+' — Inativa');
-        oltHtml += '<div id="lp-pon-' + sl + '_' + po + '" ' + clkAttr
-          + ' title="' + ponTitle + '"'
-          + ' style="position:relative;width:30px;height:30px;border-radius:4px;background:' + bg + ';border:2px solid ' + bdr + ';cursor:' + (cfg.active?'pointer':'default') + ';display:flex;align-items:center;justify-content:center;font-size:.6rem;color:#e2e8f0;font-weight:700;flex-shrink:0;user-select:none;transition:transform .12s" '
-          + 'onmouseover="if(this.style.cursor!==\'default\')this.style.transform=\'scale(1.15)\'" '
-          + 'onmouseout="this.style.transform=\'\'">'
-          + po + stub + '</div>';
-      }
-      oltHtml += '</div></div>';
-    }
-
-    // ── DGO panels HTML ───────────────────────────────────────────
-    var TC = ['#64748b','#fb923c','#84cc16','#38bdf8','#facc15','#c084fc','#f87171','#4ade80','#a16207','#2dd4bf','#818cf8','#fb7185'];
-    var TN = ['Cinza','Laranja','Verde','Azul','Amarelo','Violeta','Vermelho','V.Claro','Marrom','Teal','Índigo','Rosa'];
-    var dgoHtml = '';
-    var dgoEntries = Object.entries(dgos);
-
-    if (!dgoEntries.length) {
-      dgoHtml = '<div style="text-align:center;padding:40px;color:#334155;font-size:.82rem">'
-        + '<i class="fas fa-network-wired" style="font-size:2.5rem;display:block;margin-bottom:10px;opacity:.2"></i>'
-        + 'Nenhum DGO cadastrado<br><span style="font-size:.72rem">Clique em "Novo DGO" para criar</span></div>';
-    } else {
-      dgoEntries.forEach(function(de) {
-        var did = de[0], d = de[1];
-        var fibers = d.fibers || {};
-        var tCount = d.tube_count || 12, fpt = d.fiber_per_tube || 12;
-        var totalF = tCount * fpt;
-        var usedF  = Object.values(fibers).filter(function(f){ return f && f.status === 'used'; }).length;
-        var freeF  = totalF - usedF;
-        var dgoOrient = d.orientation === 'deitado' ? '📦' : '🗂';
-        var freeBadge = '<span style="font-size:.6rem;color:' + (freeF > 0 ? '#4ade80' : '#64748b') + ';margin-left:auto">'
-          + freeF + ' livres</span>';
-        dgoHtml += '<div style="margin-bottom:16px;background:#0a1628;border-radius:10px;padding:10px;border:1px solid #1e3a5f">'
-          + '<div style="font-size:.78rem;font-weight:700;color:#60a5fa;margin-bottom:8px;display:flex;align-items:center;gap:6px">'
-          + '<i class="fas fa-network-wired"></i> ' + (d.nome || did)
-          + ' <span style="font-size:.65rem;font-weight:400;color:#475569">' + dgoOrient + ' · ' + totalF + 'F</span>'
-          + freeBadge + '</div>';
-        for (var t2 = 1; t2 <= tCount; t2++) {
-          dgoHtml += '<div style="margin-bottom:5px">'
-            + '<div style="font-size:.6rem;color:#475569;margin-bottom:3px;display:flex;align-items:center;gap:3px">'
-            + '<span style="display:inline-block;width:7px;height:7px;border-radius:1px;background:' + TC[t2-1] + '"></span>'
-            + 'T' + t2 + ' ' + TN[t2-1] + '</div>'
-            + '<div style="display:flex;gap:2px;flex-wrap:wrap">';
-          for (var f2 = 1; f2 <= fpt; f2++) {
-            var fkey2 = 't' + t2 + 'f' + f2;
-            var fib2  = fibers[fkey2] || {};
-            var isFree = fib2.status !== 'used';
-            var fBg   = isFree ? '#050e1c' : '#0e2a1a';
-            var fBdr  = isFree ? TC[t2-1] + '44' : '#22c55e';
-            var fClr  = isFree ? TC[t2-1] + '88' : '#4ade80';
-            var fTip  = isFree
-              ? ('T'+t2+'F'+f2+' — Livre (selecione uma PON e clique aqui para conectar)')
-              : ('T'+t2+'F'+f2+' → Slot '+(fib2.slot||'?')+' PON '+(fib2.port||'?')+' · Clique para iluminar');
-            var stubL = !isFree ? '<div style="position:absolute;left:-6px;top:50%;transform:translateY(-50%);width:6px;height:3px;background:' + fBdr + ';border-radius:2px 0 0 2px"></div>' : '';
-            var clkF  = isFree
-              ? ('class="lp-free-fiber" onclick="sdrLpFiberConnect(\'' + oltId + '\',\'' + did + '\',' + t2 + ',' + f2 + ')"')
-              : ('data-dgo="'+did+'" data-fiber="'+fkey2+'" data-slot="'+(fib2.slot||'')+'" data-port="'+(fib2.port||'')+'" onclick="sdrLpHighlight(\'fib\',\''+did+'_'+fkey2+'\')"');
-            dgoHtml += '<div id="lp-fib-' + did + '_' + fkey2 + '" ' + clkF
-              + ' title="' + fTip + '"'
-              + ' style="position:relative;width:22px;height:22px;border-radius:3px;background:' + fBg + ';border:1.5px solid ' + fBdr + ';cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:.55rem;color:' + fClr + ';font-weight:700;transition:transform .1s" '
-              + 'onmouseover="this.style.transform=\'scale(1.2)\'" onmouseout="this.style.transform=\'\'">'
-              + f2 + stubL + '</div>';
-          }
-          dgoHtml += '</div></div>';
-        }
-        dgoHtml += '</div>';
-      });
-    }
-
-    // ── HTML compartilhado: status bar + 3 colunas + legenda ────────
-    var _sharedBody =
-      // Status bar (visível só no modo de conexão)
-      '<div id="lp-status" style="display:none;background:#1c1500;border-bottom:1px solid #f59e0b44;padding:7px 16px;font-size:.78rem;color:#fbbf24;align-items:center;gap:8px;flex-shrink:0"></div>'
-      // Body 3 colunas: OLT | Zona de Cordões | DGO
-      + '<div id="lp-body" style="flex:1;display:flex;overflow:hidden;position:relative;min-height:0">'
-      + '<svg id="lp-svg" style="position:absolute;inset:0;pointer-events:none;z-index:1;overflow:visible" width="100%" height="100%"></svg>'
-      + '<div id="lp-olt-panel" style="position:relative;z-index:2;width:310px;flex-shrink:0;overflow-y:auto;padding:10px 4px 10px 12px;background:#060d1c;border-right:1px solid #0f172a">'
-      + '<div style="font-size:.65rem;font-weight:700;color:#ef4444;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
-      + '<span><i class="fas fa-server"></i> OLT — EM PÉ</span>'
-      + '<span style="font-size:.57rem;font-weight:400;color:#374151">🟡 1×clique=conectar &nbsp;2×clique=desconectar</span></div>'
-      + oltHtml
-      + '</div>'
-      + '<div id="lp-cord-zone" style="position:relative;z-index:2;width:72px;flex-shrink:0;background:#020810;display:flex;align-items:center;justify-content:center;border-left:1px solid #0c1525;border-right:1px solid #0c1525;overflow:hidden">'
-      + '<span style="writing-mode:vertical-rl;font-size:.52rem;letter-spacing:.18em;color:#0f2040;user-select:none;font-weight:700">CORDÕES</span>'
-      + '</div>'
-      + '<div id="lp-dgo-panel" style="position:relative;z-index:2;flex:1;overflow-y:auto;padding:10px 12px 10px 4px;background:#030b18;border-left:1px solid #0f172a">'
-      + '<div style="font-size:.65rem;font-weight:700;color:#3b82f6;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">'
-      + '<span><i class="fas fa-network-wired"></i> DGO — EM PÉ</span>'
-      + '<span style="font-size:.57rem;font-weight:400;color:#334155">1×clique=conectar</span></div>'
-      + dgoHtml
-      + '</div>'
-      + '</div>'
-      // Legenda
-      + '<div style="background:#1e293b;padding:6px 14px;display:flex;gap:12px;font-size:.67rem;color:#475569;flex-shrink:0;flex-wrap:wrap;border-top:1px solid #334155;align-items:center">'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#0e2a1a;border:1.5px solid #22c55e;border-radius:2px;margin-right:3px"></span>OK</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#431407;border:1.5px solid #f97316;border-radius:2px;margin-right:3px"></span>🟠 Rompimento parcial</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#7f1d1d;border:1.5px solid #ef4444;border-radius:2px;margin-right:3px"></span>🔴 Rompimento total</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#1c1500;border:1.5px solid #f59e0b;border-radius:2px;margin-right:3px"></span>Livre → conectar</span>'
-      + '<span><span style="display:inline-block;width:9px;height:9px;background:#0d1a2e;border:1.5px solid #1e3a5f;border-radius:2px;margin-right:3px"></span>Inativa</span>'
-      + '<span style="margin-left:auto;color:#f59e0b;font-size:.65rem"><i class="fas fa-plug"></i> 1×clique numa PON 🟡 → clique na fibra livre · 2×clique numa PON 🟢 → desconecta</span>'
-      + '</div>';
-
-    if (_inlineEl) {
-      // ── MODO INLINE — renderiza dentro da aba da página OLTs ──────
-      _inlineEl.innerHTML =
-        '<div style="height:100%;display:flex;flex-direction:column;background:#0f172a;overflow:hidden">'
-        // Header da aba com botões de ação
-        + '<div style="background:#1e293b;padding:9px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0;border-bottom:1px solid #334155;flex-wrap:wrap">'
-        + '<div style="width:26px;height:26px;background:linear-gradient(135deg,#6366f1,#7c3aed);border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-project-diagram" style="color:#fff;font-size:.75rem"></i></div>'
-        + '<div style="min-width:0">'
-        + '<div style="font-weight:700;font-size:.85rem;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + (olt.name || oltId) + '</div>'
-        + '<div style="font-size:.62rem;color:#475569">' + orientIcon + ' · ' + slotCount + ' slots · ' + (olt.gbics_per_slot || ponPerSlot) + ' GBICs/slot · IP: ' + (olt.ip_address || '—') + '</div>'
-        + '</div>'
-        + '<div style="margin-left:auto;display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
-        + '<button onclick="sdrOltAddModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Editar dados da OLT"><i class="fas fa-edit"></i> Editar</button>'
-        + '<button onclick="sdrOltVisualModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Visualização do chassis"><i class="fas fa-th"></i> Chassis</button>'
-        + '<button onclick="sdrOltSlotAdd(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#94a3b8;border-radius:5px;cursor:pointer" title="Gerenciar slots do chassis"><i class="fas fa-layer-group"></i> Slots</button>'
-        + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:#1e3a8a;border:1px solid #3b82f6;color:#93c5fd;border-radius:5px;cursor:pointer"><i class="fas fa-plus"></i> Novo DGO</button>'
-        + '<button onclick="sdrOltStartMapPlace(\'' + oltId + '\')" style="padding:4px 10px;font-size:.72rem;background:#14532d;border:1px solid #22c55e;color:#4ade80;border-radius:5px;cursor:pointer" title="Posicionar esta OLT no mapa"><i class="fas fa-map-marker-alt"></i> Posicionar</button>'
-        + '<button onclick="sdrOltTabSwitch(\'' + oltId + '\')" style="padding:4px 9px;font-size:.72rem;background:transparent;border:1px solid #334155;color:#64748b;border-radius:5px;cursor:pointer" title="Atualizar painel"><i class="fas fa-sync-alt"></i></button>'
-        + '<button onclick="sdrOltDelete(\'' + oltId + '\')" style="padding:4px 9px;font-size:.72rem;background:#450a0a;border:1px solid #ef4444;color:#f87171;border-radius:5px;cursor:pointer" title="Excluir OLT"><i class="fas fa-trash"></i></button>'
-        + '</div></div>'
-        + _sharedBody
-        + '</div>';
-    } else {
-      // ── MODO MODAL — fallback quando a página OLTs não está ativa ──
-      var html = '<div id="sdr-lp-modal" style="position:fixed;inset:0;z-index:50002;background:rgba(2,6,23,.88);display:flex;align-items:stretch;justify-content:center;padding:8px">'
-        + '<div style="background:#0f172a;border-radius:14px;width:100%;max-width:1200px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.9)">'
-        + '<div style="background:#1e293b;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #334155">'
-        + '<div style="width:32px;height:32px;background:linear-gradient(135deg,#6366f1,#7c3aed);border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="fas fa-project-diagram" style="color:#fff;font-size:.85rem"></i></div>'
-        + '<div><div style="font-weight:700;font-size:.9rem;color:#f1f5f9">Painel de Conexão — ' + (olt.name || oltId) + '</div>'
-        + '<div style="font-size:.7rem;color:#64748b">' + orientIcon + ' · ' + slotCount + ' slots · ' + (olt.gbics_per_slot || ponPerSlot) + ' GBICs/slot</div></div>'
-        + '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">'
-        + '<button onclick="sdrDgoCriarModal(\'' + oltId + '\')" style="background:#1e3a8a;border:1px solid #3b82f6;color:#93c5fd;padding:5px 11px;border-radius:6px;font-size:.73rem;cursor:pointer;white-space:nowrap"><i class="fas fa-plus"></i> Novo DGO</button>'
-        + '<button onclick="document.getElementById(\'sdr-lp-modal\').remove()" style="background:#ef4444;border:none;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center">&times;</button>'
-        + '</div></div>'
-        + _sharedBody
-        + '</div></div>';
-      var prev = document.getElementById('sdr-lp-modal');
-      if (prev) prev.remove();
-      document.body.insertAdjacentHTML('beforeend', html);
-    }
-
-    // Desenha cordões após render
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() { _sdrDrawAllCords(pons, dgos); });
-    });
-  });
-};
-
-// Desenha cordões com roteamento ortogonal (linhas retas + curvas de 90°)
-// Cordões saem pela LATERAL direita da OLT e entram pela LATERAL esquerda do DGO
-// Roteamento: porta → stub horizontal direita → zona de cordões (vertical) → stub horizontal esquerda → fibra
-function _sdrDrawAllCords(pons, dgos) {
-  var svg      = document.getElementById('lp-svg');
-  var body     = document.getElementById('lp-body');
-  var oltPanel = document.getElementById('lp-olt-panel');
-  var dgoPanel = document.getElementById('lp-dgo-panel');
-  var cordZone = document.getElementById('lp-cord-zone');
-  if (!svg || !body) return;
-
-  var br       = body.getBoundingClientRect();
-  // Limites da zona de cordões
-  var zoneL = cordZone ? cordZone.getBoundingClientRect().left  - br.left + 4 : (oltPanel ? oltPanel.getBoundingClientRect().right - br.left + 4 : 310);
-  var zoneR = cordZone ? cordZone.getBoundingClientRect().right - br.left - 4 : zoneL + 64;
-  var zoneW = Math.max(zoneR - zoneL, 10);
-
-  svg.innerHTML = ''; // limpa tudo
-
-  // Coleta todos os cordões existentes
-  var cords = [];
-  Object.entries(pons).forEach(function(e) {
-    var pkey = e[0], cfg = e[1];
-    if (!cfg || !cfg.active || !cfg.dgo_id || !cfg.dgo_fiber_key) return;
-    var m = pkey.match(/^s(\d+)_p(\d+)$/);
-    if (!m) return;
-    var ponEl = document.getElementById('lp-pon-' + m[1] + '_' + m[2]);
-    var fibEl = document.getElementById('lp-fib-' + cfg.dgo_id + '_' + cfg.dgo_fiber_key);
-    if (!ponEl || !fibEl) return;
-    var pr = ponEl.getBoundingClientRect();
-    var fr = fibEl.getBoundingClientRect();
-    cords.push({
-      id : m[1] + '_' + m[2],
-      x1 : pr.right - br.left,           // ponta direita da porta OLT
-      y1 : pr.top + pr.height / 2 - br.top,
-      x2 : fr.left  - br.left,           // ponta esquerda da fibra DGO
-      y2 : fr.top + fr.height / 2 - br.top
-    });
-  });
-
-  if (!cords.length) return;
-
-  // Distribui cordões em "lanes" dentro da zona para evitar sobreposição
-  // Ordena por y1 para atribuir lanes sequenciais
-  cords.sort(function(a, b) { return a.y1 - b.y1; });
-  var maxLanes  = Math.max(1, Math.min(cords.length, Math.floor(zoneW / 6)));
-  var laneStep  = zoneW / maxLanes;
-
-  cords.forEach(function(c, i) {
-    // X do segmento vertical dentro da zona (lane distribuída)
-    var laneX = zoneL + laneStep * (i % maxLanes) + laneStep / 2;
-    var r     = 7; // raio das curvas de 90°
-    var dy    = c.y2 - c.y1;
-    var d;
-
-    if (Math.abs(dy) < 2) {
-      // Mesmo Y — linha reta horizontal
-      d = 'M' + c.x1 + ',' + c.y1 + ' H' + c.x2;
-    } else {
-      var dir = dy > 0 ? 1 : -1;
-      var ar  = Math.min(r, Math.abs(dy) / 2); // raio adaptativo
-      // Caminho: saída direita → curva 90° para baixo/cima → vertical → curva 90° → entrada esquerda
-      d = 'M'  + c.x1              + ',' + c.y1
-        + ' H' + (laneX - ar)
-        + ' Q' + laneX + ',' + c.y1 + ' ' + laneX + ',' + (c.y1 + dir * ar)
-        + ' V' + (c.y2 - dir * ar)
-        + ' Q' + laneX + ',' + c.y2 + ' ' + (laneX + ar) + ',' + c.y2
-        + ' H' + c.x2;
-    }
-
-    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    path.setAttribute('id',           'lp-cord-' + c.id);
-    path.setAttribute('d',            d);
-    path.setAttribute('fill',         'none');
-    path.setAttribute('stroke',       '#1e3a5f');
-    path.setAttribute('stroke-width', '2');
-    path.setAttribute('opacity',      '0.8');
-    svg.appendChild(path);
-  });
-}
-
-// Ilumina o caminho ao clicar numa porta ou fibra
-window.sdrLpHighlight = function(type, id) {
-  _sdrInjectLightCSS();
-  // Limpa highlights anteriores
-  document.querySelectorAll('.sdr-port-lit,.sdr-fib-lit').forEach(function(el){
-    el.classList.remove('sdr-port-lit','sdr-fib-lit');
-  });
-  var svg = document.getElementById('lp-svg');
-  if (svg) {
-    svg.querySelectorAll('[data-lit]').forEach(function(p){
-      p.removeAttribute('data-lit');
-      p.setAttribute('stroke', '#1e3a5f');
-      p.setAttribute('stroke-width', '1.5');
-      p.setAttribute('opacity', '0.55');
-      p.classList.remove('sdr-cord-active');
-    });
-  }
-
-  var ponEl, fibEl, cordId;
-  if (type === 'pon') {
-    ponEl = document.getElementById('lp-pon-' + id);
-    if (!ponEl) return;
-    var dgoId2  = ponEl.dataset.dgo;
-    var fibKey2 = ponEl.dataset.fiber;
-    if (!dgoId2 || !fibKey2) return;
-    fibEl  = document.getElementById('lp-fib-' + dgoId2 + '_' + fibKey2);
-    cordId = 'lp-cord-' + id;
-  } else {
-    fibEl = document.getElementById('lp-fib-' + id);
-    if (!fibEl) return;
-    var sl2 = fibEl.dataset.slot, po2 = fibEl.dataset.port;
-    if (!sl2 || !po2) return;
-    ponEl  = document.getElementById('lp-pon-' + sl2 + '_' + po2);
-    cordId = 'lp-cord-' + sl2 + '_' + po2;
-  }
-
-  if (ponEl) ponEl.classList.add('sdr-port-lit');
-  if (fibEl) fibEl.classList.add('sdr-fib-lit');
-  var cord = cordId ? document.getElementById(cordId) : null;
-  if (cord) {
-    cord.setAttribute('stroke', '#818cf8');
-    cord.setAttribute('stroke-width', '3.5');
-    cord.setAttribute('opacity', '1');
-    cord.setAttribute('data-lit', '1');
-    cord.classList.add('sdr-cord-active');
-    cord.setAttribute('stroke-dasharray', '12 5');
-  }
-  if (fibEl) { try { fibEl.scrollIntoView({behavior:'smooth',block:'nearest'}); } catch(ex){} }
-  if (ponEl) { try { ponEl.scrollIntoView({behavior:'smooth',block:'nearest'}); } catch(ex){} }
-};
-
-// ── Estado de conexão interativa no painel lightpath ──────────────────
-var _sdrLpConnState = null; // { oltId, sl, po }
-
-// 1. Seleciona uma PON para entrar em modo de conexão
-window.sdrLpPonSelect = function(oltId, sl, po) {
-  _sdrInjectLightCSS();
-  // Limpa highlights de caminho óptico
-  document.querySelectorAll('.sdr-port-lit,.sdr-fib-lit').forEach(function(el){
-    el.classList.remove('sdr-port-lit','sdr-fib-lit');
-  });
-  var svg = document.getElementById('lp-svg');
-  if (svg) svg.querySelectorAll('[data-lit]').forEach(function(p){
-    p.removeAttribute('data-lit'); p.setAttribute('stroke','#1e3a5f');
-    p.setAttribute('stroke-width','1.5'); p.setAttribute('opacity','0.55');
-    p.classList.remove('sdr-cord-active');
-  });
-  var statusEl = document.getElementById('lp-status');
-  // Toggle: desseleciona se já está selecionada
-  if (_sdrLpConnState && _sdrLpConnState.sl == sl && _sdrLpConnState.po == po) {
-    var prevEl = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
-    if (prevEl) prevEl.classList.remove('sdr-lp-selected');
-    _sdrLpConnState = null;
-    if (statusEl) statusEl.style.display = 'none';
-    document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.remove('sdr-fib-connectable'); });
-    return;
-  }
-  // Remove seleção anterior
-  if (_sdrLpConnState) {
-    var prevEl2 = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
-    if (prevEl2) prevEl2.classList.remove('sdr-lp-selected');
-  }
-  _sdrLpConnState = { oltId: oltId, sl: sl, po: po };
-  // Destaca porta selecionada
-  var ponEl = document.getElementById('lp-pon-' + sl + '_' + po);
-  if (ponEl) ponEl.classList.add('sdr-lp-selected');
-  // Mostra barra de status
-  if (statusEl) {
-    statusEl.innerHTML = '<i class="fas fa-plug" style="color:#f59e0b"></i>'
-      + '&nbsp;<b style="color:#fbbf24">Slot ' + sl + ' · PON ' + po + '</b>'
-      + '<span style="color:#94a3b8;margin:0 10px">aguardando fibra</span>'
-      + '→ clique em uma <b style="color:#4ade80">fibra livre</b> no DGO para conectar o cordão'
-      + '<button onclick="_sdrLpCancelSelect()" style="margin-left:auto;background:none;border:1px solid #ef4444;color:#ef4444;border-radius:4px;padding:2px 10px;font-size:.7rem;cursor:pointer"><i class="fas fa-times"></i> Cancelar</button>';
-    statusEl.style.display = 'flex';
-  }
-  // Pulsa fibras livres como clicáveis
-  document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.add('sdr-fib-connectable'); });
-};
-
-// Cancela modo de conexão
-window._sdrLpCancelSelect = function() {
-  if (_sdrLpConnState) {
-    var el = document.getElementById('lp-pon-' + _sdrLpConnState.sl + '_' + _sdrLpConnState.po);
-    if (el) el.classList.remove('sdr-lp-selected');
-  }
-  _sdrLpConnState = null;
-  document.querySelectorAll('.lp-free-fiber').forEach(function(e){ e.classList.remove('sdr-fib-connectable'); });
-  var statusEl = document.getElementById('lp-status');
-  if (statusEl) statusEl.style.display = 'none';
-};
-
-// 2. Conecta a PON selecionada a uma fibra livre do DGO
-window.sdrLpFiberConnect = function(oltId, did, t, f) {
-  if (!_sdrLpConnState) return; // só age se houver PON selecionada
-  var sl = _sdrLpConnState.sl, po = _sdrLpConnState.po;
-  var fkey = 't' + t + 'f' + f;
-  var ponKey = 's' + sl + '_p' + po;
-  var ponRef   = sdrRef('olt_connections/' + oltId + '/pons/' + ponKey);
-  var fiberRef = sdrRef('infrastructure/' + did + '/fibers/' + fkey);
-  // Libera fibra anterior desta PON, se houver
-  ponRef.once('value').then(function(snap) {
-    var prev = snap.val() || {};
-    var chain = Promise.resolve();
-    if (prev.dgo_id && prev.dgo_fiber_key) {
-      chain = sdrRef('infrastructure/' + prev.dgo_id + '/fibers/' + prev.dgo_fiber_key)
-        .update({ status: 'free', olt_id: null, slot: null, port: null, label: null });
-    }
-    return chain;
-  }).then(function() {
-    return fiberRef.set({
-      status: 'used', olt_id: oltId,
-      slot: parseInt(sl), port: parseInt(po),
-      label: 'OLT Slot' + sl + '/PON' + po,
-      connected_at: new Date().toISOString()
-    });
-  }).then(function() {
-    return ponRef.update({
-      dgo_id: did, dgo_fiber_key: fkey,
-      active: true, updated_at: new Date().toISOString()
-    });
-  }).then(function() {
-    _sdrLpConnState = null;
-    if (typeof toast === 'function') toast('Cordão: Slot ' + sl + ' PON ' + po + ' → T' + t + 'F' + f, 'success');
-    sdrOltLightpathModal(oltId);
-  }).catch(function(err) {
-    if (typeof toast === 'function') toast('Erro: ' + (err.message || err), 'error');
-  });
-};
-
-// 3. Desconecta uma PON (remove do Firebase e atualiza fibra do DGO para livre)
-window.sdrLpDisconnect = function(oltId, sl, po) {
-  if (!confirm('Desconectar Slot ' + sl + ' PON ' + po + '?\nA fibra do DGO ficará livre.')) return;
-  var ponKey = 's' + sl + '_p' + po;
-  var ponRef = sdrRef('olt_connections/' + oltId + '/pons/' + ponKey);
-  ponRef.once('value').then(function(snap) {
-    var cfg = snap.val() || {};
-    var chain = Promise.resolve();
-    if (cfg.dgo_id && cfg.dgo_fiber_key) {
-      chain = sdrRef('infrastructure/' + cfg.dgo_id + '/fibers/' + cfg.dgo_fiber_key)
-        .update({ status: 'free', olt_id: null, slot: null, port: null, label: null });
-    }
-    return chain;
-  }).then(function() {
-    return ponRef.update({ dgo_id: null, dgo_fiber_key: null });
-  }).then(function() {
-    if (typeof toast === 'function') toast('PON desconectada · Slot ' + sl + ' PON ' + po, 'success');
-    sdrOltLightpathModal(oltId);
-  }).catch(function(err) {
-    if (typeof toast === 'function') toast('Erro: ' + (err.message || err), 'error');
-  });
-};
-
 window.sdrFiberSelect = function(oltId, slot, port, dgoId, fiberKey) {
   var ponRef   = sdrRef('olt_connections/' + oltId + '/pons/s' + slot + '_p' + port);
   var fiberRef = sdrRef('infrastructure/' + dgoId + '/fibers/' + fiberKey);
@@ -5488,7 +5156,7 @@ window.sdrFiberSelect = function(oltId, slot, port, dgoId, fiberKey) {
 
 // ── Criar novo DGO ─────────────────────────────────────────────────
 window.sdrDgoCriarModal = function(oltId) {
-  var html = '<div class="modal-overlay open" id="sdr-dgo-criar-modal" style="z-index:60000" onclick="if(event.target===this)this.remove()">'
+  var html = '<div class="modal-overlay open" id="sdr-dgo-criar-modal" onclick="if(event.target===this)this.remove()">'
     + '<div class="modal-box" style="max-width:460px">'
     + '<div class="modal-header">'
     + '<h3><i class="fas fa-network-wired" style="color:#3b82f6;margin-right:8px"></i>Novo DGO</h3>'
@@ -5497,13 +5165,6 @@ window.sdrDgoCriarModal = function(oltId) {
     + '<div class="modal-body">'
     + '<div class="form-group"><label>Nome</label><input id="dgo-nome" placeholder="Ex: DGO-CENTRAL-01"></div>'
     + '<div class="form-group"><label>Endereço / Localização</label><input id="dgo-endereco" placeholder="Ex: Rua das Flores, 100 — Sala Técnica"></div>'
-    + '<div style="display:flex;gap:10px">'
-    + '<div class="form-group" style="flex:1"><label>Orientação</label>'
-    + '<select id="dgo-orient">'
-    + '<option value="pe">🗂 Em pé (rack/parede)</option>'
-    + '<option value="deitado">📦 Deitado (calha/piso)</option>'
-    + '</select></div>'
-    + '</div>'
     + '<div style="display:flex;gap:10px">'
     + '<div class="form-group" style="flex:1"><label>Tubos</label><select id="dgo-tubos" onchange="sdrDgoCalc()"><option value="6">6 tubos</option><option value="12" selected>12 tubos</option></select></div>'
     + '<div class="form-group" style="flex:1"><label>Fibras/Tubo</label><select id="dgo-fpt" onchange="sdrDgoCalc()"><option value="6">6 fibras</option><option value="12" selected>12 fibras</option><option value="24">24 fibras</option></select></div>'
@@ -5529,78 +5190,30 @@ window.sdrDgoCalc = function() {
 };
 
 window.sdrDgoSalvar = function(oltId) {
-  var nome   = ((document.getElementById('dgo-nome')     || {}).value || '').trim();
-  var end    = ((document.getElementById('dgo-endereco') || {}).value || '').trim();
-  var orient = ((document.getElementById('dgo-orient')   || {}).value || 'pe');
-  var tubos  = parseInt((document.getElementById('dgo-tubos') || {}).value) || 12;
-  var fpt    = parseInt((document.getElementById('dgo-fpt')   || {}).value) || 12;
+  var nome  = ((document.getElementById('dgo-nome')     || {}).value || '').trim();
+  var end   = ((document.getElementById('dgo-endereco') || {}).value || '').trim();
+  var tubos = parseInt((document.getElementById('dgo-tubos') || {}).value) || 12;
+  var fpt   = parseInt((document.getElementById('dgo-fpt')   || {}).value) || 12;
   if (!nome) { if (typeof toast === 'function') toast('Nome é obrigatório', 'error'); return; }
 
-  var data = {type:'dgo', nome:nome, endereco:end, orientation:orient,
-    tube_count:tubos, fiber_per_tube:fpt,
+  var data = {type:'dgo', nome:nome, endereco:end, tube_count:tubos, fiber_per_tube:fpt,
     total_fibers:tubos * fpt, olt_id:oltId || null, created_at:new Date().toISOString()};
 
   sdrRef('infrastructure').push(data).then(function() {
     if (typeof toast === 'function') toast('DGO criado com ' + (tubos * fpt) + ' fibras!', 'success');
     document.getElementById('sdr-dgo-criar-modal') && document.getElementById('sdr-dgo-criar-modal').remove();
     if (oltId) {
-<<<<<<< HEAD
-      sdrOltLightpathModal(oltId);
-=======
       if (document.getElementById('olt-panel-content') && _sdrActiveOltTab === oltId) {
         sdrOltInlineRender(oltId);
       } else {
         sdrOltVisualModal(oltId);
       }
->>>>>>> develop
     }
   });
 };
 
-// ── Gerenciar slots do chassis ──────────────────────────────────────
+// ── Adicionar slot ao chassis ───────────────────────────────────────
 window.sdrOltSlotAdd = function(oltId) {
-<<<<<<< HEAD
-  sdrRef('olt_connections/' + oltId).once('value').then(function(snap) {
-    var olt = snap.val() || {};
-    var slotCount = olt.slot_count || 4;
-    var gbics = olt.gbics_per_slot || 8;
-    // Monta opções de posição (inserir antes do slot X ou no final)
-    var posOpts = '';
-    for (var i = 1; i <= slotCount; i++) {
-      posOpts += '<option value="' + i + '">Antes do Slot ' + i + '</option>';
-    }
-    posOpts += '<option value="' + (slotCount + 1) + '" selected>No final (Slot ' + (slotCount + 1) + ')</option>';
-    // Monta opções de slots existentes para remover
-    var removeOpts = '';
-    for (var j = 1; j <= slotCount; j++) {
-      removeOpts += '<option value="' + j + '">Slot ' + j + '</option>';
-    }
-    var html = '<div class="modal-overlay open" id="sdr-slot-modal" style="z-index:60000" onclick="if(event.target===this)this.remove()">'
-      + '<div class="modal-box" style="max-width:420px">'
-      + '<div class="modal-header"><h3><i class="fas fa-th-large" style="color:#7c3aed;margin-right:8px"></i>Gerenciar Slots</h3>'
-      + '<button onclick="document.getElementById(\'sdr-slot-modal\').remove()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">&times;</button></div>'
-      + '<div class="modal-body">'
-      // Adicionar slot
-      + '<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px;margin-bottom:14px">'
-      + '<div style="font-weight:600;font-size:.82rem;color:#15803d;margin-bottom:10px"><i class="fas fa-plus-square"></i> Adicionar Slot</div>'
-      + '<div style="display:flex;gap:10px">'
-      + '<div class="form-group" style="flex:1"><label>Posição</label><select id="slot-pos">' + posOpts + '</select></div>'
-      + '<div class="form-group" style="flex:1"><label>GBICs/PONs</label><input id="slot-gbics" type="number" value="' + gbics + '" min="1" max="32"></div>'
-      + '</div>'
-      + '<button onclick="sdrOltSlotInsert(\'' + oltId + '\')" class="btn-primary" style="width:100%"><i class="fas fa-plus"></i> Adicionar Slot</button>'
-      + '</div>'
-      // Remover slot
-      + '<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px">'
-      + '<div style="font-weight:600;font-size:.82rem;color:#dc2626;margin-bottom:10px"><i class="fas fa-minus-square"></i> Remover Slot</div>'
-      + '<div class="form-group"><label>Slot a remover</label><select id="slot-remove-num">' + removeOpts + '</select></div>'
-      + '<div style="font-size:.72rem;color:#ef4444;margin-bottom:8px"><i class="fas fa-exclamation-triangle"></i> As PONs do slot serão desconectadas</div>'
-      + '<button onclick="sdrOltSlotRemove(\'' + oltId + '\')" style="width:100%;padding:8px;background:#dc2626;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.82rem"><i class="fas fa-trash"></i> Remover Slot</button>'
-      + '</div>'
-      + '</div></div></div>';
-    var prev = document.getElementById('sdr-slot-modal');
-    if (prev) prev.remove();
-    document.body.insertAdjacentHTML('beforeend', html);
-=======
   sdrRef('olt_connections/' + oltId + '/slot_count').once('value').then(function(s) {
     var next = (s.val() || 4) + 1;
     sdrRef('olt_connections/' + oltId + '/slot_count').set(next).then(function() {
@@ -5611,93 +5224,7 @@ window.sdrOltSlotAdd = function(oltId) {
         sdrOltVisualModal(oltId);
       }
     });
->>>>>>> develop
   });
-};
-
-// Insere um novo slot na posição escolhida
-window.sdrOltSlotInsert = function(oltId) {
-  var pos   = parseInt(document.getElementById('slot-pos').value);
-  var gbics = parseInt(document.getElementById('slot-gbics').value) || 8;
-  sdrRef('olt_connections/' + oltId).once('value').then(function(snap) {
-    var olt = snap.val() || {};
-    var slotCount = olt.slot_count || 4;
-    var pons = olt.pons || {};
-    var slots = olt.slots || {};
-    // Desloca todos os slots >= pos uma posição para cima
-    var updates = {};
-    for (var s = slotCount; s >= pos; s--) {
-      // Move PONs do slot s para s+1
-      var slotPons = {};
-      Object.entries(pons).forEach(function(e) {
-        var m = e[0].match(/^s(\d+)_p(\d+)$/);
-        if (m && parseInt(m[1]) === s) {
-          updates['olt_connections/' + oltId + '/pons/s' + (s+1) + '_p' + m[2]] = e[1];
-          updates['olt_connections/' + oltId + '/pons/' + e[0]] = null; // remove antigo
-        }
-      });
-      // Move config do slot
-      if (slots[s]) {
-        updates['olt_connections/' + oltId + '/slots/' + (s+1)] = slots[s];
-        updates['olt_connections/' + oltId + '/slots/' + s] = null;
-      }
-    }
-    // Insere o novo slot na posição
-    updates['olt_connections/' + oltId + '/slots/' + pos] = { pon_count: gbics };
-    updates['olt_connections/' + oltId + '/slot_count'] = slotCount + 1;
-    return firebase.database().ref().update(updates);
-  }).then(function() {
-    if (typeof toast === 'function') toast('Slot inserido na posição ' + pos + '!', 'success');
-    document.getElementById('sdr-slot-modal') && document.getElementById('sdr-slot-modal').remove();
-    sdrOltLightpathModal(oltId);
-  }).catch(function(e) { if (typeof toast === 'function') toast('Erro: ' + e.message, 'error'); });
-};
-
-// Remove um slot do chassis (desconecta PONs do slot)
-window.sdrOltSlotRemove = function(oltId) {
-  var slotNum = parseInt(document.getElementById('slot-remove-num').value);
-  if (!confirm('Remover Slot ' + slotNum + '? As PONs serão desconectadas.')) return;
-  sdrRef('olt_connections/' + oltId).once('value').then(function(snap) {
-    var olt = snap.val() || {};
-    var slotCount = olt.slot_count || 4;
-    var pons = olt.pons || {};
-    var slots = olt.slots || {};
-    var updates = {};
-    // Libera fibras do DGO das PONs deste slot
-    var fiberFrees = [];
-    Object.entries(pons).forEach(function(e) {
-      var m = e[0].match(/^s(\d+)_p(\d+)$/);
-      if (!m) return;
-      var s = parseInt(m[1]);
-      if (s === slotNum) {
-        // Remove PON e libera fibra do DGO
-        updates['olt_connections/' + oltId + '/pons/' + e[0]] = null;
-        var cfg = e[1] || {};
-        if (cfg.dgo_id && cfg.dgo_fiber_key) {
-          fiberFrees.push(sdrRef('infrastructure/' + cfg.dgo_id + '/fibers/' + cfg.dgo_fiber_key)
-            .update({ status:'free', olt_id:null, slot:null, port:null, label:null }));
-        }
-      } else if (s > slotNum) {
-        // Desloca slots superiores uma posição para baixo
-        updates['olt_connections/' + oltId + '/pons/s' + (s-1) + '_p' + m[2]] = e[1];
-        updates['olt_connections/' + oltId + '/pons/' + e[0]] = null;
-      }
-    });
-    // Desloca configs de slots
-    for (var i = slotNum + 1; i <= slotCount; i++) {
-      if (slots[i]) updates['olt_connections/' + oltId + '/slots/' + (i-1)] = slots[i];
-      updates['olt_connections/' + oltId + '/slots/' + i] = null;
-    }
-    updates['olt_connections/' + oltId + '/slots/' + slotNum] = null;
-    updates['olt_connections/' + oltId + '/slot_count'] = slotCount - 1;
-    return Promise.all(fiberFrees).then(function() {
-      return firebase.database().ref().update(updates);
-    });
-  }).then(function() {
-    if (typeof toast === 'function') toast('Slot ' + slotNum + ' removido!', 'success');
-    document.getElementById('sdr-slot-modal') && document.getElementById('sdr-slot-modal').remove();
-    sdrOltLightpathModal(oltId);
-  }).catch(function(e) { if (typeof toast === 'function') toast('Erro: ' + e.message, 'error'); });
 };
 
 // ════════════════════════════════════════════════════
@@ -6865,6 +6392,8 @@ let _sdrPolyArea        = null;
 let _sdrTmpMkrs         = [];
 window._sdrPendingDrawPoints = null;
 
+
+// ── GIS Draw Mode avançado (branch main) ─────────────────────────────────
 window.sdrDrawModeToggle = function() {
   if (!sdrMapReady || !sdrMap) { toast('Aguarde o mapa carregar', 'warning'); return; }
   if (document.getElementById('sdr-draw-panel')) { window._sdrCloseDrawMode(); return; }
@@ -6987,130 +6516,7 @@ window._sdrCloseDrawMode = function() {
   if (sdrMap) sdrMap.getContainer().style.cursor = '';
 };
 
-window._sdrStartDraw = function(mode) {
-  // Desativa modo edição se estiver ativo
-  _sdrEditMode = null;
-  _sdrMoveSelected = null;
-  if (_sdrMoveSelMarker) { try { sdrMap.removeLayer(_sdrMoveSelMarker); } catch(e){} _sdrMoveSelMarker = null; }
-  if (sdrMap) { sdrMap.off('click', _sdrMoveModeClick); sdrMap.off('click', _sdrDeleteModeClick); sdrMap.off('click', _sdrMeasureClick); }
 
-  _sdrCancelCurrentDraw();
-  _sdrDrawCurrentMode = mode;
-  sdrDrawModeActive = true;
-
-  // Destaca botão ativo
-  document.querySelectorAll('.sdr-dbt').forEach(function(b){ b.classList.remove('active'); });
-  var dbt = document.getElementById('dbt-' + mode);
-  if (dbt) dbt.classList.add('active');
-
-  if (!sdrMap) return;
-  const hints = {
-    cable:   '<i class="fas fa-minus" style="color:#0ea5e9"></i> <b>Clique</b> para adicionar pontos. <b>Duplo-clique</b> finaliza (mín. 2 pts).',
-    cto:     '<i class="fas fa-dot-circle" style="color:#7c3aed"></i> <b>Clique</b> no mapa para posicionar a CTO.',
-    pole:    '<i class="fas fa-bolt" style="color:#d97706"></i> <b>Clique</b> no mapa para posicionar o poste.',
-    area:    '<i class="fas fa-vector-square" style="color:#059669"></i> <b>Clique</b> para criar vértices. <b>Duplo-clique</b> fecha.',
-    measure: '<i class="fas fa-ruler-combined" style="color:#f59e0b"></i> <b>Clique</b> para medir distâncias. Clique <b>Finalizar</b> para encerrar.'
-  };
-  const hint = document.getElementById('sdr-draw-hint');
-  if (hint) { hint.style.display = 'block'; hint.innerHTML = hints[mode] || ''; }
-  const stats = document.getElementById('sdr-draw-stats');
-  if (stats) stats.style.display = 'none';
-
-  sdrMap.getContainer().style.cursor = 'crosshair';
-  sdrMap.off('click', _sdrOnDrawClick);
-  sdrMap.off('dblclick', _sdrOnDrawDblClick);
-
-  if (mode === 'measure') {
-    _sdrMeasurePts = [];
-    sdrMap.on('click', _sdrMeasureClick);
-    toast('Ferramenta Medir ativa. Clique para medir distâncias.', 'info');
-    return;
-  }
-
-  sdrMap.on('click', _sdrOnDrawClick);
-  if (mode !== 'cto' && mode !== 'pole') {
-    sdrMap.on('dblclick', _sdrOnDrawDblClick);
-    sdrMap.doubleClickZoom.disable();
-  }
-  const labels = { cable:'Cabo FO', cto:'CTO', pole:'Poste', area:'Área' };
-  toast('Ferramenta ' + (labels[mode]||mode) + ' ativa. Clique no mapa.', 'info');
-};
-
-function _sdrOnDrawClick(e) {
-  if (!_sdrDrawCurrentMode) return;
-  if (_sdrMapClickMode) return;
-  L.DomEvent.stop(e);
-  // Aplica snap
-  var snapped = _sdrSnapToNearest(e.latlng.lat, e.latlng.lng);
-  var lat = snapped.lat, lng = snapped.lng;
-  if (snapped.snapped) toast('Snap: ' + (snapped.item.name || snapped.item.nome || 'elemento'), 'info');
-
-  if (_sdrDrawCurrentMode === 'cto' || _sdrDrawCurrentMode === 'pole') {
-    _sdrFinalizeDrawing([{lat:lat, lng:lng}]); return;
-  }
-  _sdrDrawPts.push({lat:lat, lng:lng});
-  var fillColor = _sdrDrawCurrentMode === 'cable' ? '#0ea5e9' : '#059669';
-  var m = L.circleMarker([lat, lng], {radius:5, color:'#fff', fillColor:fillColor, fillOpacity:1, weight:2}).addTo(sdrMap);
-  _sdrTmpMkrs.push(m);
-  if (_sdrDrawCurrentMode === 'cable' && _sdrDrawPts.length >= 2) {
-    if (_sdrPolyPrev) sdrMap.removeLayer(_sdrPolyPrev);
-    _sdrPolyPrev = L.polyline(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#0ea5e9',weight:3,dashArray:'8,4',opacity:.85}).addTo(sdrMap);
-  }
-  if (_sdrDrawCurrentMode === 'area' && _sdrDrawPts.length >= 2) {
-    if (_sdrPolyArea) sdrMap.removeLayer(_sdrPolyArea);
-    _sdrPolyArea = L.polygon(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#059669',fillColor:'#059669',fillOpacity:.15,weight:2,dashArray:'6,3'}).addTo(sdrMap);
-  }
-  _sdrUpdateDrawStats();
-}
-
-function _sdrOnDrawDblClick(e) {
-  L.DomEvent.stop(e);
-  if (_sdrDrawPts.length < 2) { toast('Adicione pelo menos 2 pontos para finalizar', 'warning'); return; }
-  _sdrFinalizeDrawing(_sdrDrawPts.slice());
-}
-
-function _sdrCancelCurrentDraw() {
-  _sdrTmpMkrs.forEach(function(m){ try{ if(sdrMap) sdrMap.removeLayer(m); }catch(e){} });
-  _sdrTmpMkrs = [];
-  if (_sdrPolyPrev) { try{ if(sdrMap) sdrMap.removeLayer(_sdrPolyPrev); }catch(e){} _sdrPolyPrev = null; }
-  if (_sdrPolyArea) { try{ if(sdrMap) sdrMap.removeLayer(_sdrPolyArea); }catch(e){} _sdrPolyArea = null; }
-  _sdrDrawPts = [];
-  if (sdrMap) {
-    sdrMap.off('click', _sdrOnDrawClick);
-    sdrMap.off('dblclick', _sdrOnDrawDblClick);
-    sdrMap.doubleClickZoom.enable();
-  }
-}
-
-function _sdrFinalizeDrawing(pts) {
-  _sdrCancelCurrentDraw();
-  var mode = _sdrDrawCurrentMode;
-  _sdrDrawCurrentMode = null;
-  window._sdrPendingDrawPoints = pts;
-  _sdrShowPropertiesModal(mode, pts);
-}
-
-// ════════════════════════════════════════════════════
-// FERRAMENTAS AUXILIARES DO MODO DESENHO
-// ════════════════════════════════════════════════════
-
-// Snap: encaixa cursor no elemento mais próximo se < 25px
-function _sdrSnapToNearest(lat, lng) {
-  if (!_sdrSnapEnabled || !sdrMap) return {lat:lat, lng:lng, snapped:false};
-  var screenPt = sdrMap.latLngToContainerPoint(L.latLng(lat, lng));
-  var best = null, bestDist = 999999;
-  Object.entries(sdrInfraCache).forEach(function(e) {
-    var item = e[1];
-    if (!item || !item.lat || !item.lng) return;
-    var sp = sdrMap.latLngToContainerPoint(L.latLng(item.lat, item.lng));
-    var d  = Math.hypot(sp.x - screenPt.x, sp.y - screenPt.y);
-    if (d < bestDist) { bestDist = d; best = item; }
-  });
-  if (best && bestDist < 25) return {lat:best.lat, lng:best.lng, snapped:true, item:best};
-  return {lat:lat, lng:lng, snapped:false};
-}
-
-// Toggle snap visual
 window._sdrToggleSnap = function() {
   _sdrSnapEnabled = !_sdrSnapEnabled;
   var tog = document.getElementById('snap-tog');
@@ -7291,6 +6697,76 @@ window._sdrStartEditMode = function(mode) {
   toast('Modo ' + (mode === 'move' ? 'Mover' : 'Deletar') + ' ativo', 'info');
 };
 
+window._sdrStartDraw = function(mode) {
+  _sdrCancelCurrentDraw();
+  _sdrDrawCurrentMode = mode;
+  sdrDrawModeActive = true;
+  if (!sdrMap) return;
+  const hints = {
+    cable: '<b>Cabo:</b> Clique para adicionar pontos. <b>Duplo-clique</b> para finalizar (mín. 2 pts).',
+    cto:   '<b>CTO:</b> Clique no mapa para posicionar o splitter.',
+    area:  '<b>Área:</b> Clique para criar os vértices. <b>Duplo-clique</b> para fechar o polígono.'
+  };
+  const hint = document.getElementById('sdr-draw-hint');
+  if (hint) hint.innerHTML = hints[mode] || '';
+  sdrMap.getContainer().style.cursor = 'crosshair';
+  sdrMap.off('click', _sdrOnDrawClick);
+  sdrMap.off('dblclick', _sdrOnDrawDblClick);
+  sdrMap.on('click', _sdrOnDrawClick);
+  if (mode !== 'cto') { sdrMap.on('dblclick', _sdrOnDrawDblClick); sdrMap.doubleClickZoom.disable(); }
+  const labels = { cable: 'Cabo', cto: 'CTO', area: 'Área' };
+  toast('Ferramenta ' + (labels[mode] || mode) + ' ativa. Clique no mapa.', 'info');
+};
+
+
+function _sdrOnDrawClick(e) {
+  if (!_sdrDrawCurrentMode) return;
+  // Se modo de captura de coordenadas está ativo, deixa ele tratar primeiro
+  if (_sdrMapClickMode) return;
+  L.DomEvent.stop(e);
+  var lat = e.latlng.lat, lng = e.latlng.lng;
+  if (_sdrDrawCurrentMode === 'cto') { _sdrFinalizeDrawing([{lat:lat, lng:lng}]); return; }
+  _sdrDrawPts.push({lat:lat, lng:lng});
+  var fillColor = _sdrDrawCurrentMode === 'cable' ? '#0ea5e9' : '#059669';
+  var m = L.circleMarker([lat, lng], {radius:5, color:'#fff', fillColor:fillColor, fillOpacity:1, weight:2}).addTo(sdrMap);
+  _sdrTmpMkrs.push(m);
+  if (_sdrDrawCurrentMode === 'cable' && _sdrDrawPts.length >= 2) {
+    if (_sdrPolyPrev) sdrMap.removeLayer(_sdrPolyPrev);
+    _sdrPolyPrev = L.polyline(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#0ea5e9',weight:3,dashArray:'8,4',opacity:.85}).addTo(sdrMap);
+  }
+  if (_sdrDrawCurrentMode === 'area' && _sdrDrawPts.length >= 2) {
+    if (_sdrPolyArea) sdrMap.removeLayer(_sdrPolyArea);
+    _sdrPolyArea = L.polygon(_sdrDrawPts.map(function(p){return [p.lat,p.lng];}), {color:'#059669',fillColor:'#059669',fillOpacity:.15,weight:2,dashArray:'6,3'}).addTo(sdrMap);
+  }
+}
+
+function _sdrOnDrawDblClick(e) {
+  L.DomEvent.stop(e);
+  if (_sdrDrawPts.length < 2) { toast('Adicione pelo menos 2 pontos para finalizar', 'warning'); return; }
+  _sdrFinalizeDrawing(_sdrDrawPts.slice());
+}
+
+function _sdrCancelCurrentDraw() {
+  _sdrTmpMkrs.forEach(function(m){ try{ if(sdrMap) sdrMap.removeLayer(m); }catch(e){} });
+  _sdrTmpMkrs = [];
+  if (_sdrPolyPrev) { try{ if(sdrMap) sdrMap.removeLayer(_sdrPolyPrev); }catch(e){} _sdrPolyPrev = null; }
+  if (_sdrPolyArea) { try{ if(sdrMap) sdrMap.removeLayer(_sdrPolyArea); }catch(e){} _sdrPolyArea = null; }
+  _sdrDrawPts = [];
+  if (sdrMap) {
+    sdrMap.off('click', _sdrOnDrawClick);
+    sdrMap.off('dblclick', _sdrOnDrawDblClick);
+    sdrMap.doubleClickZoom.enable();
+  }
+}
+
+function _sdrFinalizeDrawing(pts) {
+  _sdrCancelCurrentDraw();
+  var mode = _sdrDrawCurrentMode;
+  _sdrDrawCurrentMode = null;
+  window._sdrPendingDrawPoints = pts;
+  _sdrShowPropertiesModal(mode, pts);
+}
+
 function _sdrShowPropertiesModal(type, pts) {
   var existing = document.getElementById('sdr-props-modal');
   if (existing) existing.remove();
@@ -7334,24 +6810,6 @@ function _sdrShowPropertiesModal(type, pts) {
       '</select>' +
       '<label style="' + lbl + '">Cabo de Entrada</label>' +
       '<input id="dp-cable-in" style="' + inp + '" placeholder="Nome do cabo de alimentação"/>' +
-      '<label style="' + lbl + '">Observações</label>' +
-      '<input id="dp-notes" style="' + inp + '" placeholder="Observações opcionais"/>';
-  } else if (type === 'pole') {
-    title = '<i class="fas fa-bolt" style="color:#d97706"></i>&nbsp; Poste';
-    formHtml =
-      '<label style="' + lbl + '">Código / Nome do Poste</label>' +
-      '<input id="dp-name" style="' + inp + '" placeholder="Ex: P-001 ou CEMIG-4512"/>' +
-      '<label style="' + lbl + '">Altura (metros)</label>' +
-      '<select id="dp-pole-height" style="' + inp + '">' +
-        '<option value="9">9m</option><option value="11" selected>11m</option>' +
-        '<option value="12">12m</option><option value="13">13m</option><option value="custom">Outro</option>' +
-      '</select>' +
-      '<label style="' + lbl + '">Tipo</label>' +
-      '<select id="dp-pole-type" style="' + inp + '">' +
-        '<option value="concreto" selected>Concreto</option>' +
-        '<option value="madeira">Madeira</option>' +
-        '<option value="metalico">Metálico</option>' +
-      '</select>' +
       '<label style="' + lbl + '">Observações</label>' +
       '<input id="dp-notes" style="' + inp + '" placeholder="Observações opcionais"/>';
   } else {
@@ -7415,12 +6873,6 @@ window._sdrSaveDrawing = async function(type) {
     data.type = 'cto'; data.lat = pts[0].lat; data.lng = pts[0].lng;
     data.cto_type = ctoType; data.total_ports = portMap[ctoType] || 8; data.used_ports = 0;
     if (cableIn) data.cable_input = cableIn;
-  } else if (type === 'pole') {
-    var poleH   = (document.getElementById('dp-pole-height') || {}).value || '11';
-    var poleT   = (document.getElementById('dp-pole-type')   || {}).value || 'concreto';
-    data.type = 'pole'; data.lat = pts[0].lat; data.lng = pts[0].lng;
-    data.height_m = parseFloat(poleH) || 11;
-    data.pole_type = poleT;
   } else {
     var color = (document.getElementById('dp-color') || {}).value || '#0ea5e9';
     data.type = 'coverage_area'; data.polygon = pts; data.color = color;
@@ -7540,6 +6992,92 @@ function _haversineM(a,b) {
 }
 
 // ── Renderização do mapa (Sprint 5 sobrescreve) ──
+
+// ── Power Budget + Viabilidade (branch main) ─────────────────────────────
+window.sdrPowerBudgetCalc = function(itemId, oltBudgetDb) {
+  const budget = oltBudgetDb || SDR_OLT_BUDGET.default;
+  const path = _sdrTracePath(itemId);
+  let totalLoss = SDR_PERDAS.conector_par;
+  const detail = [{ label:'Conectores OLT+ONU (par)', loss: SDR_PERDAS.conector_par }];
+
+  path.forEach(({ id, item }, idx) => {
+    if (!item) return;
+    // Splitter: usa ratio definido no item
+    if ((item.type==='splitter'||item.type==='cto') && item.ratio) {
+      const loss = SDR_PERDAS.splitter[item.ratio] || 0;
+      if (loss > 0) {
+        totalLoss += loss;
+        detail.push({ label:`Splitter ${item.ratio} — ${item.nome||item.name||id}`, loss });
+      }
+    }
+    // Cabo com comprimento real
+    if (item.type==='cable' && item.length_m) {
+      const loss = +(( item.length_m / 1000) * SDR_PERDAS.cabo_db_km).toFixed(2);
+      totalLoss += loss;
+      detail.push({ label:`Cabo ${item.name||id} (${Math.round(item.length_m)}m)`, loss });
+      return;
+    }
+    // Estimativa pelo gap geográfico para o próximo elemento
+    if (item.lat && item.lng && idx < path.length - 1) {
+      const nxt = path[idx+1]?.item;
+      if (nxt?.lat && nxt?.lng) {
+        const dm = _haversineM({lat:item.lat,lng:item.lng},{lat:nxt.lat,lng:nxt.lng});
+        if (dm > 20) {
+          const loss = +((dm/1000)*SDR_PERDAS.cabo_db_km).toFixed(2);
+          totalLoss += loss;
+          detail.push({ label:`Cabo estimado ~${Math.round(dm)}m`, loss });
+        }
+      }
+    }
+  });
+
+  const margem = +(budget - totalLoss).toFixed(2);
+  const status = margem < 0 ? 'crit' : margem < SDR_PERDAS.margem_min ? 'warn' : 'ok';
+  return { totalLoss:+totalLoss.toFixed(2), margem, budget, status, detail, hops:path.length };
+};
+
+// ════════════════════════════════════════════════════
+// MODAL DE PORTAS DA CTO — click na CTO no mapa
+// ════════════════════════════════════════════════════
+
+window.sdrViabilidadeToggle = function() {
+  _sdrViabMode = !_sdrViabMode;
+  const btn = document.getElementById('btn-viabilidade');
+  if (btn) {
+    btn.style.background = _sdrViabMode ? '#16a34a' : '';
+    btn.style.color      = _sdrViabMode ? '#fff'    : '';
+    btn.style.borderColor= _sdrViabMode ? '#15803d' : '';
+  }
+  if (sdrMap) sdrMap.getContainer().style.cursor = _sdrViabMode ? 'crosshair' : '';
+  if (!_sdrViabMode && _sdrViabMarker) { sdrMap.removeLayer(_sdrViabMarker); _sdrViabMarker=null; }
+  const ex = document.getElementById('viab-modal-ov');
+  if (!_sdrViabMode && ex) ex.remove();
+  toast(_sdrViabMode ? '📍 Clique no mapa para verificar viabilidade' : 'Modo viabilidade desativado', 'info');
+};
+
+window.sdrViabilidadeCheck = function(lat, lng, radiusM) {
+  radiusM = radiusM || 500;
+  const results = [];
+  Object.entries(sdrInfraCache).forEach(([id,item]) => {
+    if (!item || !item.lat || !item.lng) return;
+    if (item.type!=='cto' && item.type!=='splitter') return;
+    const dist = Math.round(_haversineM({lat,lng},{lat:item.lat,lng:item.lng}));
+    if (dist > radiusM) return;
+    const cap    = parseInt(item.total_ports)||0;
+    const used   = parseInt(item.used_ports)||0;
+    const livres = Math.max(0, cap-used);
+    const pct    = cap>0 ? Math.round((used/cap)*100) : 0;
+    const pb     = sdrPowerBudgetCalc(id);
+    results.push({id,item,dist,cap,used,livres,pct,pb});
+  });
+  // Ranking: prioriza portas livres + sinal OK + distância curta
+  results.sort((a,b) => {
+    const s = r => (r.livres>0?0:2) + (r.pb.status==='ok'?0:r.pb.status==='warn'?.5:1) + (r.dist/500);
+    return s(a)-s(b);
+  });
+  _sdrViabModal(lat, lng, results.slice(0,12), radiusM);
+};
+
 window.sdrMapRenderInfra = function() {
   sdrLayers.poles.clearLayers();
   sdrLayers.ctos.clearLayers();
@@ -7639,288 +7177,6 @@ window.sdrMapRenderInfra = function() {
     (sdrLayers[type+'s']||sdrLayers.poles).addLayer(marker);
   });
 };
-
-// ════════════════════════════════════════════════════
-// POWER BUDGET ENGINE — Calculadora de Atenuação Óptica
-// Ref: ABNT NBR 14565, fabricantes ZTE/Huawei
-// ════════════════════════════════════════════════════
-
-const SDR_PERDAS = {
-  cabo_db_km:   0.35,   // dBm/km @ 1310nm (SMF G.652D)
-  splitter:     { '1:2':3.5,'1:4':7.0,'1:8':10.5,'1:16':13.5,'1:32':17.0,'1:64':20.5 },
-  conector_par: 0.5,    // par de conectores (OLT + ONU)
-  emenda_fusao: 0.1,    // por emenda de fusão
-  margem_min:   3.0     // margem mínima de segurança (dB)
-};
-const SDR_OLT_BUDGET = { 'B+':28,'C+':32,'default':28 };
-
-// Rastreia cadeia de pais: CTO → Splitter → DGO → OLT
-function _sdrTracePath(startId) {
-  const path = [], visited = new Set();
-  let curId = startId, cur = sdrInfraCache[startId];
-  while (cur && !visited.has(curId)) {
-    visited.add(curId);
-    path.push({ id: curId, item: cur });
-    if (!cur.parent_id) break;
-    curId = cur.parent_id;
-    cur = sdrInfraCache[curId] || null;
-  }
-  return path;
-}
-
-// Calcula power budget da CTO até a OLT
-window.sdrPowerBudgetCalc = function(itemId, oltBudgetDb) {
-  const budget = oltBudgetDb || SDR_OLT_BUDGET.default;
-  const path = _sdrTracePath(itemId);
-  let totalLoss = SDR_PERDAS.conector_par;
-  const detail = [{ label:'Conectores OLT+ONU (par)', loss: SDR_PERDAS.conector_par }];
-
-  path.forEach(({ id, item }, idx) => {
-    if (!item) return;
-    // Splitter: usa ratio definido no item
-    if ((item.type==='splitter'||item.type==='cto') && item.ratio) {
-      const loss = SDR_PERDAS.splitter[item.ratio] || 0;
-      if (loss > 0) {
-        totalLoss += loss;
-        detail.push({ label:`Splitter ${item.ratio} — ${item.nome||item.name||id}`, loss });
-      }
-    }
-    // Cabo com comprimento real
-    if (item.type==='cable' && item.length_m) {
-      const loss = +(( item.length_m / 1000) * SDR_PERDAS.cabo_db_km).toFixed(2);
-      totalLoss += loss;
-      detail.push({ label:`Cabo ${item.name||id} (${Math.round(item.length_m)}m)`, loss });
-      return;
-    }
-    // Estimativa pelo gap geográfico para o próximo elemento
-    if (item.lat && item.lng && idx < path.length - 1) {
-      const nxt = path[idx+1]?.item;
-      if (nxt?.lat && nxt?.lng) {
-        const dm = _haversineM({lat:item.lat,lng:item.lng},{lat:nxt.lat,lng:nxt.lng});
-        if (dm > 20) {
-          const loss = +((dm/1000)*SDR_PERDAS.cabo_db_km).toFixed(2);
-          totalLoss += loss;
-          detail.push({ label:`Cabo estimado ~${Math.round(dm)}m`, loss });
-        }
-      }
-    }
-  });
-
-  const margem = +(budget - totalLoss).toFixed(2);
-  const status = margem < 0 ? 'crit' : margem < SDR_PERDAS.margem_min ? 'warn' : 'ok';
-  return { totalLoss:+totalLoss.toFixed(2), margem, budget, status, detail, hops:path.length };
-};
-
-// ════════════════════════════════════════════════════
-// MODAL DE PORTAS DA CTO — click na CTO no mapa
-// ════════════════════════════════════════════════════
-
-window.sdrCTOPortsModal = function(id, item) {
-  item = item || sdrInfraCache[id] || {};
-  const cap  = parseInt(item.total_ports) || 0;
-  const used = parseInt(item.used_ports)  || 0;
-  const livres = Math.max(0, cap - used);
-  const pct    = cap > 0 ? Math.round((used/cap)*100) : 0;
-  const portaColor = livres > 0 ? '#16a34a' : '#dc2626';
-  const barColor   = pct>=90 ? '#dc2626' : pct>=70 ? '#d97706' : '#22c55e';
-
-  const pb      = sdrPowerBudgetCalc(id);
-  const pbColor = pb.status==='ok'?'#16a34a':pb.status==='warn'?'#d97706':'#dc2626';
-  const pbIcon  = pb.status==='ok'?'fa-check-circle':pb.status==='warn'?'fa-exclamation-triangle':'fa-times-circle';
-  const pbLabel = pb.status==='ok'?'Sinal OK':pb.status==='warn'?'Margem baixa ⚠️':'Sinal crítico ❌';
-
-  const clientes = Object.entries(sdrClientesCache).filter(([,c])=> c && c.cto_id===id);
-  const clientesHtml = clientes.length > 0
-    ? clientes.slice(0,8).map(([,c])=>{
-        const st = c.onu_status==='online'?'#16a34a':c.onu_status==='offline'?'#dc2626':'#d97706';
-        return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:.75rem">
-          <i class="fas fa-circle" style="color:${st};font-size:.5rem;flex-shrink:0"></i>
-          <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.name||'—'}</span>
-          <span style="color:#94a3b8;font-size:.7rem">${c.plan_name||''}</span>
-        </div>`;
-      }).join('') + (clientes.length>8?`<div style="font-size:.72rem;color:#94a3b8;text-align:center;padding:4px">+${clientes.length-8} mais</div>`:'')
-    : '<div style="font-size:.75rem;color:#94a3b8;text-align:center;padding:8px">Nenhum cliente vinculado nesta CTO</div>';
-
-  const pbDetailHtml = pb.detail.length > 0
-    ? pb.detail.map(d=>`<div style="display:flex;justify-content:space-between;font-size:.72rem;color:#475569;padding:2px 0">
-        <span>${d.label}</span><span style="font-weight:600">-${d.loss}dB</span></div>`).join('')
-      + `<div style="height:1px;background:#e5e7eb;margin:6px 0"></div>
-         <div style="display:flex;justify-content:space-between;font-size:.78rem;font-weight:700;color:#1e293b">
-           <span>Perda Total</span><span>${pb.totalLoss}dB / ${pb.budget}dB</span>
-         </div>
-         <div style="display:flex;justify-content:space-between;font-size:.78rem;font-weight:700;color:${pbColor}">
-           <span>Margem</span><span>${pb.margem>0?'+':''}${pb.margem}dB</span>
-         </div>`
-    : '<div style="font-size:.72rem;color:#94a3b8">Caminho até OLT não mapeado — configure parent_id nos splitters</div>';
-
-  const html = `<div id="cto-ports-modal-ov" style="position:fixed;inset:0;z-index:50001;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px">
-    <div style="background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.22);width:420px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden">
-      <!-- Header -->
-      <div style="padding:14px 16px;background:linear-gradient(135deg,#1e293b,#334155);color:#fff;display:flex;align-items:center;gap:10px">
-        <div style="width:36px;height:36px;border-radius:10px;background:rgba(96,165,250,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-          <i class="fas fa-box" style="color:#60a5fa;font-size:.9rem"></i>
-        </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.name||item.code||id}</div>
-          <div style="font-size:.72rem;opacity:.65">${item.cto_type||item.type||'CTO'}${item.endereco?' · '+item.endereco:''}</div>
-        </div>
-        <button onclick="document.getElementById('cto-ports-modal-ov').remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:1.4rem;opacity:.7;padding:0;line-height:1">&times;</button>
-      </div>
-      <div style="overflow-y:auto;flex:1">
-        <!-- Portas -->
-        <div style="padding:14px 16px;border-bottom:1px solid #e5e7eb">
-          <div style="display:flex;align-items:center;gap:14px;margin-bottom:10px">
-            <div style="text-align:center;min-width:52px">
-              <div style="font-size:2.2rem;font-weight:900;line-height:1;color:${portaColor}">${livres}</div>
-              <div style="font-size:.62rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Livres</div>
-            </div>
-            <div style="flex:1">
-              <div style="display:flex;justify-content:space-between;font-size:.73rem;color:#64748b;margin-bottom:5px">
-                <span>Ocupação <b>${pct}%</b></span><span>${used} de ${cap} portas</span>
-              </div>
-              <div style="height:10px;background:#f1f5f9;border-radius:5px;overflow:hidden">
-                <div style="height:10px;background:${barColor};border-radius:5px;width:${pct}%;transition:width .6s ease"></div>
-              </div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn-map" onclick="sdrViabilidadeCheck(${item.lat||0},${item.lng||0},500);document.getElementById('cto-ports-modal-ov').remove()" style="flex:1;padding:7px 10px;font-size:.78rem">
-              <i class="fas fa-search-location"></i> Ver área</button>
-            <button class="btn-map" onclick="sdrInfraEdit('${id}');document.getElementById('cto-ports-modal-ov').remove()" style="flex:1;padding:7px 10px;font-size:.78rem">
-              <i class="fas fa-edit"></i> Editar</button>
-          </div>
-        </div>
-        <!-- Power Budget -->
-        <div style="padding:12px 16px;border-bottom:1px solid #e5e7eb">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-            <i class="fas fa-signal" style="color:${pbColor}"></i>
-            <b style="font-size:.82rem;color:#1e293b">Power Budget</b>
-            <span style="margin-left:auto;font-size:.74rem;font-weight:700;color:${pbColor}">
-              <i class="fas ${pbIcon}"></i> ${pbLabel}
-            </span>
-          </div>
-          <div style="background:#f8fafc;border-radius:8px;padding:8px 10px">${pbDetailHtml}</div>
-        </div>
-        <!-- Clientes -->
-        <div style="padding:12px 16px">
-          <div style="font-size:.8rem;font-weight:700;color:#374151;margin-bottom:8px">
-            <i class="fas fa-users" style="color:#2563eb;margin-right:5px"></i>Clientes vinculados (${clientes.length})
-          </div>
-          ${clientesHtml}
-        </div>
-      </div>
-    </div>
-  </div>`;
-
-  const ex = document.getElementById('cto-ports-modal-ov');
-  if (ex) ex.remove();
-  document.body.insertAdjacentHTML('beforeend', html);
-};
-
-// ════════════════════════════════════════════════════
-// VIABILIDADE COMERCIAL — Encontrar CTOs próximas
-// ════════════════════════════════════════════════════
-
-let _sdrViabMode   = false;
-let _sdrViabMarker = null;
-
-window.sdrViabilidadeToggle = function() {
-  _sdrViabMode = !_sdrViabMode;
-  const btn = document.getElementById('btn-viabilidade');
-  if (btn) {
-    btn.style.background = _sdrViabMode ? '#16a34a' : '';
-    btn.style.color      = _sdrViabMode ? '#fff'    : '';
-    btn.style.borderColor= _sdrViabMode ? '#15803d' : '';
-  }
-  if (sdrMap) sdrMap.getContainer().style.cursor = _sdrViabMode ? 'crosshair' : '';
-  if (!_sdrViabMode && _sdrViabMarker) { sdrMap.removeLayer(_sdrViabMarker); _sdrViabMarker=null; }
-  const ex = document.getElementById('viab-modal-ov');
-  if (!_sdrViabMode && ex) ex.remove();
-  toast(_sdrViabMode ? '📍 Clique no mapa para verificar viabilidade' : 'Modo viabilidade desativado', 'info');
-};
-
-window.sdrViabilidadeCheck = function(lat, lng, radiusM) {
-  radiusM = radiusM || 500;
-  const results = [];
-  Object.entries(sdrInfraCache).forEach(([id,item]) => {
-    if (!item || !item.lat || !item.lng) return;
-    if (item.type!=='cto' && item.type!=='splitter') return;
-    const dist = Math.round(_haversineM({lat,lng},{lat:item.lat,lng:item.lng}));
-    if (dist > radiusM) return;
-    const cap    = parseInt(item.total_ports)||0;
-    const used   = parseInt(item.used_ports)||0;
-    const livres = Math.max(0, cap-used);
-    const pct    = cap>0 ? Math.round((used/cap)*100) : 0;
-    const pb     = sdrPowerBudgetCalc(id);
-    results.push({id,item,dist,cap,used,livres,pct,pb});
-  });
-  // Ranking: prioriza portas livres + sinal OK + distância curta
-  results.sort((a,b) => {
-    const s = r => (r.livres>0?0:2) + (r.pb.status==='ok'?0:r.pb.status==='warn'?.5:1) + (r.dist/500);
-    return s(a)-s(b);
-  });
-  _sdrViabModal(lat, lng, results.slice(0,12), radiusM);
-};
-
-function _sdrViabModal(lat, lng, results, radiusM) {
-  const total    = results.length;
-  const comPorta = results.filter(r=>r.livres>0).length;
-
-  let rows = '';
-  if (total === 0) {
-    rows = `<div style="text-align:center;padding:24px;color:#94a3b8">
-      <i class="fas fa-search" style="font-size:2rem;display:block;margin-bottom:8px;opacity:.4"></i>
-      Nenhuma CTO em raio de ${radiusM}m<br>
-      <span style="font-size:.75rem">Tente aumentar o raio de busca</span></div>`;
-  } else {
-    results.forEach(r => {
-      const pbColor = r.pb.status==='ok'?'#16a34a':r.pb.status==='warn'?'#d97706':'#dc2626';
-      const pbIcon  = r.pb.status==='ok'?'fa-check-circle':r.pb.status==='warn'?'fa-exclamation-triangle':'fa-times-circle';
-      const pColor  = r.livres>0?'#16a34a':'#dc2626';
-      const barPct  = r.cap>0?r.pct:0;
-      const barCol  = barPct>=90?'#dc2626':barPct>=70?'#d97706':'#22c55e';
-      rows += `<div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .15s"
-        onmouseover="this.style.borderColor='#93c5fd';this.style.background='#f0f9ff'"
-        onmouseout="this.style.borderColor='#e5e7eb';this.style.background=''"
-        onclick="sdrMap.flyTo([${r.item.lat},${r.item.lng}],18);sdrCTOPortsModal('${r.id}',sdrInfraCache['${r.id}'])">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
-          <i class="fas fa-box" style="color:#2563eb;font-size:.8rem;flex-shrink:0"></i>
-          <b style="font-size:.83rem;color:#1e293b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.item.name||r.item.code||r.id}</b>
-          <span style="font-size:.7rem;color:#94a3b8;flex-shrink:0">${r.dist}m</span>
-        </div>
-        <div style="display:flex;gap:10px;font-size:.72rem;margin-bottom:5px">
-          <span style="color:${pColor};font-weight:600"><i class="fas fa-plug"></i> ${r.livres>0?r.livres+' porta'+(r.livres>1?'s':'')+' livre'+(r.livres>1?'s':''):'Sem porta livre'}</span>
-          <span style="color:#64748b"><i class="fas fa-server"></i> ${r.used}/${r.cap||'?'}</span>
-          <span style="color:${pbColor};margin-left:auto"><i class="fas ${pbIcon}"></i> ${r.pb.totalLoss}dB / ${r.pb.margem>0?'+':''}${r.pb.margem}dB</span>
-        </div>
-        ${r.cap>0?`<div style="height:4px;background:#f1f5f9;border-radius:2px"><div style="height:4px;background:${barCol};border-radius:2px;width:${barPct}%"></div></div>`:''}
-      </div>`;
-    });
-  }
-
-  const html = `<div id="viab-modal-ov" style="position:fixed;top:66px;right:10px;z-index:49999;width:370px;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.18);display:flex;flex-direction:column;max-height:calc(100vh - 80px)">
-    <div style="padding:12px 14px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;gap:8px">
-      <i class="fas fa-search-location" style="color:#2563eb;font-size:1rem;flex-shrink:0"></i>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:.88rem;color:#1e293b">Viabilidade Comercial</div>
-        <div style="font-size:.7rem;color:#64748b">Raio ${radiusM}m · <b style="color:#1e293b">${total}</b> CTO${total!==1?'s':''} · <b style="color:#16a34a">${comPorta}</b> com porta livre</div>
-      </div>
-      <button onclick="document.getElementById('viab-modal-ov').remove()" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:1.3rem;padding:0;line-height:1;flex-shrink:0">&times;</button>
-    </div>
-    <div style="overflow-y:auto;flex:1;padding:10px">${rows}</div>
-    <div style="padding:8px 10px;border-top:1px solid #e5e7eb;display:flex;gap:8px;align-items:center">
-      <span style="font-size:.72rem;color:#94a3b8;flex-shrink:0">Raio:</span>
-      <input id="viab-r-input" type="number" value="${radiusM}" min="100" max="3000" step="100"
-        style="width:80px;padding:5px 8px;border:1px solid #e5e7eb;border-radius:6px;font-size:.8rem">
-      <button class="btn-map" onclick="sdrViabilidadeCheck(${lat},${lng},parseInt(document.getElementById('viab-r-input').value)||500)"
-        style="flex:1;padding:6px;font-size:.78rem"><i class="fas fa-sync-alt"></i> Rebuscar</button>
-    </div>
-  </div>`;
-
-  const ex = document.getElementById('viab-modal-ov');
-  if (ex) ex.remove();
-  document.body.insertAdjacentHTML('beforeend', html);
-}
 
 // ────────────────────────────────────────────────
 // A. IMPORTAÇÃO KMZ / KML
@@ -8326,31 +7582,7 @@ window._sdrHtml_clientes = function() {
     +'</div>';
 };
 
-<<<<<<< HEAD
-window._sdrHtml_olts = function() {
-  // Layout dark de abas — ocupa todo o espaço disponível
-  return '<div id="olts-page" style="height:100%;display:flex;flex-direction:column;background:#060d1c;overflow:hidden">'
-    // Barra superior
-    +'<div style="background:#0f172a;padding:9px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #1e3a5f">'
-    +'<i class="fas fa-server" style="color:#6366f1;font-size:1rem"></i>'
-    +'<span style="font-weight:700;font-size:.9rem;color:#e2e8f0">OLTs — Equipamentos</span>'
-    +'<div style="margin-left:auto;display:flex;gap:6px">'
-    +'<button onclick="sdrOltsRender()" style="padding:5px 12px;font-size:.76rem;background:transparent;border:1px solid #334155;color:#64748b;border-radius:6px;cursor:pointer" title="Atualizar lista de OLTs"><i class="fas fa-sync-alt"></i> Atualizar</button>'
-    +'<button onclick="sdrOltAddModal(null)" style="padding:5px 13px;font-size:.76rem;background:#4f46e5;color:#fff;border:none;border-radius:6px;cursor:pointer"><i class="fas fa-plus"></i> Nova OLT</button>'
-    +'</div></div>'
-    // Barra de abas (uma por OLT)
-    +'<div id="olts-tab-bar" style="background:#0a1628;border-bottom:1px solid #1e3a5f;display:flex;align-items:center;overflow-x:auto;flex-shrink:0;min-height:44px;padding:0 6px;gap:1px">'
-    +'<span style="color:#334155;font-size:.72rem;padding:0 10px">Carregando...</span>'
-    +'</div>'
-    // Área do painel inline da OLT selecionada
-    +'<div id="olt-panel-content" style="flex:1;min-height:0;overflow:hidden;position:relative;background:#060d1c">'
-    +'<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#334155"><i class="fas fa-spinner fa-spin" style="font-size:1.5rem"></i></div>'
-    +'</div>'
-    +'</div>';
-};
-=======
 // _sdrHtml_olts definida na Sprint 4 (linha ~2098) — não redefinir aqui
->>>>>>> develop
 
 window._sdrHtml_onus = function() {
   return '<div style="max-width:1100px;margin:0 auto">'
@@ -8421,14 +7653,10 @@ window.sdrClientesFiltrar = function(q) {
     '#page-dash-rede{display:none!important}#page-dash-rede.active{display:block!important}',
     '#page-clientes{display:none!important}#page-clientes.active{display:block!important}',
     '#page-olts{display:none!important}#page-olts.active{display:flex!important;flex-direction:column;overflow:hidden;padding:0!important}',
-<<<<<<< HEAD
-    '#page-olts #olts-page{flex:1;min-height:0}',
-=======
     '#page-olts #olts-page{flex:1;min-height:0;display:flex;flex-direction:column}',
     /* Esconder scrollbar interno do painel OLT sem afetar o resto do app */
     '#page-olts *::-webkit-scrollbar{width:0;height:0;background:transparent}',
     '#page-olts *{scrollbar-width:none}',
->>>>>>> develop
     '#page-onus{display:none!important}#page-onus.active{display:block!important}',
     '#page-alertas{display:none!important}#page-alertas.active{display:block!important}',
     '#page-tickets{display:none!important}#page-tickets.active{display:block!important}',
@@ -9288,21 +8516,14 @@ window.sdrMoveCancelMarker = function() {
 window._sdrCtxOlt = function(id) {
   return [
     {_label: 'OLT'},
-<<<<<<< HEAD
-    {icon:'fa-project-diagram', label:'Painel de Conexão', fn:function(){ if(typeof showPage==='function') showPage('olts'); setTimeout(function(){ _sdrActiveOltTab=id; sdrOltsRender(); },200); }},
-    {icon:'fa-th',              label:'Chassis Visual',    fn:function(){ sdrOltVisualModal(id); }},
-    {icon:'fa-edit',            label:'Editar',            fn:function(){ sdrOltAddModal(id); }},
-    {icon:'fa-map-marker-alt',  label:'Posicionar no Mapa',fn:function(){ sdrOltStartMapPlace(id); }},
-=======
     {icon:'fa-th',          label:'Ver Chassis',      fn:function(){ showPage && showPage('olts'); setTimeout(function(){ sdrOltTabSwitch(id); }, 200); }},
     {icon:'fa-edit',        label:'Editar',           fn:function(){ sdrOltAddModal(id); }},
     {icon:'fa-sitemap',     label:'Ver Topologia',    fn:function(){ showPage && showPage('olts'); setTimeout(function(){ var p=document.getElementById('topologia-tree'); if(p&&p.style.display==='none') sdrTopologiaToggle(); else sdrTopologiaRender(); },200); }},
->>>>>>> develop
     '---',
-    {icon:'fa-router',          label:'Nova ONU',          fn:function(){ sdrOnuAdd(); }},
-    {icon:'fa-network-wired',   label:'Novo DGO',          fn:function(){ sdrDgoCriarModal(id); }},
+    {icon:'fa-router',      label:'Nova ONU',         fn:function(){ sdrOnuAdd(); }},
+    {icon:'fa-network-wired',label:'Novo DGO',        fn:function(){ sdrDgoCriarModal(id); }},
     '---',
-    {icon:'fa-trash',           label:'Excluir OLT', color:'#dc2626', fn:function(){ sdrOltDelete(id); }}
+    {icon:'fa-trash',       label:'Excluir OLT',      color:'#dc2626', fn:function(){ sdrOltDelete(id); }}
   ];
 };
 
