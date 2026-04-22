@@ -8719,7 +8719,7 @@ window._sdrUpdateAlertBadge = function(count) {
   var badge = document.getElementById('sdr-alert-badge');
   if (!badge) {
     // Criar badge no item de Alertas do sidebar
-    var alertLink = document.querySelector('[onclick*="showPage(\'alertas\')"], [onclick*="showPage(\"alertas\")"]');
+    var alertLink = document.querySelector('[onclick*="alertas"]') || Array.from(document.querySelectorAll('[onclick]')).find(function(el){return el.getAttribute('onclick').indexOf('alertas')>-1;});
     if (!alertLink) return;
     badge = document.createElement('span');
     badge.id = 'sdr-alert-badge';
