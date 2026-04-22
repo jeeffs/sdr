@@ -1087,7 +1087,8 @@ function _sdrShowAddModal(editId, editData) {
   // Só cria se o mapa estiver ativo e o item tiver coordenadas
   var _editDragMarker = null;
   if (isEdit && d.lat && d.lng && window.sdrMap && window.sdrMapReady) {
-    var editCfg = INFRA_TYPES[d.type] || INFRA_TYPES.pole;
+    var _effTypeEdit = (d.cto_type && INFRA_TYPES[d.cto_type]) ? d.cto_type : d.type;
+    var editCfg = INFRA_TYPES[_effTypeEdit] || INFRA_TYPES.pole;
     _editDragMarker = L.marker([d.lat, d.lng], {
       draggable: true,
       icon: L.divIcon({
@@ -1377,7 +1378,8 @@ function _renderInfraGrid() {
   }
 
   gridEl.innerHTML = items.map(([id, item]) => {
-    const cfg = INFRA_TYPES[item.type] || INFRA_TYPES.pole;
+    const _effTypeGrid = (item.cto_type && INFRA_TYPES[item.cto_type]) ? item.cto_type : item.type;
+    const cfg = INFRA_TYPES[_effTypeGrid] || INFRA_TYPES.pole;
     let detail = '';
     if (item.total_ports) detail = `Portas: ${item.used_ports||0}/${item.total_ports}`;
     else if (item.fiber_count) detail = `${item.fiber_count} fibras | ${item.length_meters||0}m`;
@@ -7200,7 +7202,8 @@ window.sdrMapRenderInfra = function() {
     }
 
     // POSTES e outros
-    const cfg=INFRA_TYPES[type]||INFRA_TYPES.pole;
+    const _effTypeMap = (item.cto_type && INFRA_TYPES[item.cto_type]) ? item.cto_type : type;
+    const cfg=INFRA_TYPES[_effTypeMap]||INFRA_TYPES.pole;
     const marker=L.marker([item.lat,item.lng],{icon:L.divIcon({className:'leaflet-div-icon',html:`<div class="marker-icon ${cfg.iconClass}"><i class="fas ${cfg.icon}"></i></div>`,iconSize:[28,28],iconAnchor:[14,14]})});
     marker.bindTooltip(item.name||cfg.label,{direction:'top',offset:[0,-14]});
     marker.on('click',()=>sdrOpenInfraPanel(id,item));
