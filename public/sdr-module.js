@@ -849,10 +849,17 @@ window.sdrOpenInfraPanel = function(id, item) {
   if (item.fiber_count) html += `<div class="sp-row"><span class="sp-label">Fibras</span><span class="sp-val">${item.fiber_count}</span></div>`;
   if (item.length_meters) html += `<div class="sp-row"><span class="sp-label">Comprimento</span><span class="sp-val">${item.length_meters}m</span></div>`;
   if (item.notes) html += `<div class="sp-row"><span class="sp-label">Observações</span><span class="sp-val">${item.notes}</span></div>`;
+  // kmz_desc como nota de fusão (dados importados do KMZ)
+  if (item.kmz_desc) html += `<div class="sp-row"><span class="sp-label">Nota Fusão</span><span class="sp-val" style="font-size:.74rem;color:#475569;word-break:break-word">${item.kmz_desc}</span></div>`;
   html += `</div>`;
 
+  // Botão Diagrama de Fusão — exclusivo para CEO
+  if (_effType === 'ceo') {
+    html += `<button class="btn-primary" onclick="sdrCeoFusaoModal('${id}')" style="width:100%;margin-top:12px;padding:9px;background:linear-gradient(135deg,#ea580c,#dc2626);border:none"><i class="fas fa-project-diagram"></i> Diagrama de Fusão</button>`;
+  }
+
   // Botões de ação
-  html += `<div style="display:flex;gap:8px;margin-top:16px">
+  html += `<div style="display:flex;gap:8px;margin-top:10px">
     <button class="btn-primary" onclick="sdrInfraEdit('${id}')" style="flex:1;padding:8px"><i class="fas fa-edit"></i> Editar</button>
     <button class="btn-danger" onclick="sdrInfraDelete('${id}')" style="padding:8px 16px"><i class="fas fa-trash"></i></button>
   </div>`;
@@ -6996,8 +7003,8 @@ const SDR_CTO_ICONS = {
   'splitter':      { bg:'#0891b2', fg:'#ffffff', label:'SPL',  icon:'fa-code-branch' },
   'nao_instalada': { bg:'#ef4444', fg:'#ffffff', label:'N/I',  icon:'fa-times-circle' },
   'emenda':        { bg:'#f97316', fg:'#ffffff', label:'EMD',  icon:'fa-link' },
-  'ceo':           { bg:'#2563eb', fg:'#ffffff', label:'CEO',  icon:'fa-project-diagram' },
-  'rt':            { bg:'#10b981', fg:'#ffffff', label:'RT',   icon:'fa-exchange-alt' },
+  'ceo':           { bg:'#ea580c', fg:'#ffffff', label:'CEO',  icon:'fa-project-diagram' },
+  'rt':            { bg:'#16a34a', fg:'#ffffff', label:'RT',   icon:'fa-tape' },
   'default':       { bg:'#2563eb', fg:'#ffffff', label:'CTO',  icon:'fa-box' }
 };
 
@@ -7144,13 +7151,15 @@ window.sdrMapRenderInfra = function() {
     if (!item.lat||!item.lng) return;
     const type=item.type||'pole';
 
-    // CTOS / SPLITTERS / CEO / RT
-    if (type==='cto'||type==='splitter') {
-      let subtype=item.cto_type||'default';
+    // CTOS / SPLITTERS / CEO / RT — inclui type='ceo' e type='rt' que vêm do KMZ
+    if (type==='cto'||type==='splitter'||type==='ceo'||type==='rt'||type==='emd') {
+      let subtype=item.cto_type||type||'default';
       if (!item.cto_type&&item.kmz_color) {
         const m=_matchKMZColor(item.kmz_color,SDR_CTO_COLOR_MAP);
         if (m) subtype=m.cto_type;
       }
+      // Nome 'RT' sempre força ícone verde de Reserva Técnica
+      if ((item.name||'').toUpperCase()==='RT') subtype='rt';
       const ico=SDR_CTO_ICONS[subtype]||SDR_CTO_ICONS.default;
       const cap=item.total_ports||0, used=item.used_ports||0;
       const pct=cap>0?Math.round((used/cap)*100):0;
@@ -9072,6 +9081,209 @@ window.sdrRtEditMetragem = function(id, metrosAtual) {
   }).catch(function(e) { alert('Erro ao salvar: ' + e.message); });
 };
 
+
+// ════════════════════════════════════════════════════════════════════════════
+// DIAGRAMA DE FUSÃO — CEO (Caixa de Emenda Óptica)
+// Visualiza bandejas de fibra ABNT NBR 14100 com mapeamento entrada↔saída
+// ════════════════════════════════════════════════════════════════════════════
+
+// Retorna as cores de fibra do padrão atual (ABNT ou TIA-598)
+function _getCeoFiberColors() {
+  var std = (typeof SDR_FIBER_STANDARDS !== 'undefined' && typeof sdrFiberStandard !== 'undefined')
+    ? SDR_FIBER_STANDARDS[sdrFiberStandard] : null;
+  if (std && std.fibers) {
+    return std.fibers.map(function(f) {
+      return { cor: f.color, nome: f.name, borda: (f.color === '#ffffff' ? '#94a3b8' : null) };
+    });
+  }
+  // Fallback ABNT
+  return [
+    {cor:'#16a34a',nome:'Verde'},{cor:'#eab308',nome:'Amarelo'},{cor:'#ffffff',nome:'Branco',borda:'#94a3b8'},
+    {cor:'#2563eb',nome:'Azul'},{cor:'#dc2626',nome:'Vermelho'},{cor:'#7c3aed',nome:'Violeta'},
+    {cor:'#92400e',nome:'Marrom'},{cor:'#ec4899',nome:'Rosa'},{cor:'#0f172a',nome:'Preto'},
+    {cor:'#0891b2',nome:'Ciano'},{cor:'#94a3b8',nome:'Cinza'},{cor:'#f97316',nome:'Laranja'}
+  ];
+}
+
+window.sdrCeoFusaoModal = function(id) {
+  var item = (window.sdrInfraCache && window.sdrInfraCache[id]) || {};
+  var fusoes = item.ceo_fusoes || {};
+  var notaKmz = item.kmz_desc || '';
+
+  // Detecta capacidade pelo nome: "CEO 24/24/12" → 24 fibras
+  var totalFibras = 12;
+  var nameMatch = (item.name || '').match(/(\d+)\/(\d+)/);
+  if (nameMatch) totalFibras = Math.max(parseInt(nameMatch[1]) || 12, parseInt(nameMatch[2]) || 12);
+  if (totalFibras > 48) totalFibras = 48;
+
+  // Cabos próximos (raio ≈ 300m via Haversine)
+  var cabosProximos = [];
+  if (item.lat && item.lng && typeof _haversineM === 'function') {
+    Object.entries(window.sdrInfraCache || {}).forEach(function(e) {
+      var cid = e[0], cab = e[1];
+      if (cab.type !== 'cable' || !cab.route || !cab.route.length) return;
+      var minDist = Infinity;
+      cab.route.forEach(function(pt) {
+        var d = _haversineM({lat: item.lat, lng: item.lng}, {lat: pt.lat, lng: pt.lng});
+        if (d < minDist) minDist = d;
+      });
+      if (minDist <= 300) cabosProximos.push({id: cid, cab: cab, dist: Math.round(minDist)});
+    });
+    cabosProximos.sort(function(a, b) { return a.dist - b.dist; });
+  }
+
+  // Padrão atual (ABNT/TIA)
+  var stdName = (typeof sdrFiberStandard !== 'undefined' && sdrFiberStandard === 'tia') ? 'TIA-598' : 'ABNT';
+
+  var prev = document.getElementById('sdr-ceo-fusao-modal');
+  if (prev) prev.remove();
+
+  var numBandejas = Math.max(1, Object.keys(fusoes).length);
+  var modal = document.createElement('div');
+  modal.id = 'sdr-ceo-fusao-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;padding:0';
+
+  // HTML do modal
+  var cabosHtml = '';
+  if (cabosProximos.length > 0) {
+    cabosHtml = '<div style="padding:8px 14px;border-bottom:1px solid #f1f5f9">'
+      + '<div style="font-size:.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px"><i class="fas fa-wave-square" style="color:#16a34a;margin-right:4px"></i>Cabos Próximos (' + cabosProximos.length + ')</div>'
+      + '<div style="display:flex;flex-direction:column;gap:3px">'
+      + cabosProximos.slice(0, 5).map(function(e) {
+          var CABLE_RENDER = (typeof window.CABLE_RENDER !== 'undefined') ? window.CABLE_RENDER : {};
+          var sty = CABLE_RENDER[e.cab.cable_type] || {color:'#64748b', label:'Cabo'};
+          return '<div style="display:flex;align-items:center;gap:6px;font-size:.76rem">'
+            + '<span style="display:inline-block;width:14px;height:4px;background:' + (e.cab.kmz_color || sty.color) + ';border-radius:2px;flex-shrink:0"></span>'
+            + '<span style="flex:1;color:#334155">' + (e.cab.name || 'Cabo') + '</span>'
+            + '<span style="color:#94a3b8">' + (e.cab.fiber_count || '?') + ' FO</span>'
+            + '<span style="color:#64748b;font-weight:600">' + e.dist + 'm</span>'
+            + '</div>';
+        }).join('')
+      + '</div></div>';
+  }
+
+  modal.innerHTML = '<div style="background:#fff;border-radius:18px 18px 0 0;width:100%;max-width:500px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.25)">'
+    + '<div style="padding:13px 16px;background:linear-gradient(135deg,#ea580c,#dc2626);color:#fff;border-radius:18px 18px 0 0;display:flex;align-items:center;gap:10px">'
+    + '<i class="fas fa-project-diagram" style="font-size:1.1rem;opacity:.9"></i>'
+    + '<div style="flex:1"><div style="font-weight:700;font-size:.95rem">Diagrama de Fusão · CEO</div>'
+    + '<div style="font-size:.72rem;opacity:.8">' + (item.name || 'CEO') + ' · Padrão ' + stdName + '</div></div>'
+    + '<button onclick="sdrShowFiberStandardModal()" title="Trocar padrão ABNT/TIA" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:3px 8px;cursor:pointer;font-size:.7rem;margin-right:4px"><i class="fas fa-palette"></i> ' + stdName + '</button>'
+    + '<button onclick="document.getElementById(\'sdr-ceo-fusao-modal\').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1rem">&times;</button>'
+    + '</div>'
+    + (notaKmz ? '<div style="padding:7px 14px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:.73rem;color:#78350f"><i class="fas fa-info-circle" style="margin-right:4px"></i>' + notaKmz + '</div>' : '')
+    + cabosHtml
+    + '<div style="padding:9px 14px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+    + '<span style="font-size:.76rem;font-weight:600;color:#475569">Bandeja:</span>'
+    + '<div id="sdr-ceo-bandeja-tabs" style="display:flex;gap:4px;flex-wrap:wrap">'
+    + Array.from({length: numBandejas}, function(_, i) {
+        var b = i + 1;
+        var isSel = b === 1;
+        return '<button id="sdr-ceo-tab-' + b + '" onclick="sdrCeoFusaoTab(\'' + id + '\',' + b + ')" style="padding:3px 10px;font-size:.73rem;border-radius:6px;border:1px solid ' + (isSel ? '#ea580c' : '#e2e8f0') + ';background:' + (isSel ? '#fff7ed' : '#fff') + ';color:' + (isSel ? '#ea580c' : '#64748b') + ';cursor:pointer;font-weight:' + (isSel ? '700' : '400') + '">B' + b + '</button>';
+      }).join('')
+    + '<button onclick="sdrCeoFusaoAddBandeja(\'' + id + '\')" style="padding:3px 9px;font-size:.73rem;border-radius:6px;border:1px dashed #ea580c;background:#fff7ed;color:#ea580c;cursor:pointer"><i class="fas fa-plus"></i></button>'
+    + '</div></div>'
+    + '<div id="sdr-ceo-fusao-body" style="flex:1;overflow-y:auto;padding:10px 14px"></div>'
+    + '<div style="padding:9px 14px;border-top:1px solid #f1f5f9;display:flex;gap:8px">'
+    + '<button onclick="document.getElementById(\'sdr-ceo-fusao-modal\').remove()" style="flex:1;padding:8px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-size:.82rem">Fechar</button>'
+    + '<button onclick="sdrCeoFusaoAddBandeja(\'' + id + '\')" style="padding:8px 14px;background:#fff7ed;border:1px solid #fed7aa;color:#ea580c;border-radius:8px;cursor:pointer;font-size:.82rem"><i class="fas fa-plus"></i> Bandeja</button>'
+    + '</div></div>';
+
+  document.body.appendChild(modal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+  modal._totalFibras = totalFibras;
+  modal._id = id;
+
+  // Renderiza bandeja 1 imediatamente
+  sdrCeoFusaoTab(id, 1);
+};
+
+window.sdrCeoFusaoTab = function(id, bandeja) {
+  var modal = document.getElementById('sdr-ceo-fusao-modal');
+  if (!modal) return;
+  var item = (window.sdrInfraCache && window.sdrInfraCache[id]) || {};
+  var fusoes = item.ceo_fusoes || {};
+  var totalFibras = modal._totalFibras || 12;
+  var cores = _getCeoFiberColors();
+
+  // Atualiza tabs
+  document.querySelectorAll('[id^="sdr-ceo-tab-"]').forEach(function(btn) {
+    var isActive = btn.id === 'sdr-ceo-tab-' + bandeja;
+    btn.style.borderColor = isActive ? '#ea580c' : '#e2e8f0';
+    btn.style.background  = isActive ? '#fff7ed' : '#fff';
+    btn.style.color       = isActive ? '#ea580c' : '#64748b';
+    btn.style.fontWeight  = isActive ? '700' : '400';
+  });
+
+  var body = document.getElementById('sdr-ceo-fusao-body');
+  if (!body) return;
+  var dados = fusoes[bandeja] || {};
+
+  // Conta conexões mapeadas nesta bandeja
+  var totalMapeadas = Object.keys(dados).length;
+  var html = '<div style="font-size:.72rem;color:#64748b;margin-bottom:8px;display:flex;gap:12px">'
+    + '<span><i class="fas fa-link" style="color:#16a34a;margin-right:3px"></i>' + totalMapeadas + ' mapeadas</span>'
+    + '<span><i class="fas fa-unlink" style="color:#94a3b8;margin-right:3px"></i>' + (totalFibras - totalMapeadas) + ' livres</span>'
+    + '</div>';
+
+  for (var f = 1; f <= totalFibras; f++) {
+    var fc = cores[(f - 1) % cores.length] || {cor:'#94a3b8', nome:'?'};
+    var destino = dados[f] ? String(dados[f]) : '';
+    var hasConn = !!destino;
+    // Texto do destino: pode ser "F5" ou texto livre como "Drop-A"
+    var destLabel = destino ? (isNaN(parseInt(destino)) ? destino : 'F' + destino) : '—';
+    html += '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:' + (hasConn ? '#f0fdf4' : '#fafafa') + ';border:1px solid ' + (hasConn ? '#86efac' : '#e2e8f0') + ';border-radius:6px;margin-bottom:3px">'
+      + '<div style="width:13px;height:13px;border-radius:50%;background:' + fc.cor + ';border:1.5px solid ' + (fc.borda || fc.cor) + ';flex-shrink:0"></div>'
+      + '<span style="font-size:.78rem;font-weight:700;color:#334155;min-width:26px">F' + f + '</span>'
+      + '<span style="font-size:.71rem;color:#94a3b8;flex:1">' + fc.nome + '</span>'
+      + '<span style="font-size:.74rem;color:' + (hasConn ? '#15803d' : '#94a3b8') + ';font-weight:' + (hasConn ? '700' : '400') + ';margin-right:4px">' + (hasConn ? '→ ' + destLabel : '—') + '</span>'
+      + '<button onclick="sdrCeoFusaoEditar(\'' + id + '\',' + bandeja + ',' + f + ',\'' + destino + '\')" style="padding:2px 8px;font-size:.68rem;background:' + (hasConn ? '#dcfce7' : '#f1f5f9') + ';border:1px solid ' + (hasConn ? '#86efac' : '#e2e8f0') + ';border-radius:4px;cursor:pointer;color:' + (hasConn ? '#15803d' : '#64748b') + ';flex-shrink:0">' + (hasConn ? 'Editar' : 'Mapear') + '</button>'
+      + '</div>';
+  }
+  body.innerHTML = html;
+};
+
+window.sdrCeoFusaoEditar = function(id, bandeja, fibra, destinoAtual) {
+  var val = prompt('Fibra de destino para F' + fibra + ' (Bandeja ' + bandeja + '):\nDigite o número da fibra de saída (ex: 5), ou deixe em branco para limpar:', destinoAtual || '');
+  if (val === null) return;
+  val = val.trim();
+  var item = (window.sdrInfraCache && window.sdrInfraCache[id]) || {};
+  var fusoes = JSON.parse(JSON.stringify(item.ceo_fusoes || {}));
+  if (!fusoes[bandeja]) fusoes[bandeja] = {};
+  if (val === '') {
+    delete fusoes[bandeja][fibra];
+  } else {
+    var num = parseInt(val);
+    if (isNaN(num) || num < 1) { alert('Número inválido.'); return; }
+    fusoes[bandeja][fibra] = num;
+  }
+  sdrRef('infrastructure/' + id + '/ceo_fusoes').set(fusoes).then(function() {
+    if (window.sdrInfraCache && window.sdrInfraCache[id]) {
+      window.sdrInfraCache[id].ceo_fusoes = fusoes;
+      window.sdrInfraCache = window.sdrInfraCache;
+    }
+    sdrCeoFusaoTab(id, bandeja);
+  }).catch(function(e) { alert('Erro: ' + e.message); });
+};
+
+window.sdrCeoFusaoAddBandeja = function(id) {
+  var item = (window.sdrInfraCache && window.sdrInfraCache[id]) || {};
+  var fusoes = item.ceo_fusoes || {};
+  var novaBandeja = Object.keys(fusoes).length + 1;
+  var modal = document.getElementById('sdr-ceo-fusao-modal');
+  if (!modal) return;
+  // Adiciona tab da nova bandeja
+  var tabs = document.getElementById('sdr-ceo-bandeja-tabs');
+  if (tabs) {
+    var btn = document.createElement('button');
+    btn.id = 'sdr-ceo-tab-' + novaBandeja;
+    btn.setAttribute('onclick', 'sdrCeoFusaoTab(\'' + id + '\',' + novaBandeja + ')');
+    btn.style.cssText = 'padding:4px 12px;font-size:.75rem;border-radius:6px;border:1px solid #e2e8f0;background:#fff;color:#64748b;cursor:pointer';
+    btn.textContent = 'B' + novaBandeja;
+    var addBtn = tabs.querySelector('[onclick*="AddBandeja"]');
+    tabs.insertBefore(btn, addBtn);
+  }
+  sdrCeoFusaoTab(id, novaBandeja);
+};
 
 // ── FERRAMENTAS DE CONVERSÃO BULK ─────────────────────────────────────────
 // Converte itens CEO com nome prefixado "CTO..." → "CEO..."
