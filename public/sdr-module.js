@@ -716,7 +716,9 @@ function sdrMapRenderOlts() {
 }
 
 function _infraPopup(id, item) {
-  const cfg = INFRA_TYPES[item.type] || INFRA_TYPES.pole;
+  // cto_type 'ceo'/'rt'/'emd'/'spl' sobrescreve o tipo base para o label correto
+  const _effType = (item.cto_type && INFRA_TYPES[item.cto_type]) ? item.cto_type : item.type;
+  const cfg = INFRA_TYPES[_effType] || INFRA_TYPES.pole;
   let html = `<b>${cfg.label}: ${item.name||item.code||id}</b>`;
   if (item.code) html += `<br>Código: ${item.code}`;
   if (item.total_ports) html += `<br>Portas: ${item.used_ports||0}/${item.total_ports}`;
@@ -799,7 +801,9 @@ window.sdrMapAddItem = function() {
 // ════════════════════════════════════════════════════
 
 window.sdrOpenInfraPanel = function(id, item) {
-  const cfg = INFRA_TYPES[item.type] || INFRA_TYPES.pole;
+  // cto_type 'ceo'/'rt'/'emd'/'spl' sobrescreve o tipo base para label/icon corretos
+  const _effType = (item.cto_type && INFRA_TYPES[item.cto_type]) ? item.cto_type : item.type;
+  const cfg = INFRA_TYPES[_effType] || INFRA_TYPES.pole;
   const spTitle = document.getElementById('sp-title');
   const spBody = document.getElementById('sp-body');
   const spPanel = document.getElementById('sdr-side-panel');
@@ -821,9 +825,9 @@ window.sdrOpenInfraPanel = function(id, item) {
       + (item.notes ? '<div class="sp-row"><span class="sp-label">Observações</span><span class="sp-val">' + item.notes + '</span></div>' : '')
       + '</div>'
       + '<div style="display:flex;gap:8px;margin-top:16px">'
-      + '<button class="btn-primary" onclick="sdrRtEditMetragem('' + id + '',' + (metros||0) + ')" style="flex:1;padding:8px"><i class="fas fa-ruler"></i> Definir Metragem</button>'
-      + '<button class="btn-primary" onclick="sdrInfraEdit('' + id + '')" style="padding:8px 14px"><i class="fas fa-edit"></i></button>'
-      + '<button class="btn-danger" onclick="sdrInfraDelete('' + id + '')" style="padding:8px 16px"><i class="fas fa-trash"></i></button>'
+      + '<button class="btn-primary" onclick="sdrRtEditMetragem(\'' + id + '\',' + (metros||0) + ')" style="flex:1;padding:8px"><i class="fas fa-ruler"></i> Definir Metragem</button>'
+      + '<button class="btn-primary" onclick="sdrInfraEdit(\'' + id + '\')" style="padding:8px 14px"><i class="fas fa-edit"></i></button>'
+      + '<button class="btn-danger" onclick="sdrInfraDelete(\'' + id + '\')" style="padding:8px 16px"><i class="fas fa-trash"></i></button>'
       + '</div>';
     document.getElementById('sp-body').innerHTML = html;
     document.getElementById('sdr-side-panel').classList.add('open');
