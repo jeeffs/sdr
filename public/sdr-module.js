@@ -303,11 +303,15 @@
 // ── CONFIGURAÇÃO ──
 // MIGRADO para src/core/config.js (sdr-bundle.js)
 // Disponível via window.xxx (carregado antes deste arquivo)
-const SDR_TENANT    = window.SDR_TENANT;
-const SDR_BASE      = window.SDR_BASE;
-const INFRA_TYPES   = window.INFRA_TYPES;
-const SDR_PERDAS    = window.SDR_PERDAS;
+const SDR_TENANT     = window.SDR_TENANT;
+const SDR_BASE       = window.SDR_BASE;
+const INFRA_TYPES    = window.INFRA_TYPES;
+const SDR_PERDAS     = window.SDR_PERDAS;
 const SDR_OLT_BUDGET = window.SDR_OLT_BUDGET;
+
+// MIGRADO para src/cto/power-budget.js (sdr-bundle.js)
+// _sdrTracePath e sdrPowerBudgetCalc disponíveis via window.xxx
+const _sdrTracePath = window._sdrTracePath;
 
 // ── PADRÃO DE CORES DE FIBRA ──
 // MIGRADO para src/utils/fiber-standards.js (sdr-bundle.js)
@@ -6897,47 +6901,8 @@ function _fmtDist(m) { return m>=1000?(m/1000).toFixed(2)+'km':m+'m'; }
 // ── Renderização do mapa (Sprint 5 sobrescreve) ──
 
 // ── Power Budget + Viabilidade (branch main) ─────────────────────────────
-window.sdrPowerBudgetCalc = function(itemId, oltBudgetDb) {
-  const budget = oltBudgetDb || SDR_OLT_BUDGET.default;
-  const path = _sdrTracePath(itemId);
-  let totalLoss = SDR_PERDAS.conector_par;
-  const detail = [{ label:'Conectores OLT+ONU (par)', loss: SDR_PERDAS.conector_par }];
-
-  path.forEach(({ id, item }, idx) => {
-    if (!item) return;
-    // Splitter: usa ratio definido no item
-    if ((item.type==='splitter'||item.type==='cto') && item.ratio) {
-      const loss = SDR_PERDAS.splitter[item.ratio] || 0;
-      if (loss > 0) {
-        totalLoss += loss;
-        detail.push({ label:`Splitter ${item.ratio} — ${item.nome||item.name||id}`, loss });
-      }
-    }
-    // Cabo com comprimento real
-    if (item.type==='cable' && item.length_m) {
-      const loss = +(( item.length_m / 1000) * SDR_PERDAS.cabo_db_km).toFixed(2);
-      totalLoss += loss;
-      detail.push({ label:`Cabo ${item.name||id} (${Math.round(item.length_m)}m)`, loss });
-      return;
-    }
-    // Estimativa pelo gap geográfico para o próximo elemento
-    if (item.lat && item.lng && idx < path.length - 1) {
-      const nxt = path[idx+1]?.item;
-      if (nxt?.lat && nxt?.lng) {
-        const dm = _haversineM({lat:item.lat,lng:item.lng},{lat:nxt.lat,lng:nxt.lng});
-        if (dm > 20) {
-          const loss = +((dm/1000)*SDR_PERDAS.cabo_db_km).toFixed(2);
-          totalLoss += loss;
-          detail.push({ label:`Cabo estimado ~${Math.round(dm)}m`, loss });
-        }
-      }
-    }
-  });
-
-  const margem = +(budget - totalLoss).toFixed(2);
-  const status = margem < 0 ? 'crit' : margem < SDR_PERDAS.margem_min ? 'warn' : 'ok';
-  return { totalLoss:+totalLoss.toFixed(2), margem, budget, status, detail, hops:path.length };
-};
+// MIGRADO para src/cto/power-budget.js (sdr-bundle.js)
+// window.sdrPowerBudgetCalc disponível via sdr-bundle.js (carregado antes)
 
 // ════════════════════════════════════════════════════
 // MODAL DE PORTAS DA CTO — click na CTO no mapa
