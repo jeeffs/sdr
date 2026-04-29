@@ -7474,83 +7474,123 @@ window.sdrKMZConfirmImport = async function() {
 
 // ────────────────────────────────────────────────
 // C. MODAL DE CLICK NA CTO / CEO / RT / SPLITTER
+// Inclui Power Budget, clientes, viabilidade
 // ────────────────────────────────────────────────
 window.sdrCTOPortsModal = function(id, item) {
   var existing = document.getElementById('sdr-cto-ports-modal');
   if (existing) existing.remove();
-  // Salva referência global para o botão Detalhes poder acessar o item
   window._ctoPortsItemRef = { id: id, item: item };
 
-  var ico = (typeof SDR_CTO_ICONS !== 'undefined' ? (SDR_CTO_ICONS[item.cto_type||'default'] || SDR_CTO_ICONS.default) : {label:'CTO', icon:'fa-box', bg:'#2563eb'});
-  var cap = item.total_ports || 0;
-  var used = item.used_ports || 0;
-  var pct = cap > 0 ? Math.round((used / cap) * 100) : 0;
-  var barColor = pct >= 90 ? '#dc2626' : pct >= 60 ? '#d97706' : '#22c55e';
+  // Tipo efetivo (ceo, rt, etc.)
+  var _eff = (item.cto_type && SDR_CTO_ICONS[item.cto_type]) ? item.cto_type : (item.type || 'default');
+  var ico = SDR_CTO_ICONS[_eff] || SDR_CTO_ICONS.default;
 
-  // Clientes conectados a esta CTO
-  var clientesConectados = [];
-  if (typeof sdrClientesCache !== 'undefined') {
-    Object.entries(sdrClientesCache).forEach(function(entry) {
-      var cid = entry[0], c = entry[1];
-      if (c && (c.cto_id === id || c.cto === id)) clientesConectados.push({id: cid, c: c});
+  // Portas
+  var cap    = parseInt(item.total_ports) || 0;
+  var used   = parseInt(item.used_ports)  || 0;
+  var livres = Math.max(0, cap - used);
+  var pct    = cap > 0 ? Math.round((used / cap) * 100) : 0;
+  var barColor   = pct >= 90 ? '#dc2626' : pct >= 70 ? '#d97706' : '#22c55e';
+  var livresColor = livres > 0 ? '#16a34a' : '#dc2626';
+
+  // Power Budget
+  var pb = (typeof sdrPowerBudgetCalc === 'function') ? sdrPowerBudgetCalc(id) : { status:'unknown', totalLoss:0, budget:0, margem:0, detail:[] };
+  var pbColor = pb.status === 'ok' ? '#16a34a' : pb.status === 'warn' ? '#d97706' : pb.status === 'critical' ? '#dc2626' : '#94a3b8';
+  var pbIcon  = pb.status === 'ok' ? 'fa-check-circle' : pb.status === 'warn' ? 'fa-exclamation-triangle' : pb.status === 'critical' ? 'fa-times-circle' : 'fa-question-circle';
+  var pbLabel = pb.status === 'ok' ? 'Sinal OK' : pb.status === 'warn' ? 'Margem baixa ⚠️' : pb.status === 'critical' ? 'Sinal crítico ❌' : 'Caminho não mapeado';
+
+  var pbDetailHtml = '';
+  if (pb.detail && pb.detail.length > 0) {
+    pb.detail.forEach(function(d) {
+      pbDetailHtml += '<div style="display:flex;justify-content:space-between;font-size:.72rem;color:#475569;padding:2px 0">'
+        + '<span>' + d.label + '</span><span style="font-weight:600">-' + d.loss + 'dB</span></div>';
     });
+    pbDetailHtml += '<div style="height:1px;background:#e5e7eb;margin:5px 0"></div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:.76rem;font-weight:700;color:#1e293b">'
+      + '<span>Perda Total</span><span>' + pb.totalLoss + 'dB / ' + pb.budget + 'dB</span></div>'
+      + '<div style="display:flex;justify-content:space-between;font-size:.76rem;font-weight:700;color:' + pbColor + '">'
+      + '<span>Margem</span><span>' + (pb.margem > 0 ? '+' : '') + pb.margem + 'dB</span></div>';
+  } else {
+    pbDetailHtml = '<div style="font-size:.72rem;color:#94a3b8">Caminho até OLT não mapeado — configure parent_id nos splitters</div>';
   }
 
+  // Clientes vinculados
+  var clientes = [];
+  if (typeof sdrClientesCache !== 'undefined') {
+    Object.entries(sdrClientesCache).forEach(function(e) {
+      var c = e[1];
+      if (c && (c.cto_id === id || c.cto === id)) clientes.push(c);
+    });
+  }
   var clientesHtml = '';
-  if (clientesConectados.length > 0) {
-    clientesHtml = '<div style="margin-top:12px">'
-      + '<div style="font-size:.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Clientes (' + clientesConectados.length + ')</div>'
-      + '<div style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">'
-      + clientesConectados.map(function(e) {
-          var status = e.c.onu_status || 'desconhecido';
-          var dot = status === 'online' ? '#22c55e' : status === 'offline' ? '#dc2626' : '#94a3b8';
-          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;background:#f8fafc;border-radius:6px;font-size:.8rem">'
-            + '<span style="width:8px;height:8px;border-radius:50%;background:' + dot + ';flex-shrink:0"></span>'
-            + '<span style="flex:1;font-weight:500">' + (e.c.name || e.id) + '</span>'
-            + '<span style="color:#64748b;font-size:.72rem">' + (e.c.plan_name || '') + '</span>'
-            + '</div>';
-        }).join('')
-      + '</div></div>';
+  if (clientes.length > 0) {
+    clientesHtml = clientes.slice(0, 8).map(function(c) {
+      var st = c.onu_status === 'online' ? '#16a34a' : c.onu_status === 'offline' ? '#dc2626' : '#d97706';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:.75rem">'
+        + '<i class="fas fa-circle" style="color:' + st + ';font-size:.45rem;flex-shrink:0"></i>'
+        + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (c.name || '—') + '</span>'
+        + '<span style="color:#94a3b8;font-size:.7rem">' + (c.plan_name || '') + '</span>'
+        + '</div>';
+    }).join('') + (clientes.length > 8 ? '<div style="font-size:.72rem;color:#94a3b8;text-align:center;padding:4px">+' + (clientes.length - 8) + ' mais</div>' : '');
   } else {
-    clientesHtml = '<div style="color:#94a3b8;font-size:.8rem;text-align:center;padding:10px 0">Nenhum cliente vinculado</div>';
+    clientesHtml = '<div style="font-size:.75rem;color:#94a3b8;text-align:center;padding:8px">Nenhum cliente vinculado nesta CTO</div>';
   }
 
   var modal = document.createElement('div');
   modal.id = 'sdr-cto-ports-modal';
-  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:16px';
 
-  modal.innerHTML = '<div style="background:#fff;border-radius:14px;width:100%;max-width:400px;box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden">'
+  modal.innerHTML = '<div style="background:#fff;border-radius:16px;width:100%;max-width:420px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.25);overflow:hidden">'
     // Header
-    + '<div style="padding:13px 16px;background:' + (ico.bg || '#2563eb') + ';color:#fff;display:flex;align-items:center;justify-content:space-between">'
-    + '<div style="display:flex;align-items:center;gap:9px">'
-    + '<i class="fas ' + (ico.icon || 'fa-box') + '" style="font-size:1.1rem;opacity:.9"></i>'
-    + '<div><div style="font-weight:700;font-size:.95rem">' + (item.name || 'CTO') + '</div>'
-    + '<div style="font-size:.72rem;opacity:.8">' + ico.label + (item.code ? ' · ' + item.code : '') + '</div></div>'
+    + '<div style="padding:14px 16px;background:linear-gradient(135deg,#1e293b,#334155);color:#fff;display:flex;align-items:center;gap:10px">'
+    + '<div style="width:36px;height:36px;border-radius:10px;background:' + ico.bg + '44;display:flex;align-items:center;justify-content:center;flex-shrink:0">'
+    + '<i class="fas ' + ico.icon + '" style="color:' + ico.bg + ';font-size:.9rem"></i></div>'
+    + '<div style="flex:1;min-width:0">'
+    + '<div style="font-weight:700;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (item.name || item.code || id) + '</div>'
+    + '<div style="font-size:.72rem;opacity:.65">' + ico.label + (item.code ? ' · ' + item.code : '') + (item.endereco ? ' · ' + item.endereco : '') + '</div>'
     + '</div>'
-    + '<button onclick="document.getElementById(\'sdr-cto-ports-modal\').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center">&times;</button>'
+    + '<button onclick="document.getElementById(\'sdr-cto-ports-modal\').remove()" style="background:none;border:none;color:#fff;cursor:pointer;font-size:1.4rem;opacity:.7;padding:0;line-height:1">&times;</button>'
     + '</div>'
-    // Body
-    + '<div style="padding:14px 16px">'
-    // Stats portas
+    // Body scrollável
+    + '<div style="overflow-y:auto;flex:1">'
+    // Portas
+    + '<div style="padding:13px 16px;border-bottom:1px solid #e5e7eb">'
     + (cap > 0
-      ? '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
-        + '<div style="flex:1;background:#f1f5f9;border-radius:8px;padding:8px 12px;text-align:center">'
-        + '<div style="font-size:1.3rem;font-weight:800;color:#1e293b">' + used + '<span style="font-size:.8rem;font-weight:500;color:#64748b">/' + cap + '</span></div>'
-        + '<div style="font-size:.7rem;color:#64748b">Portas usadas</div></div>'
-        + '<div style="flex:2"><div style="height:10px;background:#e2e8f0;border-radius:10px;overflow:hidden">'
-        + '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:10px;transition:.3s"></div></div>'
-        + '<div style="font-size:.72rem;color:#64748b;text-align:right;margin-top:3px">' + pct + '% ocupado</div>'
+      ? '<div style="display:flex;align-items:center;gap:14px;margin-bottom:10px">'
+        + '<div style="text-align:center;min-width:48px">'
+        + '<div style="font-size:2rem;font-weight:900;line-height:1;color:' + livresColor + '">' + livres + '</div>'
+        + '<div style="font-size:.6rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.04em">Livres</div>'
+        + '</div>'
+        + '<div style="flex:1">'
+        + '<div style="display:flex;justify-content:space-between;font-size:.73rem;color:#64748b;margin-bottom:5px">'
+        + '<span>Ocupação <b>' + pct + '%</b></span><span>' + used + ' de ' + cap + ' portas</span></div>'
+        + '<div style="height:9px;background:#f1f5f9;border-radius:5px;overflow:hidden">'
+        + '<div style="height:9px;background:' + barColor + ';border-radius:5px;width:' + pct + '%;transition:width .5s"></div></div>'
         + '</div></div>'
-      : '<div style="color:#94a3b8;font-size:.8rem;text-align:center;padding:4px 0;margin-bottom:8px">Portas não configuradas</div>'
+      : '<div style="font-size:.8rem;color:#94a3b8;text-align:center;padding:4px 0;margin-bottom:6px">Portas não configuradas</div>'
     )
+    + '<div style="display:flex;gap:8px">'
+    + '<button class="btn-map" onclick="sdrViabilidadeCheck(' + (item.lat || 0) + ',' + (item.lng || 0) + ',500);document.getElementById(\'sdr-cto-ports-modal\').remove()" style="flex:1;padding:7px 10px;font-size:.77rem"><i class="fas fa-search-location"></i> Ver área</button>'
+    + '<button class="btn-map" onclick="document.getElementById(\'sdr-cto-ports-modal\').remove();setTimeout(function(){var r=window._ctoPortsItemRef||{};sdrOpenInfraPanel(r.id,sdrInfraCache[r.id]||r.item||{});},50)" style="flex:1;padding:7px 10px;font-size:.77rem"><i class="fas fa-eye"></i> Detalhes</button>'
+    + '<button class="btn-map" onclick="document.getElementById(\'sdr-cto-ports-modal\').remove();setTimeout(function(){var r=window._ctoPortsItemRef||{};sdrInfraEdit(r.id);},50)" style="flex:1;padding:7px 10px;font-size:.77rem"><i class="fas fa-edit"></i> Editar</button>'
+    + '</div></div>'
+    // Power Budget
+    + '<div style="padding:12px 16px;border-bottom:1px solid #e5e7eb">'
+    + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">'
+    + '<i class="fas fa-signal" style="color:' + pbColor + '"></i>'
+    + '<b style="font-size:.82rem;color:#1e293b">Power Budget</b>'
+    + '<span style="margin-left:auto;font-size:.74rem;font-weight:700;color:' + pbColor + '"><i class="fas ' + pbIcon + '"></i> ' + pbLabel + '</span>'
+    + '</div>'
+    + '<div style="background:#f8fafc;border-radius:8px;padding:8px 10px">' + pbDetailHtml + '</div>'
+    + '</div>'
+    // Clientes
+    + '<div style="padding:12px 16px">'
+    + '<div style="font-size:.8rem;font-weight:700;color:#374151;margin-bottom:8px">'
+    + '<i class="fas fa-users" style="color:#2563eb;margin-right:5px"></i>Clientes vinculados (' + clientes.length + ')'
+    + '</div>'
     + clientesHtml
     + (item.notes ? '<div style="margin-top:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:8px;font-size:.78rem;color:#78350f">' + item.notes + '</div>' : '')
     + '</div>'
-    // Footer
-    + '<div style="padding:10px 16px;border-top:1px solid #e5e7eb;display:flex;gap:8px;justify-content:flex-end">'
-    + '<button onclick="document.getElementById(\'sdr-cto-ports-modal\').remove()" style="padding:7px 16px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:7px;cursor:pointer;font-size:.82rem">Fechar</button>'
-    + '<button onclick="event.stopPropagation();document.getElementById(\'sdr-cto-ports-modal\').remove();setTimeout(function(){var r=window._ctoPortsItemRef||{};sdrOpenInfraPanel(r.id,sdrInfraCache[r.id]||r.item||{});},50);" style="padding:7px 16px;background:#0ea5e9;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82rem"><i class="fas fa-eye"></i> Detalhes</button>'
-    + '<button onclick="event.stopPropagation();document.getElementById(\'sdr-cto-ports-modal\').remove();setTimeout(function(){var r=window._ctoPortsItemRef||{};sdrInfraEdit(r.id);},50);" style="padding:7px 16px;background:var(--primary);color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:.82rem;font-weight:600"><i class="fas fa-edit"></i> Editar</button>'
     + '</div></div>';
 
   document.body.appendChild(modal);
