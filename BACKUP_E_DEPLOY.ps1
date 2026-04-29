@@ -23,10 +23,10 @@ if ($branch -ne "main") {
     exit 1
 }
 
-Write-Host "[1/4] Branch: main ✓" -ForegroundColor Green
+Write-Host "[1/5] Branch: main ✓" -ForegroundColor Green
 
 # --- 2. Backup do código atual (antes de qualquer mudança) ---
-Write-Host "[2/4] Criando backup local do código..." -ForegroundColor Yellow
+Write-Host "[2/5] Criando backup local do código..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Path $PASTA_BACKUP -Force | Out-Null
 Copy-Item "public\admin.html"  "$PASTA_BACKUP\admin.html"  -Force
 Copy-Item "public\index.html"  "$PASTA_BACKUP\index.html"  -Force
@@ -37,7 +37,7 @@ if (Test-Path "public\sdr-module.js") {
 Write-Host "    Backup salvo em: $PASTA_BACKUP" -ForegroundColor Green
 
 # --- 3. Backup do Firebase Realtime Database ---
-Write-Host "[3/4] Exportando banco Firebase..." -ForegroundColor Yellow
+Write-Host "[3/5] Exportando banco Firebase..." -ForegroundColor Yellow
 $backupResult = firebase database:get / --output "$PASTA_BACKUP\firebase-db-backup.json" --project solucaoderua 2>&1
 if ($LASTEXITCODE -eq 0) {
     Write-Host "    Banco exportado: firebase-db-backup.json ✓" -ForegroundColor Green
@@ -46,8 +46,17 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "    Motivo: $backupResult" -ForegroundColor DarkYellow
 }
 
-# --- 4. Deploy no Firebase Hosting ---
-Write-Host "[4/4] Iniciando deploy..." -ForegroundColor Yellow
+# --- 4. Build Vite (gera public/sdr-bundle.js) ---
+Write-Host "[4/5] Compilando módulos Vite..." -ForegroundColor Yellow
+npm run build
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERRO] Build Vite falhou. Deploy cancelado." -ForegroundColor Red
+    exit 1
+}
+Write-Host "    Build concluído: public/sdr-bundle.js ✓" -ForegroundColor Green
+
+# --- 5. Deploy no Firebase Hosting ---
+Write-Host "[5/5] Iniciando deploy..." -ForegroundColor Yellow
 firebase deploy --only hosting --project solucaoderua
 
 Write-Host ""
