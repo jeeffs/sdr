@@ -32,6 +32,9 @@ import {
 // Power Budget GPON — sdrPowerBudgetCalc + _sdrTracePath
 import { sdrPowerBudgetCalc } from './cto/power-budget.js';
 
+// Audit Log — sdrAuditLog (fire-and-forget para toda escrita Firebase)
+import { sdrAuditLog } from './core/audit.js';
+
 // Re-exporta para uso em outros módulos do bundle
 export {
   haversineM,
@@ -46,7 +49,8 @@ export {
   SDR_CTO_COLOR_MAP,
   SDR_PERDAS,
   SDR_OLT_BUDGET,
-  sdrPowerBudgetCalc
+  sdrPowerBudgetCalc,
+  sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v4.0 carregado — power-budget + config + haversine OK');
+console.log('[SDR Bundle] sdr-bundle.js v5.0 carregado — audit + power-budget + config OK');

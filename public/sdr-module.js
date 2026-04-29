@@ -1142,6 +1142,13 @@ window.sdrInfraSave = async function(editId) {
       const oldItem = sdrInfraCache[editId] || {};
       await sdrRef(`infrastructure/${editId}`).update(data);
 
+      // Audit log — registra quem/quando/o quê foi alterado
+      window.sdrAuditLog('update_infra',
+        { id: editId, type: data.type || oldItem.type, nome: data.name || oldItem.name },
+        oldItem,
+        Object.assign({}, oldItem, data)
+      );
+
       // Atualizar cache local imediatamente (para refresh do mapa)
       sdrInfraCache[editId] = Object.assign({}, oldItem, data);
 
@@ -1181,6 +1188,14 @@ window.sdrInfraSave = async function(editId) {
       }
       const newRef = await sdrRef('infrastructure').push(data);
       sdrInfraCache[newRef.key] = data;  // update local infra cache
+
+      // Audit log — registra criação do novo elemento
+      window.sdrAuditLog('create_infra',
+        { id: newRef.key, type: data.type, nome: data.name },
+        null,
+        data
+      );
+
       toast('Cadastrado com sucesso!','success');
     }
 
@@ -1206,7 +1221,14 @@ window.sdrInfraEdit = function(id) {
 
 window.sdrInfraDelete = function(id) {
   if (!confirm('Excluir este item da infraestrutura?')) return;
+  const itemAntes = sdrInfraCache[id] || {};
   sdrRef(`infrastructure/${id}`).remove().then(() => {
+    // Audit log — registra deleção com estado anterior preservado
+    window.sdrAuditLog('delete_infra',
+      { id, type: itemAntes.type, nome: itemAntes.name },
+      itemAntes,
+      null
+    );
     toast('Excluído!','success');
     sdrCloseSidePanel();
   }).catch(e => toast('Erro: ' + e.message,'error'));
