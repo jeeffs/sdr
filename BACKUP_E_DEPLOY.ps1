@@ -23,10 +23,10 @@ if ($branch -ne "main") {
     exit 1
 }
 
-Write-Host "[1/5] Branch: main OK" -ForegroundColor Green
+Write-Host "[1/6] Branch: main OK" -ForegroundColor Green
 
 # --- 2. Backup do codigo atual (antes de qualquer mudanca) ---
-Write-Host "[2/5] Criando backup local do codigo..." -ForegroundColor Yellow
+Write-Host "[2/6] Criando backup local do codigo..." -ForegroundColor Yellow
 New-Item -ItemType Directory -Path $PASTA_BACKUP -Force | Out-Null
 Copy-Item "public\admin.html"  "$PASTA_BACKUP\admin.html"  -Force
 Copy-Item "public\index.html"  "$PASTA_BACKUP\index.html"  -Force
@@ -40,7 +40,7 @@ if (Test-Path "public\sdr-bundle.js") {
 Write-Host "    Backup salvo em: $PASTA_BACKUP" -ForegroundColor Green
 
 # --- 3. Backup do Firebase Realtime Database ---
-Write-Host "[3/5] Exportando banco Firebase..." -ForegroundColor Yellow
+Write-Host "[3/6] Exportando banco Firebase..." -ForegroundColor Yellow
 $backupResult = firebase database:get / --output "$PASTA_BACKUP\firebase-db-backup.json" --project solucaoderua 2>&1
 if ($LASTEXITCODE -eq 0) {
     Write-Host "    Banco exportado: firebase-db-backup.json OK" -ForegroundColor Green
@@ -50,7 +50,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # --- 4. Build Vite (gera public/sdr-bundle.js) ---
-Write-Host "[4/5] Compilando modulos Vite..." -ForegroundColor Yellow
+Write-Host "[4/6] Compilando modulos Vite..." -ForegroundColor Yellow
 npm run build
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERRO] Build Vite falhou. Deploy cancelado." -ForegroundColor Red
@@ -58,8 +58,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "    Build concluido: public/sdr-bundle.js OK" -ForegroundColor Green
 
-# --- 5. Deploy no Firebase Hosting ---
-Write-Host "[5/5] Iniciando deploy..." -ForegroundColor Yellow
+# --- 5. Deploy das Security Rules do banco ---
+Write-Host "[5/6] Deployando Security Rules do banco..." -ForegroundColor Yellow
+firebase deploy --only database --project solucaoderua
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "    [AVISO] Deploy das rules falhou - continuando com hosting." -ForegroundColor Yellow
+} else {
+    Write-Host "    Security Rules deployadas: database.rules.json OK" -ForegroundColor Green
+}
+
+# --- 6. Deploy no Firebase Hosting ---
+Write-Host "[6/6] Iniciando deploy do hosting..." -ForegroundColor Yellow
 firebase deploy --only hosting --project solucaoderua
 
 Write-Host ""

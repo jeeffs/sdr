@@ -1,0 +1,78 @@
+{
+  "rules": {
+
+    // ── Regra raiz: bloqueia tudo por padrão ──────────────────────────────
+    // Caminhos sem regra explícita herdam false (negado)
+    ".read":  false,
+    ".write": false,
+
+    // ── SDR Comercial (mapa, infraestrutura, clientes, OLTs) ─────────────
+    "sdr_comercial": {
+      "$tenant": {
+        "infrastructure": {
+          ".read":  "auth != null",
+          ".write": "auth != null"
+        },
+        "clients": {
+          ".read":  "auth != null",
+          ".write": "auth != null"
+        },
+        "olt_connections": {
+          ".read":  "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    },
+
+    // ── Ordens de Serviço ─────────────────────────────────────────────────
+    "os": {
+      ".read":  "auth != null",
+      ".write": "auth != null"
+    },
+
+    // ── Usuários ──────────────────────────────────────────────────────────
+    // Leitura e escrita requerem auth; deleção de nó raiz de usuário bloqueada
+    "users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".read":  "auth != null",
+        ".write": "auth != null"
+      }
+    },
+
+    // ── Configurações ─────────────────────────────────────────────────────
+    "config": {
+      ".read":  "auth != null",
+      ".write": "auth != null"
+    },
+
+    // ── Tabela de preços ──────────────────────────────────────────────────
+    "precos": {
+      ".read":  "auth != null",
+      ".write": "auth != null"
+    },
+
+    // ── Segurança (EPI, veículos, documentos por técnico) ─────────────────
+    "seguranca": {
+      ".read":  "auth != null",
+      ".write": "auth != null"
+    },
+
+    // ── Contratos ─────────────────────────────────────────────────────────
+    "contratos": {
+      ".read":  "auth != null",
+      ".write": "auth != null"
+    },
+
+    // ── Audit Log — append-only ───────────────────────────────────────────
+    // Qualquer usuário autenticado pode criar registros,
+    // mas NINGUÉM pode editar ou deletar um registro existente
+    "audit_log": {
+      ".read": "auth != null",
+      "$entry": {
+        ".write": "auth != null && !data.exists()"
+      }
+    }
+
+  }
+}
