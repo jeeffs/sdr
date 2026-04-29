@@ -3234,6 +3234,9 @@ async function iniciarFirebase(cfg) {
     firebase.initializeApp(cfg);
     db   = firebase.database();
     auth = firebase.auth();
+    // Expoe db e auth no window para o sdr-bundle.js (audit log, etc.)
+    window.db   = db;
+    window.auth = auth;
     // Test connectivity
     await db.ref('.info/connected').once('value');
     // Faz sign-in anônimo para satisfazer regras "auth != null".
