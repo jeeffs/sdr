@@ -301,19 +301,13 @@
 'use strict';
 
 // ── CONFIGURAÇÃO ──
-const SDR_TENANT = 'default_tenant';
-const SDR_BASE = `sdr_comercial/${SDR_TENANT}`;
-const INFRA_TYPES = {
-  pole:     {label:'Poste',             icon:'fa-bolt',           color:'#d97706', iconClass:'pole'},
-  cto:      {label:'CTO',               icon:'fa-box',            color:'#2563eb', iconClass:'cto'},
-  ceo:      {label:'CEO',               icon:'fa-project-diagram',color:'#2563eb', iconClass:'cto'},
-  rt:       {label:'Reserva Técnica',   icon:'fa-tape',           color:'#16a34a', iconClass:'cable'},
-  emd:      {label:'Emenda',            icon:'fa-link',           color:'#0891b2', iconClass:'cto'},
-  spl:      {label:'Splitter',          icon:'fa-code-branch',    color:'#9333ea', iconClass:'splitter'},
-  cable:    {label:'Cabo',              icon:'fa-wave-square',    color:'#16a34a', iconClass:'cable'},
-  splitter: {label:'Splitter',          icon:'fa-code-branch',    color:'#9333ea', iconClass:'splitter'},
-  olt:      {label:'OLT',               icon:'fa-server',         color:'#dc2626', iconClass:'olt'}
-};
+// MIGRADO para src/core/config.js (sdr-bundle.js)
+// Disponível via window.xxx (carregado antes deste arquivo)
+const SDR_TENANT    = window.SDR_TENANT;
+const SDR_BASE      = window.SDR_BASE;
+const INFRA_TYPES   = window.INFRA_TYPES;
+const SDR_PERDAS    = window.SDR_PERDAS;
+const SDR_OLT_BUDGET = window.SDR_OLT_BUDGET;
 
 // ── PADRÃO DE CORES DE FIBRA ──
 // MIGRADO para src/utils/fiber-standards.js (sdr-bundle.js)
@@ -6873,29 +6867,12 @@ const SDR_CABLE_COLOR_MAP = [
 ];
 
 // CTOS: preto=1/16, branco=1/8, marrom=1/4, amarelo=com splitter, vermelho=não instalada, laranja=emenda, azul=CEO
-const SDR_CTO_COLOR_MAP = [
-  { hex:['#000000','#111111','#222222','#0a0a0a','#1a1a1a'], cto_type:'1/16',          ports:16, label:'CTO 1/16'        },
-  { hex:['#ffffff','#eeeeee','#f0f0f0','#dddddd','#f5f5f5'], cto_type:'1/8',           ports:8,  label:'CTO 1/8'         },
-  { hex:['#8b4513','#6b3410','#7b3d1e','#a0522d','#92400e'], cto_type:'1/4',           ports:4,  label:'CTO 1/4'         },
-  { hex:['#ffff00','#ffd700','#f0e000','#eab308'],            cto_type:'splitter',      ports:8,  label:'CTO c/ Splitter' },
-  { hex:['#ff0000','#cc0000','#dd0000','#ef4444'],            cto_type:'nao_instalada', ports:16, label:'Não Instalada'   },
-  { hex:['#ff8000','#ff7f00','#ff6600','#f97316'],            cto_type:'emenda',        ports:0,  label:'CTO Emenda'      },
-  { hex:['#0000ff','#0000cc','#1d4ed8','#2563eb','#3b82f6'],  cto_type:'ceo',           ports:16, label:'CEO'             },
-  { hex:['#00ff00','#00cc00','#22c55e','#10b981','#16a34a','#4ade80'], cto_type:'rt', ports:0,  label:'RT (Reserva)'    }
-];
+// MIGRADO para src/core/config.js (sdr-bundle.js)
+const SDR_CTO_COLOR_MAP = window.SDR_CTO_COLOR_MAP;
 
 // Ícones das CTOs por subtipo
-const SDR_CTO_ICONS = {
-  '1/16':          { bg:'#000000', fg:'#ffffff', label:'1:16', icon:'fa-box' },
-  '1/8':           { bg:'#1e40af', fg:'#ffffff', label:'1:8',  icon:'fa-box' },
-  '1/4':           { bg:'#7c3aed', fg:'#ffffff', label:'1:4',  icon:'fa-box' },
-  'splitter':      { bg:'#0891b2', fg:'#ffffff', label:'SPL',  icon:'fa-code-branch' },
-  'nao_instalada': { bg:'#ef4444', fg:'#ffffff', label:'N/I',  icon:'fa-times-circle' },
-  'emenda':        { bg:'#f97316', fg:'#ffffff', label:'EMD',  icon:'fa-link' },
-  'ceo':           { bg:'#ea580c', fg:'#ffffff', label:'CEO',  icon:'fa-project-diagram' },
-  'rt':            { bg:'#16a34a', fg:'#ffffff', label:'RT',   icon:'fa-tape' },
-  'default':       { bg:'#2563eb', fg:'#ffffff', label:'CTO',  icon:'fa-box' }
-};
+// MIGRADO para src/core/config.js (sdr-bundle.js)
+const SDR_CTO_ICONS = window.SDR_CTO_ICONS;
 
 // Correspondência de cor por distância euclidiana RGB
 function _matchKMZColor(hexColor, colorMap) {
