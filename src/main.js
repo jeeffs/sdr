@@ -2,11 +2,7 @@
  * SDR Solucoes de Rua - Entry Point
  * Vite + ES Modules — migração incremental do sdr-module.js
  *
- * Este bundle carrega ANTES do sdr-module.js (legado).
- * Funções extraídas ficam aqui e são expostas via window.xxx
- * para manter compatibilidade com o código legado.
- *
- * Fase 3: constantes de infraestrutura (config.js)
+ * Fase 24: OLT CRUD (sdrOltsRender, sdrOltAddModal, sdrOltSave, etc.)
  */
 
 // Utils puros — sem dependência de DOM
@@ -41,6 +37,57 @@ import { sdrAuditLog } from './core/audit.js';
 // Renderização do mapa — fase 7
 import './map/render.js';
 
+// Modais CTO/CEO/RT — fase 9
+import './cto/index.js';
+
+// GIS Draw — fase 8
+import './map/draw.js';
+
+// KMZ/KML import — fase 11
+import './map/kmz.js';
+
+// Viabilidade Comercial — fase 13
+import './viab/index.js';
+
+// Clientes — importação CSV, painel, auto-link CTO — fase 10
+import './clientes/index.js';
+
+// Clientes — render lista + CRUD (sdrClientesRender, sdrClienteSave, etc.) — fase 15
+import './clientes/render.js';
+
+// ONUs — CRUD + painel + filtros — fase 12
+import './onus/index.js';
+
+// Infra — painel lateral + CRUD (sdrOpenInfraPanel, sdrInfraSave, etc.) — fase 14
+import './infra/index.js';
+
+// Tickets — CRUD + Ordem de Serviço — fase 16
+import './tickets/index.js';
+
+// MK Integração — Firebase Functions proxy — fase 17
+import './mk/index.js';
+
+// UI — Topologia, CtxMenu, MoveMarker, CtxHelpers, CSV Export — fase 18
+import './ui/index.js';
+
+// Realtime + Alertas + HTML Templates + Conversores — fase 19
+import './realtime/index.js';
+
+// Alertas CRUD + Relatório Inadimplentes — fase 20
+import './alertas/index.js';
+
+// Dashboard de Rede + HTML Templates — fase 21
+import './dashboard/index.js';
+
+// Infra Grid Render + sdrInfraAdd + sdrOltAdd — fase 22
+import './infra/render.js';
+
+// Fiber Standards Modal — fase 23
+import './fiber/index.js';
+
+// OLT CRUD — sdrOltsRender, sdrOltAddModal, sdrOltSave, sdrOltDelete, etc. — fase 24
+import './olt/crud.js';
+
 // Re-exporta para uso em outros módulos do bundle
 export {
   haversineM,
@@ -62,4 +109,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v6.0 carregado — audit + power-budget + config + map/render OK');
+console.log('[SDR Bundle] sdr-bundle.js v24.0 carregado — audit + power-budget + config + map/render + cto/index + map/draw + map/kmz + viab + clientes + onus + infra + clientes/render + tickets + mk + ui + realtime + alertas + dashboard + infra/render + fiber + olt/crud OK');

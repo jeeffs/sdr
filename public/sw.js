@@ -1,9 +1,9 @@
-// Service Worker — Solução de Rua PWA v29
+// Service Worker — Solução de Rua PWA v30
 // Estratégia: cache-first para assets estáticos, network-first para app shell
 // Firebase RTDB usa WebSocket (não interceptável pelo SW) — offline tratado pelo keepSynced
 
-const CACHE_NAME  = 'sdr-v29';
-const CACHE_SHELL = 'sdr-shell-v29';
+const CACHE_NAME  = 'sdr-v30';
+const CACHE_SHELL = 'sdr-shell-v30';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
 const SHELL_ASSETS = [
@@ -19,6 +19,20 @@ const SHELL_ASSETS = [
 const APP_ASSETS = [
     '/sdr-module.js',
     '/sdr-bundle.js'
+];
+
+// CDN assets pré-cacheados no install para uso offline imediato
+const CDN_ASSETS = [
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/webfonts/fa-solid-900.woff2',
+    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/webfonts/fa-regular-400.woff2',
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
+    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
+    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
+    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
 ];
 
 // CDN assets — cache-first (não mudam sem versão na URL)
@@ -48,13 +62,14 @@ async function cacheIndividual(cacheName, urls) {
 
 // ── Install: pré-cacheia shell imediatamente ──────────────────────────────────
 self.addEventListener('install', event => {
-    console.log('[SDR SW] install — v28');
+    console.log('[SDR SW] install — v30');
     event.waitUntil(
         Promise.all([
             cacheIndividual(CACHE_SHELL, SHELL_ASSETS),
-            cacheIndividual(CACHE_NAME,  APP_ASSETS)
+            cacheIndividual(CACHE_NAME,  APP_ASSETS),
+            cacheIndividual(CACHE_NAME,  CDN_ASSETS)
         ]).then(() => {
-            console.log('[SDR SW] pré-cache concluído');
+            console.log('[SDR SW] pré-cache concluído — shell + app + CDN');
             return self.skipWaiting();
         })
     );
