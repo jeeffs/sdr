@@ -76,12 +76,52 @@ export const SDR_OLT_BUDGET = {
   'default': 28
 };
 
+// ── Estilos de renderização de cabo por tipo ──────────────────────────────
+
+export const CABLE_RENDER = {
+  backbone:     { color: '#1d4ed8', weight: 5 },
+  distribuicao: { color: '#16a34a', weight: 4 },
+  drop:         { color: '#f59e0b', weight: 3 },
+  projeto:      { color: '#06b6d4', weight: 3 },
+  unknown:      { color: '#8b5cf6', weight: 3 }
+};
+
+// ── Cor de renderização por contagem de fibras ────────────────────────────
+
+export const CABLE_FIBER_COLOR = {
+  6:   { color: '#2563eb', weight: 3, label: '6FO'   },
+  12:  { color: '#16a34a', weight: 4, label: '12FO'  },
+  24:  { color: '#eab308', weight: 4, label: '24FO'  },
+  36:  { color: '#f97316', weight: 5, label: '36FO'  },
+  48:  { color: '#ec4899', weight: 5, label: '48FO'  },
+  72:  { color: '#dc2626', weight: 5, label: '72FO'  },
+  144: { color: '#8b5cf6', weight: 6, label: '144FO' }
+};
+
+// ── Mapa de cores KMZ → tipo/fibras de cabo ───────────────────────────────
+// verde=12FO, azul=6FO, amarelo=24FO, laranja=36FO, rosa=48FO, vermelho=72FO,
+// violeta=144FO, aqua=projeto
+
+export const SDR_CABLE_COLOR_MAP = [
+  { hex: ['#00ff00','#008000','#00aa00','#00cc00','#006400','#22c55e'], cabo: 'distribuicao', fibers: 12, label: 'Distribuição 12FO' },
+  { hex: ['#0000ff','#0000cc','#0000aa','#1e40af','#1d4ed8','#3b82f6'], cabo: 'distribuicao', fibers: 6,  label: 'Distribuição 6FO'  },
+  { hex: ['#ffff00','#ffd700','#f0e000','#ffe000','#eab308'],            cabo: 'distribuicao', fibers: 24, label: 'Distribuição 24FO' },
+  { hex: ['#ff8000','#ff7f00','#ff6600','#ff4500','#f97316'],            cabo: 'backbone',     fibers: 36, label: 'Backbone 36FO'     },
+  { hex: ['#ff69b4','#ff1493','#ff00ff','#ee00cc','#ec4899'],            cabo: 'backbone',     fibers: 48, label: 'Backbone 48FO'     },
+  { hex: ['#ff0000','#cc0000','#dd0000','#ee0000','#ef4444'],            cabo: 'backbone',     fibers: 72, label: 'Backbone 72FO'     },
+  { hex: ['#9400d3','#8b008b','#7b00c3','#aa00dd','#a855f7'],            cabo: 'backbone',     fibers: 144,label: 'Backbone 144FO'    },
+  { hex: ['#00ffff','#00cccc','#00aaaa','#22d3ee','#06b6d4'],            cabo: 'projeto',      fibers: 0,  label: 'Projeto'          }
+];
+
 // ── Expor como globais para compatibilidade com sdr-module.js ─────────────
 
-window.SDR_TENANT        = SDR_TENANT;
-window.SDR_BASE          = SDR_BASE;
-window.INFRA_TYPES       = INFRA_TYPES;
-window.SDR_CTO_ICONS     = SDR_CTO_ICONS;
-window.SDR_CTO_COLOR_MAP = SDR_CTO_COLOR_MAP;
-window.SDR_PERDAS        = SDR_PERDAS;
-window.SDR_OLT_BUDGET    = SDR_OLT_BUDGET;
+window.SDR_TENANT          = SDR_TENANT;
+window.SDR_BASE            = SDR_BASE;
+window.INFRA_TYPES         = INFRA_TYPES;
+window.SDR_CTO_ICONS       = SDR_CTO_ICONS;
+window.SDR_CTO_COLOR_MAP   = SDR_CTO_COLOR_MAP;
+window.SDR_PERDAS          = SDR_PERDAS;
+window.SDR_OLT_BUDGET      = SDR_OLT_BUDGET;
+window.CABLE_RENDER        = CABLE_RENDER;
+window.CABLE_FIBER_COLOR   = CABLE_FIBER_COLOR;
+window.SDR_CABLE_COLOR_MAP = SDR_CABLE_COLOR_MAP;

@@ -311,7 +311,10 @@ const SDR_OLT_BUDGET = window.SDR_OLT_BUDGET;
 
 // MIGRADO para src/cto/power-budget.js (sdr-bundle.js)
 // _sdrTracePath e sdrPowerBudgetCalc disponíveis via window.xxx
-const _sdrTracePath = window._sdrTracePath;
+const _sdrTracePath  = window._sdrTracePath;
+
+// MIGRADO para src/utils/haversine.js (sdr-bundle.js)
+const _haversineM = window._haversineM;
 
 // ── PADRÃO DE CORES DE FIBRA ──
 // MIGRADO para src/utils/fiber-standards.js (sdr-bundle.js)
@@ -488,6 +491,11 @@ window.sdrMapInit = function() {
   sdrLayers.areas = L.layerGroup().addTo(sdrMap); // Áreas de cobertura (coverage_area)
 
   sdrMapReady = true;
+  // Expor estado do mapa para módulos em sdr-bundle.js (map/render.js)
+  window.sdrMap          = sdrMap;
+  window.sdrLayers       = sdrLayers;
+  window.sdrLayerVisible = sdrLayerVisible;
+  window.sdrMapReady     = true;
   setTimeout(() => sdrMap.invalidateSize(), 200);
 
   // Listener de clique no mapa — capturar coordenadas quando card de edição está aberto
@@ -535,149 +543,28 @@ function sdrMapRenderInfra() {
 }
 
 function sdrMapRenderClients() {
-  sdrLayers.clients.clearLayers();
-  Object.entries(sdrClientesCache).forEach(([id, c]) => {
-    if (!c || !c.lat || !c.lng) return;
-    const status = c.financial_status === 'inadimplente' ? 'client-off' :
-                   c.onu_status === 'offline' ? 'client-bad' :
-                   c.onu_status === 'degraded' ? 'client-warn' : 'client-ok';
-    const marker = L.marker([c.lat, c.lng], {
-      icon: L.divIcon({
-        className: 'leaflet-div-icon',
-        html: `<div class="marker-icon ${status}"><i class="fas fa-user"></i></div>`,
-        iconSize: [28, 28], iconAnchor: [14, 14]
-      })
-    });
-    marker.bindTooltip(`<b>${c.name||'Cliente'}</b><br>${c.plan_name||''} · ${c.onu_status||''}`, {direction:'top', offset:[0,-14]});
-    marker.on('click', () => window.sdrOpenClientePanel(id, c));
-    marker.on('contextmenu', (e) => { L.DomEvent.preventDefault(e); L.DomEvent.stopPropagation(e); sdrCtxMenu(e.originalEvent, _sdrCtxCliente(id)); });
-    sdrLayers.clients.addLayer(marker);
-  });
+  // MIGRADO para src/map/render.js (sdr-bundle.js)
+  if (typeof window.sdrMapRenderClients === 'function') { window.sdrMapRenderClients(); return; }
 }
 
 function sdrMapRenderOlts() {
-  sdrLayers.olts.clearLayers();
-
-  // 1. OLTs gerenciadas via painel OLTs (olt_connections)
-  Object.entries(sdrOltsCache).forEach(([id, o]) => {
-    if (!o || !o.lat || !o.lng) return;
-    const marker = L.marker([o.lat, o.lng], {
-      icon: L.divIcon({
-        className: 'leaflet-div-icon',
-        html: `<div class="marker-icon olt"><i class="fas fa-server"></i></div>`,
-        iconSize: [28, 28], iconAnchor: [14, 14]
-      })
-    });
-    marker.bindTooltip(`<b>${o.name||'OLT'}</b><br>${o.model||''} · ${o.ip_address||''}`, {direction:'top', offset:[0,-14]});
-    marker.on('click', function() {
-      // Click simples → navega para aba OLTs e abre painel inline do chassis
-      if (typeof showPage === 'function') showPage('olts');
-      setTimeout(function() { sdrOltTabSwitch(id); }, 250);
-    });
-    marker.on('contextmenu', (e) => { L.DomEvent.preventDefault(e); L.DomEvent.stopPropagation(e); sdrCtxMenu(e.originalEvent, _sdrCtxOlt(id)); });
-    sdrLayers.olts.addLayer(marker);
-  });
-
-  // 2. OLTs de infraestrutura (type='olt' em sdrInfraCache) — itens editados no mapa
-  // Evitar conflito: sdrMapRenderInfra tentaria adicionar ao sdrLayers.olts mas
-  // sdrMapRenderOlts limparia logo após. Tratamos aqui para garantir visibilidade.
-  if (window.sdrInfraCache) {
-    Object.entries(sdrInfraCache).forEach(function(entry) {
-      var iid = entry[0], item = entry[1];
-      if (!item || item.type !== 'olt' || !item.lat || !item.lng) return;
-      // Já está em olt_connections? Não duplicar
-      if (sdrOltsCache[iid]) return;
-      var imarker = L.marker([item.lat, item.lng], {
-        icon: L.divIcon({
-          className: 'leaflet-div-icon',
-          html: '<div class="marker-icon olt"><i class="fas fa-server"></i></div>',
-          iconSize: [28, 28], iconAnchor: [14, 14]
-        })
-      });
-      imarker.bindTooltip('<b>' + (item.name || item.code || 'OLT') + '</b>', {direction:'top', offset:[0,-14]});
-      imarker.on('click', function() { sdrOpenInfraPanel(iid, item); });
-      imarker.on('contextmenu', function(e) { L.DomEvent.stopPropagation(e); L.DomEvent.preventDefault(e); sdrOpenInfraPanel(iid, item); });
-      sdrLayers.olts.addLayer(imarker);
-    });
-  }
+  // MIGRADO para src/map/render.js (sdr-bundle.js)
+  if (typeof window.sdrMapRenderOlts === 'function') { window.sdrMapRenderOlts(); return; }
 }
 
 function _infraPopup(id, item) {
-  // cto_type 'ceo'/'rt'/'emd'/'spl' sobrescreve o tipo base para o label correto
-  const _effType = (item.cto_type && INFRA_TYPES[item.cto_type]) ? item.cto_type : item.type;
-  const cfg = INFRA_TYPES[_effType] || INFRA_TYPES.pole;
-  let html = `<b>${cfg.label}: ${item.name||item.code||id}</b>`;
-  if (item.code) html += `<br>Código: ${item.code}`;
-  if (item.total_ports) html += `<br>Portas: ${item.used_ports||0}/${item.total_ports}`;
-  if (item.concessionaria) html += `<br>Concess.: ${item.concessionaria}`;
-  if (item.fiber_count) html += `<br>Fibras: ${item.fiber_count}`;
-  return html;
+  // MIGRADO para src/map/render.js (sdr-bundle.js)
+  if (typeof window._infraPopup === 'function') return window._infraPopup(id, item);
+  return '';
 }
 
 function sdrUpdateMapInfo() {
-  const infra = Object.values(sdrInfraCache);
-  const _set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
-  _set('mi-poles', infra.filter(i=>i.type==='pole').length);
-  _set('mi-ctos', infra.filter(i=>i.type==='cto'||i.type==='splitter').length);
-  _set('mi-cables', infra.filter(i=>i.type==='cable').length);
-  _set('mi-clients', Object.keys(sdrClientesCache).length);
-  _set('mi-olts', Object.keys(sdrOltsCache).length);
+  // MIGRADO para src/map/render.js (sdr-bundle.js)
+  if (typeof window.sdrUpdateMapInfo === 'function') { window.sdrUpdateMapInfo(); return; }
 }
 
-window.sdrMapInfoToggle = function() {
-  var panel = document.getElementById('map-info');
-  var body  = document.getElementById('map-info-body');
-  var chev  = document.getElementById('map-info-chev');
-  var btn   = document.getElementById('map-info-toggle');
-  if (!panel) return;
-  var collapsed = panel.getAttribute('data-collapsed') === '1';
-  if (collapsed) {
-    // Expandir
-    panel.style.width = '260px';
-    panel.style.minWidth = '260px';
-    panel.style.padding = '12px';
-    if (body) body.style.display = '';
-    if (chev) chev.style.transform = 'rotate(0deg)';
-    if (btn)  btn.title = 'Minimizar painel';
-    panel.setAttribute('data-collapsed', '0');
-    if (sdrMap) setTimeout(function(){ sdrMap.invalidateSize(); }, 240);
-  } else {
-    // Minimizar
-    panel.style.width = '28px';
-    panel.style.minWidth = '28px';
-    panel.style.padding = '0';
-    if (body) body.style.display = 'none';
-    if (chev) chev.style.transform = 'rotate(180deg)';
-    if (btn)  btn.title = 'Expandir painel';
-    panel.setAttribute('data-collapsed', '1');
-    if (sdrMap) setTimeout(function(){ sdrMap.invalidateSize(); }, 240);
-  }
-};
-
-window.sdrMapToggleLayer = function(layer) {
-  sdrLayerVisible[layer] = !sdrLayerVisible[layer];
-  const btn = document.getElementById('ml-' + layer);
-  if (btn) btn.classList.toggle('active', sdrLayerVisible[layer]);
-  if (sdrLayerVisible[layer]) {
-    if (sdrLayers[layer]) sdrMap.addLayer(sdrLayers[layer]);
-  } else {
-    if (sdrLayers[layer]) sdrMap.removeLayer(sdrLayers[layer]);
-  }
-};
-
-window.sdrMapCenterOnMe = function() {
-  if (!navigator.geolocation) { toast('GPS não disponível','error'); return; }
-  navigator.geolocation.getCurrentPosition(pos => {
-    sdrMap.setView([pos.coords.latitude, pos.coords.longitude], 16);
-    L.marker([pos.coords.latitude, pos.coords.longitude], {
-      icon: L.divIcon({
-        className: 'leaflet-div-icon',
-        html: '<div style="width:16px;height:16px;background:#2563eb;border-radius:50%;border:3px solid #fff;box-shadow:0 0 8px rgba(37,99,235,.5)"></div>',
-        iconSize: [16,16], iconAnchor: [8,8]
-      })
-    }).addTo(sdrMap).bindPopup('Você está aqui');
-  }, () => toast('Não foi possível obter sua posição','error'));
-};
+// sdrMapInfoToggle, sdrMapToggleLayer, sdrMapCenterOnMe
+// MIGRADOS para src/map/render.js (sdr-bundle.js) — definidos via window lá
 
 window.sdrMapAddItem = function() {
   _sdrShowAddModal(null, null);
@@ -6859,38 +6746,11 @@ function _tubeColors(numTubes)  {
 const FIBER_COLORS_ABNT = null; // DEPRECATED - usar _fiberColors()
 const FIBER_NAMES_ABNT  = null; // DEPRECATED - usar _fiberNames()
 
-// ── Estilos de cabo por tipo ──
-const CABLE_RENDER = {
-  backbone:     { color:'#1d4ed8', weight:5 },
-  distribuicao: { color:'#16a34a', weight:4 },
-  drop:         { color:'#f59e0b', weight:3 },
-  projeto:      { color:'#06b6d4', weight:3 },
-  unknown:      { color:'#8b5cf6', weight:3 }
-};
-
-// Cor por contagem de fibras (padrão empresa)
-const CABLE_FIBER_COLOR = {
-  6:   { color:'#2563eb', weight:3, label:'6FO'   },   // azul
-  12:  { color:'#16a34a', weight:4, label:'12FO'  },   // verde
-  24:  { color:'#eab308', weight:4, label:'24FO'  },   // amarelo
-  36:  { color:'#f97316', weight:5, label:'36FO'  },   // laranja
-  48:  { color:'#ec4899', weight:5, label:'48FO'  },   // rosa
-  72:  { color:'#dc2626', weight:5, label:'72FO'  },   // vermelho
-  144: { color:'#8b5cf6', weight:6, label:'144FO' }    // violeta
-};
-
-// ── Padrão de cores da empresa (doc: padrao cores.docx) ──
-// CABOS: verde=12FO, azul=6FO, amarelo=24FO, laranja=36FO, rosa=48FO, vermelho=72FO, violeta=144FO, aqua=projeto
-const SDR_CABLE_COLOR_MAP = [
-  { hex:['#00ff00','#008000','#00aa00','#00cc00','#006400','#22c55e'], cabo:'distribuicao', fibers:12, label:'Distribuição 12FO' },
-  { hex:['#0000ff','#0000cc','#0000aa','#1e40af','#1d4ed8','#3b82f6'], cabo:'distribuicao', fibers:6,  label:'Distribuição 6FO'  },
-  { hex:['#ffff00','#ffd700','#f0e000','#ffe000','#eab308'],           cabo:'distribuicao', fibers:24, label:'Distribuição 24FO' },
-  { hex:['#ff8000','#ff7f00','#ff6600','#ff4500','#f97316'],           cabo:'backbone',     fibers:36, label:'Backbone 36FO'     },
-  { hex:['#ff69b4','#ff1493','#ff00ff','#ee00cc','#ec4899'],           cabo:'backbone',     fibers:48, label:'Backbone 48FO'     },
-  { hex:['#ff0000','#cc0000','#dd0000','#ee0000','#ef4444'],           cabo:'backbone',     fibers:72, label:'Backbone 72FO'     },
-  { hex:['#9400d3','#8b008b','#7b00c3','#aa00dd','#a855f7'],           cabo:'backbone',     fibers:144,label:'Backbone 144FO'    },
-  { hex:['#00ffff','#00cccc','#00aaaa','#22d3ee','#06b6d4'],           cabo:'projeto',      fibers:0,  label:'Projeto'          }
-];
+// CABO_RENDER, CABLE_FIBER_COLOR, SDR_CABLE_COLOR_MAP
+// MIGRADOS para src/core/config.js (sdr-bundle.js)
+const CABLE_RENDER        = window.CABLE_RENDER        || {};
+const CABLE_FIBER_COLOR   = window.CABLE_FIBER_COLOR   || {};
+const SDR_CABLE_COLOR_MAP = window.SDR_CABLE_COLOR_MAP || [];
 
 // CTOS: preto=1/16, branco=1/8, marrom=1/4, amarelo=com splitter, vermelho=não instalada, laranja=emenda, azul=CEO
 // MIGRADO para src/core/config.js (sdr-bundle.js)
@@ -6900,22 +6760,15 @@ const SDR_CTO_COLOR_MAP = window.SDR_CTO_COLOR_MAP;
 // MIGRADO para src/core/config.js (sdr-bundle.js)
 const SDR_CTO_ICONS = window.SDR_CTO_ICONS;
 
-// Correspondência de cor por distância euclidiana RGB
+// _matchKMZColor, _fmtDist — MIGRADOS para src/map/render.js (sdr-bundle.js)
 function _matchKMZColor(hexColor, colorMap) {
-  if (!hexColor || hexColor.length < 7) return null;
-  const r1=parseInt(hexColor.slice(1,3),16), g1=parseInt(hexColor.slice(3,5),16), b1=parseInt(hexColor.slice(5,7),16);
-  let best=null, bestDist=Infinity;
-  for (const entry of colorMap) {
-    for (const ref of entry.hex) {
-      const r2=parseInt(ref.slice(1,3),16), g2=parseInt(ref.slice(3,5),16), b2=parseInt(ref.slice(5,7),16);
-      const d=Math.sqrt((r1-r2)**2+(g1-g2)**2+(b1-b2)**2);
-      if (d<bestDist) { bestDist=d; best=entry; }
-    }
-  }
-  return bestDist < 90 ? best : null;
+  if (typeof window._matchKMZColor === 'function') return window._matchKMZColor(hexColor, colorMap);
+  return null;
 }
-
-function _fmtDist(m) { return m>=1000?(m/1000).toFixed(2)+'km':m+'m'; }
+function _fmtDist(m) {
+  if (typeof window._fmtDist === 'function') return window._fmtDist(m);
+  return m >= 1000 ? (m / 1000).toFixed(2) + 'km' : m + 'm';
+}
 
 // MIGRADO para src/utils/haversine.js (sdr-bundle.js)
 // window._haversineM disponivel via sdr-bundle.js (carregado antes)
@@ -7029,108 +6882,9 @@ function _sdrViabModal(lat, lng, results, radiusM) {
   document.body.appendChild(div);
 }
 
-window.sdrMapRenderInfra = function() {
-  sdrLayers.poles.clearLayers();
-  sdrLayers.ctos.clearLayers();
-  sdrLayers.cables.clearLayers();
-  if (sdrLayers.areas) sdrLayers.areas.clearLayers();
-
-  Object.entries(sdrInfraCache).forEach(([id,item]) => {
-    if (!item) return;
-
-    // CABOS — cor por contagem de fibra (padrão da empresa)
-    if (item.type==='cable' && item.route && item.route.length>=2) {
-      let ctype=item.cable_type||'unknown', fibers=item.fiber_count;
-      if (item.kmz_color) {
-        const m=_matchKMZColor(item.kmz_color,SDR_CABLE_COLOR_MAP);
-        if (m) { ctype=m.cabo; if(!fibers) fibers=m.fibers; }
-      }
-      // Prioridade: cor pela fibra > cor pelo tipo > fallback
-      const fiberStyle=fibers && CABLE_FIBER_COLOR[fibers];
-      const typeStyle=CABLE_RENDER[ctype]||CABLE_RENDER.unknown;
-      const color=ctype==='projeto'?'#06b6d4':(fiberStyle?fiberStyle.color:typeStyle.color);
-      const weight=fiberStyle?fiberStyle.weight:typeStyle.weight;
-      const dash=item.installation==='subterraneo'?'10,5':null;
-      const line=L.polyline(item.route.map(p=>[p.lat,p.lng]),{color,weight,opacity:0.95,dashArray:dash});
-      line.bindTooltip(`<b>${item.name||'Cabo'}</b><br>${fibers||'?'}FO • ${ctype} • ${item.installation==='subterraneo'?'Subterrâneo':'Aéreo'}${item.length_m?' • '+_fmtDist(item.length_m):''}`,{sticky:true});
-      line.on('click',()=>sdrCableDetailModal(id,{...item,cable_type:ctype,fiber_count:fibers}));
-      line.on('contextmenu',(e)=>{L.DomEvent.stopPropagation(e);L.DomEvent.preventDefault(e);sdrOpenInfraPanel(id,item);});
-      sdrLayers.cables.addLayer(line);
-      return;
-    }
-
-    if (!item.lat||!item.lng) return;
-    const type=item.type||'pole';
-
-    // CTOS / SPLITTERS / CEO / RT — inclui type='ceo' e type='rt' que vêm do KMZ
-    if (type==='cto'||type==='splitter'||type==='ceo'||type==='rt'||type==='emd') {
-      let subtype=item.cto_type||type||'default';
-      if (!item.cto_type&&item.kmz_color) {
-        const m=_matchKMZColor(item.kmz_color,SDR_CTO_COLOR_MAP);
-        if (m) subtype=m.cto_type;
-      }
-      // Nome 'RT' sempre força ícone verde de Reserva Técnica
-      if ((item.name||'').toUpperCase()==='RT') subtype='rt';
-      const ico=SDR_CTO_ICONS[subtype]||SDR_CTO_ICONS.default;
-      const cap=item.total_ports||0, used=item.used_ports||0;
-      const pct=cap>0?Math.round((used/cap)*100):0;
-      const bgColor=pct>=90?'#dc2626':pct>=60?'#d97706':ico.bg;
-      const barColor=pct>=90?'#dc2626':pct>=60?'#d97706':'#22c55e';
-
-      // Extrair nome curto (sem prefixo repetitivo)
-      const rawName=item.name||'';
-      const shortName=rawName.replace(/^(CTO|CEO|RT|EMD|SPL)\s*/i,'').substring(0,18);
-
-      // HTML do marker profissional
-      let html=`<div class="cto-marker">`;
-      html+=`<div class="cto-box" style="background:${bgColor}">`;
-      html+=`<i class="fas ${ico.icon||'fa-box'}"></i>`;
-      html+=`<span>${ico.label}</span>`;
-      if(cap>0) html+=`<span style="font-size:8px;opacity:0.85;margin-left:1px">${used}/${cap}</span>`;
-      html+=`</div>`;
-      if(shortName) html+=`<div class="cto-name">${shortName}</div>`;
-      if(cap>0) {
-        html+=`<div class="cto-bar"><div class="cto-bar-fill" style="width:${pct}%;background:${barColor}"></div></div>`;
-      }
-      html+=`</div>`;
-
-      const marker=L.marker([item.lat,item.lng],{
-        icon:L.divIcon({
-          className:'',
-          html:html,
-          iconSize:[50,32],
-          iconAnchor:[25,32]
-        })
-      });
-      marker.bindTooltip(`${item.name||'CTO'} • ${ico.label}${cap>0?' • '+used+'/'+cap+' portas ('+pct+'%)':''}`,{direction:'top',offset:[0,-5]});
-      marker.on('click',()=>sdrCTOPortsModal(id,{...item,cto_type:subtype}));
-      marker.on('contextmenu',(e)=>{L.DomEvent.stopPropagation(e);L.DomEvent.preventDefault(e);sdrOpenInfraPanel(id,item);});
-      sdrLayers.ctos.addLayer(marker);
-      return;
-    }
-
-    // ÁREAS DE COBERTURA
-    if (type === 'coverage_area' && item.polygon && item.polygon.length >= 3) {
-      var acolor = item.color || '#0ea5e9';
-      var apoly = L.polygon(item.polygon.map(function(p){return [p.lat,p.lng];}), {
-        color: acolor, fillColor: acolor, fillOpacity: 0.12, weight: 2, dashArray: '6,4'
-      });
-      apoly.bindTooltip('<b>' + (item.name || 'Área de Cobertura') + '</b>' + (item.notes ? '<br>' + item.notes : ''), {sticky: true});
-      apoly.on('contextmenu', function(e){ L.DomEvent.stopPropagation(e); L.DomEvent.preventDefault(e); sdrOpenInfraPanel(id, item); });
-      if (sdrLayers.areas) sdrLayers.areas.addLayer(apoly);
-      return;
-    }
-
-    // POSTES e outros
-    const _effTypeMap = (item.cto_type && INFRA_TYPES[item.cto_type]) ? item.cto_type : type;
-    const cfg=INFRA_TYPES[_effTypeMap]||INFRA_TYPES.pole;
-    const marker=L.marker([item.lat,item.lng],{icon:L.divIcon({className:'leaflet-div-icon',html:`<div class="marker-icon ${cfg.iconClass}"><i class="fas ${cfg.icon}"></i></div>`,iconSize:[28,28],iconAnchor:[14,14]})});
-    marker.bindTooltip(item.name||cfg.label,{direction:'top',offset:[0,-14]});
-    marker.on('click',()=>sdrOpenInfraPanel(id,item));
-    marker.on('contextmenu',(e)=>{L.DomEvent.stopPropagation(e);L.DomEvent.preventDefault(e);sdrOpenInfraPanel(id,item);});
-    (sdrLayers[type+'s']||sdrLayers.poles).addLayer(marker);
-  });
-};
+// window.sdrMapRenderInfra
+// MIGRADO para src/map/render.js (sdr-bundle.js)
+// O bundle define window.sdrMapRenderInfra antes deste arquivo carregar
 
 // ────────────────────────────────────────────────
 // A. IMPORTAÇÃO KMZ / KML

@@ -26,7 +26,10 @@ import {
   SDR_CTO_ICONS,
   SDR_CTO_COLOR_MAP,
   SDR_PERDAS,
-  SDR_OLT_BUDGET
+  SDR_OLT_BUDGET,
+  CABLE_RENDER,
+  CABLE_FIBER_COLOR,
+  SDR_CABLE_COLOR_MAP
 } from './core/config.js';
 
 // Power Budget GPON — sdrPowerBudgetCalc + _sdrTracePath
@@ -34,6 +37,9 @@ import { sdrPowerBudgetCalc } from './cto/power-budget.js';
 
 // Audit Log — sdrAuditLog (fire-and-forget para toda escrita Firebase)
 import { sdrAuditLog } from './core/audit.js';
+
+// Renderização do mapa — fase 7
+import './map/render.js';
 
 // Re-exporta para uso em outros módulos do bundle
 export {
@@ -49,8 +55,11 @@ export {
   SDR_CTO_COLOR_MAP,
   SDR_PERDAS,
   SDR_OLT_BUDGET,
+  CABLE_RENDER,
+  CABLE_FIBER_COLOR,
+  SDR_CABLE_COLOR_MAP,
   sdrPowerBudgetCalc,
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v5.0 carregado — audit + power-budget + config OK');
+console.log('[SDR Bundle] sdr-bundle.js v6.0 carregado — audit + power-budget + config + map/render OK');
