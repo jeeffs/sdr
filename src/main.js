@@ -2,8 +2,7 @@
  * SDR Solucoes de Rua - Entry Point
  * Vite + ES Modules — migração incremental do sdr-module.js
  *
- * Fase 27: OLT InlineRender + ChassisPreview (sdrOltTabSwitch, sdrOltInlineRender,
- *          sdrOltChassisPreview, sdrOltBrandChange, sdrOltModelChange)
+ * Fase 28: OLT Lightpath Modal + LP helpers
  */
 
 import { haversineM }            from './utils/haversine.js';
@@ -49,15 +48,12 @@ import './infra/render.js';
 import './fiber/index.js';
 import './olt/crud.js';
 import './olt/visual.js';
-
-// OLT HTML template — fase 26
 import './olt/html.js';
-
-// Heatmap de sinal + troca de base do mapa — fase 26
 import './map/heatmap.js';
-
-// OLT InlineRender + ChassisPreview — fase 27
 import './olt/inline.js';
+
+// Lightpath Modal + LP helpers — fase 28
+import './olt/lightpath.js';
 
 export {
   haversineM,
@@ -79,4 +75,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v27.0 carregado — ... + olt/inline OK');
+console.log('[SDR Bundle] sdr-bundle.js v28.0 carregado — ... + olt/lightpath OK');
