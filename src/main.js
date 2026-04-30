@@ -2,7 +2,7 @@
  * SDR Solucoes de Rua - Entry Point
  * Vite + ES Modules — migração incremental do sdr-module.js
  *
- * Fase 28: OLT Lightpath Modal + LP helpers
+ * Fase 29: Cord Drawing + Slots + Rastreabilidade + CordEdit
  */
 
 import { haversineM }            from './utils/haversine.js';
@@ -51,9 +51,10 @@ import './olt/visual.js';
 import './olt/html.js';
 import './map/heatmap.js';
 import './olt/inline.js';
-
-// Lightpath Modal + LP helpers — fase 28
 import './olt/lightpath.js';
+
+// Cord Drawing + Slots + Rastreabilidade + CordEdit — fase 29
+import './olt/cord.js';
 
 export {
   haversineM,
@@ -75,4 +76,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v28.0 carregado — ... + olt/lightpath OK');
+console.log('[SDR Bundle] sdr-bundle.js v29.0 carregado — ... + olt/cord OK');
