@@ -3237,6 +3237,15 @@ async function iniciarFirebase(cfg) {
     // Expoe db e auth no window para o sdr-bundle.js (audit log, etc.)
     window.db   = db;
     window.auth = auth;
+    // keepSynced: mantém cópia local dos paths críticos para acesso offline
+    // O Firebase RTDB usa WebSocket — SW não intercepta. keepSynced garante
+    // que os dados fiquem em memória mesmo sem conexão.
+    try {
+      ['os','users','precos','config'].forEach(path => {
+        db.ref(path).keepSynced(true);
+      });
+      console.log('[SDR] keepSynced ativado para: os, users, precos, config');
+    } catch(_ks) { console.warn('[SDR] keepSynced nao disponivel:', _ks.message); }
     // Test connectivity
     await db.ref('.info/connected').once('value');
     // Faz sign-in anônimo para satisfazer regras "auth != null".
@@ -16981,5 +16990,46 @@ async function gerarPdfExportDocs() {
 <!-- SDR Bundle: modulos ES compilados pelo Vite — carrega ANTES do legado -->
 <script src="sdr-bundle.js"></script>
 <script src="sdr-module.js"></script>
+
+<!-- ── Banner Offline ──────────────────────────────────────────────── -->
+<div id="banner-offline" style="
+  display:none;position:fixed;top:0;left:0;right:0;z-index:99999;
+  background:#f97316;color:#fff;text-align:center;
+  padding:8px 16px;font-size:.87rem;font-weight:700;
+  box-shadow:0 2px 8px rgba(0,0,0,.28);
+  align-items:center;justify-content:center;gap:10px;
+  flex-wrap:wrap;">
+  <i class="fas fa-wifi" style="opacity:.75"></i>
+  Sem conexão — você está offline. Os dados podem estar desatualizados.
+  <button onclick="location.reload()"
+    style="background:rgba(255,255,255,.2);border:1.5px solid rgba(255,255,255,.6);
+    color:#fff;border-radius:7px;padding:3px 12px;font-size:.8rem;
+    font-weight:700;cursor:pointer;white-space:nowrap">
+    Tentar novamente
+  </button>
+</div>
+
+<script>
+// ── Registro do Service Worker (PWA — cache offline) ────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('[SDR SW] registrado — scope:', reg.scope))
+      .catch(err => console.warn('[SDR SW] falha no registro:', err));
+  });
+}
+
+// ── Banner online / offline ─────────────────────────────────────────
+(function () {
+  const banner = document.getElementById('banner-offline');
+  function _atualizarBanner() {
+    if (!banner) return;
+    banner.style.display = navigator.onLine ? 'none' : 'flex';
+  }
+  window.addEventListener('online',  _atualizarBanner);
+  window.addEventListener('offline', _atualizarBanner);
+  _atualizarBanner(); // verifica estado inicial (útil em reload offline)
+})();
+</script>
 </body>
 </html>
