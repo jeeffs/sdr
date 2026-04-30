@@ -329,9 +329,6 @@ const SDR_SPLITTER_TOPOLOGIES = window.SDR_SPLITTER_TOPOLOGIES;
 function _getTubeConfig(fiberCount) {
   return SDR_CABLE_TUBE_CONFIG[fiberCount] || [{ fibers: fiberCount }];
 }
-function _getTubeColor(tubeNum) {
-  return window.SDR_FIBER_STANDARDS[window.sdrFiberStandard].tubeColor(tubeNum);
-}
 window.sdrFiberStandard = localStorage.getItem('sdr_fiber_standard') || 'abnt';
 
 window.sdrSetFiberStandard = window.sdrSetFiberStandard || function(std) {
@@ -410,112 +407,16 @@ window.sdrOltAdd = window.sdrOltAdd || function() {};
 // PÁGINA ALERTAS
 // ════════════════════════════════════════════════════
 
-window.sdrAlertasRender = window.sdrAlertasRender || function() {
-  sdrRef('alerts').once('value').then(snap => {
-    sdrAlertasCache = snap.val() || {};
-    window.sdrAlertasCache = sdrAlertasCache;
-    const el = document.getElementById('alertas-lista');
-    if (!el) return;
-    const items = Object.entries(sdrAlertasCache).sort((a,b) => (b[1].created_at||'').localeCompare(a[1].created_at||''));
-    if (items.length === 0) {
-      el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
-        <i class="fas fa-check-circle" style="font-size:2.5rem;margin-bottom:12px;display:block;color:#16a34a;opacity:.6"></i>
-        <p>Nenhum alerta ativo</p>
-      </div>`;
-      return;
-    }
-    el.innerHTML = items.map(([id, a]) => {
-      const colors = {info:'#2563eb',warning:'#d97706',critical:'#dc2626'};
-      const icons = {info:'fa-info-circle',warning:'fa-exclamation-triangle',critical:'fa-radiation'};
-      const c = colors[a.severity]||colors.info;
-      return `<div style="padding:12px;border-left:4px solid ${c};background:#fff;border-radius:0 8px 8px 0;margin-bottom:8px;display:flex;align-items:center;gap:12px">
-        <i class="fas ${icons[a.severity]||icons.info}" style="color:${c};font-size:1.2rem"></i>
-        <div style="flex:1">
-          <div style="font-weight:700;font-size:.88rem">${a.title||'Alerta'}</div>
-          <div style="font-size:.78rem;color:var(--muted)">${a.message||''}</div>
-          <div style="font-size:.7rem;color:var(--muted);margin-top:2px">${a.created_at?new Date(a.created_at).toLocaleString('pt-BR'):''}</div>
-        </div>
-        ${a.is_active?`<button class="btn-map" onclick="sdrAlertaAck('${id}')" style="padding:4px 10px;font-size:.75rem"><i class="fas fa-check"></i> Ack</button>`
-        :`<span style="font-size:.72rem;color:#16a34a"><i class="fas fa-check-circle"></i> Resolvido</span>`}
-      </div>`;
-    }).join('');
-  });
-};
-
-window.sdrAlertaAck = window.sdrAlertaAck || function(id) {
-  window.sdrRef(`alerts/${id}`).update({is_active:false,acknowledged_at:new Date().toISOString()}).then(()=>{
-    window.toast('Alerta reconhecido','success');
-    window.sdrAlertasRender&&window.sdrAlertasRender();
-  });
-};
-
+// sdrAlertasRender — sobrescrita por src/realtime/index.js (bundle)
+window.sdrAlertasRender = window.sdrAlertasRender || function() {};
+// sdrAlertaAck — sobrescrita por src/alertas/index.js (bundle)
+window.sdrAlertaAck = window.sdrAlertaAck || function() {};
 // ════════════════════════════════════════════════════
 // DASHBOARD REDE
 // ════════════════════════════════════════════════════
 
-window.sdrDashRedeRender = window.sdrDashRedeRender || function() {
-  Promise.all([
-    sdrRef('infrastructure').once('value'),
-    sdrRef('clients').once('value'),
-    sdrRef('olt_connections').once('value'),
-    sdrRef('alerts').once('value')
-  ]).then(([infraSnap, clientsSnap, oltsSnap, alertsSnap]) => {
-    const infra = Object.values(infraSnap.val() || {});
-    const clients = Object.values(clientsSnap.val() || {});
-    const olts = Object.values(oltsSnap.val() || {});
-    const alerts = Object.values(alertsSnap.val() || {});
-
-    const activeAlerts = alerts.filter(a => a.is_active);
-    const onlineClients = clients.filter(c => c.onu_status === 'online');
-    const offlineClients = clients.filter(c => c.onu_status === 'offline');
-    const degradedClients = clients.filter(c => c.onu_status === 'degraded');
-
-    const statsEl = document.getElementById('dash-rede-stats');
-    if (statsEl) {
-      statsEl.innerHTML = `
-        <div class="infra-stat"><div class="is-num">${clients.length}</div><div class="is-label">Clientes</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#16a34a">${onlineClients.length}</div><div class="is-label">Online</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#d97706">${degradedClients.length}</div><div class="is-label">Degradados</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#dc2626">${offlineClients.length}</div><div class="is-label">Offline</div></div>
-        <div class="infra-stat"><div class="is-num">${infra.length}</div><div class="is-label">Infra Items</div></div>
-        <div class="infra-stat"><div class="is-num">${olts.length}</div><div class="is-label">OLTs</div></div>
-        <div class="infra-stat"><div class="is-num" style="color:#dc2626">${activeAlerts.length}</div><div class="is-label">Alertas Ativos</div></div>`;
-    }
-
-    const contentEl = document.getElementById('dash-rede-content');
-    if (contentEl) {
-      // Top 10 clientes com sinal ruim
-      const worstSignal = clients.filter(c => c.rx_power != null).sort((a,b) => a.rx_power - b.rx_power).slice(0, 10);
-      let html = '';
-      if (worstSignal.length > 0) {
-        html += `<div style="margin-top:20px"><h4 style="font-size:.9rem;margin-bottom:10px"><i class="fas fa-signal" style="color:#dc2626;margin-right:6px"></i>Top 10 — Pior Sinal</h4>`;
-        html += `<table style="width:100%;border-collapse:collapse;font-size:.82rem">
-          <thead><tr style="background:#fef2f2"><th style="padding:6px 10px;text-align:left">Cliente</th><th style="padding:6px 10px">Rx (dBm)</th><th style="padding:6px 10px">Status</th></tr></thead>
-          <tbody>${worstSignal.map(c => {
-            const badge = c.rx_power > -25 ? 'good' : c.rx_power > -28 ? 'warn' : 'bad';
-            return `<tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 10px">${c.name||'-'}</td>
-              <td style="padding:6px 10px;text-align:center"><span class="signal-badge ${badge}">${c.rx_power} dBm</span></td>
-              <td style="padding:6px 10px;text-align:center">${c.onu_status||'-'}</td></tr>`;
-          }).join('')}</tbody></table></div>`;
-      }
-
-      // Alertas recentes
-      if (activeAlerts.length > 0) {
-        html += `<div style="margin-top:20px"><h4 style="font-size:.9rem;margin-bottom:10px"><i class="fas fa-bell" style="color:#d97706;margin-right:6px"></i>Alertas Ativos</h4>`;
-        activeAlerts.slice(0, 5).forEach(a => {
-          const c = {info:'#2563eb',warning:'#d97706',critical:'#dc2626'}[a.severity]||'#2563eb';
-          html += `<div style="padding:8px 12px;border-left:3px solid ${c};background:#fafbfc;border-radius:0 6px 6px 0;margin-bottom:6px;font-size:.82rem">
-            <b>${a.title||'Alerta'}</b><br><span style="color:var(--muted)">${a.message||''}</span>
-          </div>`;
-        });
-        html += `</div>`;
-      }
-
-      contentEl.innerHTML = html || '<p style="color:var(--muted);text-align:center;padding:20px">Cadastre clientes e infraestrutura para ver o dashboard da rede.</p>';
-    }
-  });
-};
-
+// sdrDashRedeRender — sobrescrita por src/dashboard/index.js (bundle)
+window.sdrDashRedeRender = window.sdrDashRedeRender || function() {};
 // ════════════════════════════════════════════════════
 // INICIALIZAÇÃO DO TENANT DEFAULT
 // ════════════════════════════════════════════════════
@@ -646,8 +547,6 @@ window.sdrCheckAlerts = window.sdrCheckAlerts || async function() {};
 
 
 // ── 4B: DASHBOARD REDE COM GRÁFICOS ──
-window.sdrDashRedeRender = window.sdrDashRedeRender || function() {};
-
 
 // ── 4C: TICKETS DE REDE — migrado para src/tickets/index.js (Fase 16) ──
 window.sdrTicketsRender   = window.sdrTicketsRender   || function() {};
