@@ -2,7 +2,7 @@
  * SDR Solucoes de Rua - Entry Point
  * Vite + ES Modules — migração incremental do sdr-module.js
  *
- * Fase 25: OLT Visual + PON Config + DGO 144 + Slot
+ * Fase 26: OLT HTML template, Heatmap + MapChangeBase
  */
 
 import { haversineM }            from './utils/haversine.js';
@@ -46,12 +46,14 @@ import './alertas/index.js';
 import './dashboard/index.js';
 import './infra/render.js';
 import './fiber/index.js';
-
-// OLT CRUD — fase 24
 import './olt/crud.js';
-
-// OLT Visual + PON + DGO 144 — fase 25
 import './olt/visual.js';
+
+// OLT HTML template — fase 26
+import './olt/html.js';
+
+// Heatmap de sinal + troca de base do mapa — fase 26
+import './map/heatmap.js';
 
 export {
   haversineM,
@@ -73,4 +75,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v25.0 carregado — ... + olt/crud + olt/visual OK');
+console.log('[SDR Bundle] sdr-bundle.js v26.0 carregado — ... + olt/html + map/heatmap OK');

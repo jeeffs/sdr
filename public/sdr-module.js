@@ -395,6 +395,7 @@ window.sdrMapInit = function() {
     attribution: '&copy; OpenStreetMap'
   }).addTo(sdrMap);
 
+  window.sdrBaseTile = sdrBaseTile; // exposed for src/map/heatmap.js
   // Inicializar layer groups — MarkerCluster para CTOs (6000+)
   sdrLayers.ctos = (typeof L.markerClusterGroup === 'function')
     ? L.markerClusterGroup({ maxClusterRadius: 40, spiderfyOnMaxZoom: true, showCoverageOnHover: false, disableClusteringAtZoom: 17 }).addTo(sdrMap)
@@ -675,20 +676,9 @@ window._sdrOltPlaceMode = window._sdrOltPlaceMode || null;
 var _sdrCordDrawMode  = null;
 
 // ── HTML da página OLTs (tab-based dark UI) ─────────────────────────
-window._sdrHtml_olts = function() {
-  return '<div id="olts-page" style="height:100%;display:flex;flex-direction:column;background:#060d1c;overflow:hidden">'
-    // Tab bar row: scrollable tabs on left, Nova OLT button pinned on right
-    +'<div style="display:flex;align-items:stretch;background:#0a1628;border-bottom:1px solid #1e3a5f;flex-shrink:0">'
-    +'<div id="olts-tab-bar" style="flex:1;display:flex;align-items:flex-end;min-height:42px;overflow-x:auto;padding:0 4px"></div>'
-    +'<div style="display:flex;align-items:center;padding:0 10px;flex-shrink:0;border-left:1px solid #1e3a5f">'
-    +'<button onclick="sdrOltAddModal()" style="padding:5px 12px;font-size:.78rem;background:#1d4ed8;color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap"><i class="fas fa-plus"></i> Nova OLT</button>'
-    +'</div>'
-    +'</div>'
-    +'<div id="olt-panel-content" style="flex:1;min-height:0;overflow:hidden;position:relative;background:#060d1c;display:flex;flex-direction:column"></div>'
-    +'</div>';
-};
+// ── HTML OLT page — MIGRADO para src/olt/html.js ────────────────────────
+window._sdrHtml_olts = window._sdrHtml_olts || function() { return ''; };
 
-// ── Troca de aba ─────────────────────────────────────────────────────
 window.sdrOltTabSwitch = function(oltId) {
   window._sdrActiveOltTab = oltId;
   _sdrCordDrawMode = null; // cancel any draw mode on tab switch
@@ -2951,53 +2941,16 @@ window.sdrAlertasRender = function() {
 // ════════════════════════════════════════════════════
 
 // ── 4A: HEATMAP DE SINAL ──
-function sdrRenderHeatmap() {
-  if (!sdrMap || !sdrLayers.heatmap) return;
-  // Remove old heatmap layer if exists
-  if (sdrLayers.heatmap && sdrMap.hasLayer(sdrLayers.heatmap)) {
-    sdrMap.removeLayer(sdrLayers.heatmap);
-  }
-  const points = [];
-  Object.values(sdrClientesCache).forEach(c => {
-    if (!c || !c.lat || !c.lng) return;
-    // Intensity based on signal: good signal = low heat, bad signal = high heat
-    let intensity = 0.3; // default (no data)
-    if (c.rx_power != null) {
-      const rx = parseFloat(c.rx_power);
-      if (rx > -20) intensity = 0.1;
-      else if (rx > -25) intensity = 0.3;
-      else if (rx > -28) intensity = 0.6;
-      else intensity = 1.0; // bad signal = hot
-    }
-    if (c.onu_status === 'offline') intensity = 1.0;
-    points.push([c.lat, c.lng, intensity]);
-  });
-
-  if (points.length > 0) {
-    sdrLayers.heatmap = L.heatLayer(points, {
-      radius: 35,
-      blur: 25,
-      maxZoom: 17,
-      max: 1.0,
-      gradient: {0.2: '#00ff00', 0.4: '#adff2f', 0.6: '#ffff00', 0.8: '#ff8c00', 1.0: '#ff0000'}
-    });
-  } else {
-    sdrLayers.heatmap = L.layerGroup();
-  }
-
-  if (sdrLayerVisible.heatmap) {
-    sdrLayers.heatmap.addTo(sdrMap);
-  }
-}
-
-// Hook heatmap render into map reload + expor para window
+// ── HEATMAP — MIGRADO para src/map/heatmap.js ──────────────────────────
+// sdrRenderHeatmap → window.sdrRenderHeatmap via sdr-bundle.js
+// Hook sdrMapReloadData → still here in IIFE to call window.sdrRenderHeatmap after reload
 const _origMapReload = sdrMapReloadData;
 sdrMapReloadData = function() {
   _origMapReload();
-  // Render heatmap after clients load
-  setTimeout(sdrRenderHeatmap, 500);
+  setTimeout(function() { if (typeof window.sdrRenderHeatmap === 'function') window.sdrRenderHeatmap(); }, 500);
 };
 window.sdrMapReloadData = sdrMapReloadData;
+
 
 // ── 4B: DASHBOARD REDE COM GRÁFICOS ──
 window.sdrDashRedeRender = window.sdrDashRedeRender || function() {};
@@ -3017,28 +2970,10 @@ window.sdrTicketPrintOS   = window.sdrTicketPrintOS   || function() {};
 // ── Relatório de Inadimplentes ──
 window.sdrRelatorioInadimplentes = window.sdrRelatorioInadimplentes || function() {};
 
-// ── 4D: MAPA BASE — SATÉLITE + RUAS ──
-const SDR_TILE_URLS = {
-  streets:   { url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', attr: '&copy; OpenStreetMap', maxZoom: 19 },
-  satellite: { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '&copy; Esri', maxZoom: 19 },
-  hybrid:    { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attr: '&copy; Esri', maxZoom: 19 },
-  dark:      { url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', attr: '&copy; CARTO', maxZoom: 19 }
-};
-let sdrHybridLabels = null;
-
-window.sdrMapChangeBase = function(type) {
-  if (!sdrMap || !sdrBaseTile) return;
-  const cfg = SDR_TILE_URLS[type] || SDR_TILE_URLS.streets;
-  sdrMap.removeLayer(sdrBaseTile);
-  if (sdrHybridLabels) { sdrMap.removeLayer(sdrHybridLabels); sdrHybridLabels = null; }
-  sdrBaseTile = L.tileLayer(cfg.url, { maxZoom: cfg.maxZoom, attribution: cfg.attr }).addTo(sdrMap);
-  // Add road/place labels on top of satellite
-  if (type === 'hybrid' || type === 'satellite') {
-    sdrHybridLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19, attribution: '&copy; CARTO', pane: 'overlayPane'
-    }).addTo(sdrMap);
-  }
-};
+// ── MAPA BASE — MIGRADO para src/map/heatmap.js ─────────────────────────
+// SDR_TILE_URLS, sdrHybridLabels, sdrMapChangeBase → window.xxx via sdr-bundle.js
+window.sdrHybridLabels   = window.sdrHybridLabels   || null;
+window.sdrMapChangeBase  = window.sdrMapChangeBase  || function() {};
 
 
 // ════════════════════════════════════════════════════════════════
