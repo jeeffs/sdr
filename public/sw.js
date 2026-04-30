@@ -1,9 +1,9 @@
-// Service Worker — Solução de Rua PWA v28
+// Service Worker — Solução de Rua PWA v29
 // Estratégia: cache-first para assets estáticos, network-first para app shell
 // Firebase RTDB usa WebSocket (não interceptável pelo SW) — offline tratado pelo keepSynced
 
-const CACHE_NAME  = 'sdr-v28';
-const CACHE_SHELL = 'sdr-shell-v28';
+const CACHE_NAME  = 'sdr-v29';
+const CACHE_SHELL = 'sdr-shell-v29';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
 const SHELL_ASSETS = [
@@ -28,19 +28,36 @@ const CDN_ORIGINS = [
     'cdn.jsdelivr.net'
 ];
 
+// ── Helpers: cacheia cada URL individualmente (tolerante a falhas por item) ────
+async function cacheIndividual(cacheName, urls) {
+    const cache = await caches.open(cacheName);
+    const results = await Promise.allSettled(
+        urls.map(url =>
+            fetch(url, { cache: 'reload' })
+                .then(res => {
+                    if (res.ok) return cache.put(url, res);
+                    console.warn('[SDR SW] skip (não-OK):', url, res.status);
+                })
+                .catch(err => console.warn('[SDR SW] skip (erro):', url, err.message))
+        )
+    );
+    const ok  = results.filter(r => r.status === 'fulfilled').length;
+    const nok = results.filter(r => r.status === 'rejected').length;
+    console.log(`[SDR SW] ${cacheName}: ${ok} ok, ${nok} falha(s)`);
+}
+
 // ── Install: pré-cacheia shell imediatamente ──────────────────────────────────
 self.addEventListener('install', event => {
+    console.log('[SDR SW] install — v28');
     event.waitUntil(
         Promise.all([
-            caches.open(CACHE_SHELL).then(cache =>
-                cache.addAll(SHELL_ASSETS).catch(() => Promise.resolve())
-            ),
-            caches.open(CACHE_NAME).then(cache =>
-                cache.addAll(APP_ASSETS).catch(() => Promise.resolve())
-            )
-        ])
+            cacheIndividual(CACHE_SHELL, SHELL_ASSETS),
+            cacheIndividual(CACHE_NAME,  APP_ASSETS)
+        ]).then(() => {
+            console.log('[SDR SW] pré-cache concluído');
+            return self.skipWaiting();
+        })
     );
-    self.skipWaiting();
 });
 
 // ── Activate: remove caches antigos ──────────────────────────────────────────
