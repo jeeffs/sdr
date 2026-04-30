@@ -443,9 +443,7 @@ window.sdrOpenClientePanel = window.sdrOpenClientePanel || function() {};
 window.sdrAutoLinkCTO      = window.sdrAutoLinkCTO      || function() {};
 
 // Helper: calcular ocupação de uma CTO
-function _sdrCtoOcupacao(ctoId) { return (typeof window._sdrCtoOcupacao === 'function') ? window._sdrCtoOcupacao(ctoId) : []; } // migrado → src/cto/index.js
 // Helper: encontrar CTO do poste
-function _sdrCtosDoPoste(poleId) { return (typeof window._sdrCtosDoPoste === 'function') ? window._sdrCtosDoPoste(poleId) : []; } // migrado → src/cto/index.js
 
 // ════════════════════════════════════════════════════
 // SPRINT 4 — OLTs TAB INTERFACE + CHASSIS INLINE + CORD DRAWING
@@ -613,66 +611,19 @@ window.sdrCableDetailModal = window.sdrCableDetailModal || function() {}; // mig
 // IDs devem bater exatamente com o que as funções de render buscam via getElementById
 window._sdrHtml_dash_rede = window._sdrHtml_dash_rede || function() { return ''; };
 
-window._sdrHtml_clientes = window._sdrHtml_clientes || function() {
-  return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
-    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-users" style="color:var(--primary)"></i> Clientes FTTH</h2>'
-    // IDs corretos que _renderClientesLista usa
-    +'<input id="clientes-search" type="text" placeholder="Buscar cliente..." oninput="sdrClientesFilter()" style="padding:6px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:.85rem;width:200px">'
-    +'<select id="clientes-filter-status" onchange="sdrClientesFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem">'
-    +'<option value="">Todos</option><option value="adimplente">Adimplentes</option><option value="inadimplente">Inadimplentes</option>'
-    +'</select>'
-    +'<button class="btn-map" onclick="sdrClienteAdd()" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Novo</button>'
-    +'<button class="btn-map" onclick="document.getElementById(\'clientes-import-input\').click()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-file-import"></i> Importar</button>'
-    +'<button class="btn-map" onclick="sdrAutoLinkCTO()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-link"></i> Auto-Link CTO</button>'
-    +'<button class="btn-map" onclick="sdrRelatorioInadimplentes()" style="padding:6px 14px;font-size:.8rem;background:#dc2626;color:#fff;border-color:#b91c1c" title="Relatório de Inadimplentes"><i class="fas fa-exclamation-triangle"></i> Inadimplentes</button>'
-    +'<input type="file" id="clientes-import-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="sdrImportClientes(this)">'
-    +'</div>'
-    +'<div id="clientes-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
-    +'<div id="clientes-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
-    +'</div>';
-};
-
+// _sdrHtml_clientes — sobrescrita por src/realtime/index.js (bundle)
+window._sdrHtml_clientes = window._sdrHtml_clientes || function() { return '<div>Carregando...</div>'; };
 // _sdrHtml_olts definida na Sprint 4 (linha ~2098) — não redefinir aqui
 
-window._sdrHtml_onus = window._sdrHtml_onus || function() {
-  return '<div style="max-width:1100px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
-    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-router" style="color:var(--primary)"></i> ONUs</h2>'
-    // IDs corretos que _renderOnusLista usa: filter-olt, filter-status, onus-search
-    +'<input id="onus-search" type="text" placeholder="Buscar serial/cliente..." oninput="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem;width:190px">'
-    +'<select id="onus-filter-olt" onchange="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todas as OLTs</option></select>'
-    +'<select id="onus-filter-status" onchange="sdrOnusFilter()" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:.82rem"><option value="">Todos os Status</option><option value="online">Online</option><option value="offline">Offline</option><option value="degraded">Degradado</option></select>'
-    +'<button class="btn-map" onclick="sdrOnusRender()" style="padding:6px 10px;font-size:.8rem"><i class="fas fa-sync-alt"></i></button>'
-    +'<button class="btn-map" onclick="sdrOnuAdd()" style="padding:6px 14px;font-size:.8rem;background:var(--primary);color:#fff"><i class="fas fa-plus"></i> Nova ONU</button>'
-    +'</div>'
-    +'<div id="onus-stats" style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap"></div>'
-    +'<div id="onus-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
-    +'</div>';
-};
-
-window._sdrHtml_alertas = window._sdrHtml_alertas || function() {
-  return '<div style="max-width:900px;margin:0 auto">'
-    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">'
-    +'<h2 style="margin:0;font-size:1.1rem;color:#1e293b;flex:1"><i class="fas fa-bell" style="color:#d97706"></i> Alertas de Rede</h2>'
-    +'<button class="btn-map" onclick="sdrCheckAlerts()" style="padding:6px 14px;font-size:.8rem;background:#d97706;color:#fff;border-color:#b45309"><i class="fas fa-search"></i> Verificar Agora</button>'
-    +'<button class="btn-map" onclick="sdrAlertasRender()" style="padding:6px 14px;font-size:.8rem"><i class="fas fa-sync-alt"></i> Atualizar</button>'
-    +'</div>'
-    +'<div id="alertas-lista"><div style="text-align:center;padding:40px;color:var(--muted)"><i class="fas fa-spinner fa-spin" style="font-size:2rem"></i><p style="margin-top:12px">Carregando...</p></div></div>'
-    +'</div>';
-};
-
+// _sdrHtml_onus — sobrescrita por src/realtime/index.js (bundle)
+window._sdrHtml_onus = window._sdrHtml_onus || function() { return '<div>Carregando...</div>'; };
+// _sdrHtml_alertas — sobrescrita por src/realtime/index.js (bundle)
+window._sdrHtml_alertas = window._sdrHtml_alertas || function() { return '<div>Carregando...</div>'; };
 window._sdrHtml_tickets = window._sdrHtml_tickets || function() { return ''; };
 
 // Filtro de clientes — stub (bundle define versão definitiva)
-window.sdrClientesFiltrar = window.sdrClientesFiltrar || function(q) {
-  q = (q||'').toLowerCase().trim();
-  var cards = document.querySelectorAll('#clientes-lista .infra-card[data-search]');
-  cards.forEach(function(c) {
-    c.style.display = (!q || c.dataset.search.toLowerCase().includes(q)) ? '' : 'none';
-  });
-};
-
+// sdrClientesFiltrar — sobrescrita por src/ui/index.js (bundle)
+window.sdrClientesFiltrar = window.sdrClientesFiltrar || function() {};
 // CSS das paginas SDR
 (function(){
   if (document.getElementById('sdr-extra-css')) return;
