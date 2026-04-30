@@ -79,4 +79,7 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v30.0 carregado — ... + map/core OK');
+// Bootstrap: injetar pages HTML + CSS + patch showPage — fase 33
+import './core/bootstrap.js';
+
+console.log('[SDR Bundle] sdr-bundle.js v31.0 carregado — ... + map/core OK + bootstrap');
