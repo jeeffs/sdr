@@ -340,21 +340,16 @@ window.sdrSetFiberStandard = window.sdrSetFiberStandard || function(std) {
 };
 window.sdrShowFiberStandardModal = window.sdrShowFiberStandardModal || function() {};
 
-// ── ESTADO ──
-let sdrMap = null;
-let sdrMapReady = false;
-let sdrBaseTile = null;
-let sdrLayers = { clients: null, ctos: null, poles: null, cables: null, olts: null, heatmap: null };
-let sdrLayerVisible = { clients: true, ctos: true, poles: true, cables: false, olts: true, heatmap: false };
-let sdrInfraCache = {};
-let sdrClientesCache = {};
-let sdrOltsCache = {};
-let sdrAlertasCache = {};
-// Expoe caches no window para acesso em onclick inline
-window.sdrInfraCache    = sdrInfraCache;
-window.sdrClientesCache = sdrClientesCache;
-window.sdrOltsCache     = sdrOltsCache;
-window.sdrAlertasCache  = sdrAlertasCache;
+// ── ESTADO (exposto via window — src/map/core.js acessa diretamente) ──
+window.sdrMap          = window.sdrMap          || null;
+window.sdrMapReady     = window.sdrMapReady     || false;
+window.sdrBaseTile     = window.sdrBaseTile     || null;
+window.sdrLayers       = window.sdrLayers       || { clients: null, ctos: null, poles: null, cables: null, olts: null, heatmap: null };
+window.sdrLayerVisible = window.sdrLayerVisible || { clients: true, ctos: true, poles: true, cables: false, olts: true, heatmap: false };
+window.sdrInfraCache   = window.sdrInfraCache   || {};
+window.sdrClientesCache= window.sdrClientesCache|| {};
+window.sdrOltsCache    = window.sdrOltsCache    || {};
+window.sdrAlertasCache = window.sdrAlertasCache || {};
 
 // ── REFERÊNCIAS FIREBASE ──
 function sdrRef(path) { return db.ref(`${SDR_BASE}/${path}`); }
@@ -364,126 +359,10 @@ window.sdrRef = sdrRef; // exposto para src/cto/index.js (sdr-bundle.js)
 // MAPA LEAFLET
 // ════════════════════════════════════════════════════
 
-window.sdrMapInit = function() {
-  if (sdrMapReady && sdrMap) {
-    setTimeout(() => sdrMap.invalidateSize(), 100);
-    sdrMapReloadData();
-    return;
-  }
-  const container = document.getElementById('sdr-map');
-  if (!container) return;
-
-  // Retry se Leaflet ainda não carregou (CDN lento)
-  if (typeof L === 'undefined' || !L.map) {
-    console.warn('[SDR] Leaflet não carregado, retry em 500ms...');
-    setTimeout(() => window.sdrMapInit(), 500);
-    return;
-  }
-
-  // Centro padrão: Jundiaí-SP (região de operação)
-  sdrMap = L.map('sdr-map', {
-    center: [-23.1862, -46.8842],
-    zoom: 13,
-    zoomControl: true,
-    attributionControl: false,
-    preferCanvas: true
-  });
-
-  // Tiles
-  sdrBaseTile = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(sdrMap);
-
-  window.sdrBaseTile = sdrBaseTile; // exposed for src/map/heatmap.js
-  // Inicializar layer groups — MarkerCluster para CTOs (6000+)
-  sdrLayers.ctos = (typeof L.markerClusterGroup === 'function')
-    ? L.markerClusterGroup({ maxClusterRadius: 40, spiderfyOnMaxZoom: true, showCoverageOnHover: false, disableClusteringAtZoom: 17 }).addTo(sdrMap)
-    : L.layerGroup().addTo(sdrMap);
-  sdrLayers.clients = L.layerGroup(); // não adiciona ao mapa por padrão (14k+ sem coords)
-  sdrLayers.poles = L.layerGroup().addTo(sdrMap);
-  sdrLayers.cables = L.layerGroup().addTo(sdrMap);
-  sdrLayers.olts = L.layerGroup().addTo(sdrMap);
-  sdrLayers.heatmap = L.layerGroup();
-  sdrLayers.areas = L.layerGroup().addTo(sdrMap); // Áreas de cobertura (coverage_area)
-
-  sdrMapReady = true;
-  // Expor estado do mapa para módulos em sdr-bundle.js (map/render.js)
-  window.sdrMap          = sdrMap;
-  window.sdrLayers       = sdrLayers;
-  window.sdrLayerVisible = sdrLayerVisible;
-  window.sdrMapReady     = true;
-  setTimeout(() => sdrMap.invalidateSize(), 200);
-
-  // Listener de clique no mapa — capturar coordenadas quando card de edição está aberto
-  sdrMap.on('click', function(e) {
-    if (window.sdrMapClickCapture) {
-      window.sdrMapClickCapture(e.latlng.lat, e.latlng.lng);
-    }
-  });
-
-  // Carregar dados
-  sdrMapReloadData();
-};
-
-function sdrMapReloadData() {
-  if (!sdrMapReady) return;
-  // Carregar infra
-  sdrRef('infrastructure').once('value').then(snap => {
-    sdrInfraCache = snap.val() || {};
-    window.sdrInfraCache = sdrInfraCache;
-    sdrMapRenderInfra();
-    sdrUpdateMapInfo();
-  });
-  // Carregar clientes
-  sdrRef('clients').once('value').then(snap => {
-    sdrClientesCache = snap.val() || {};
-    window.sdrClientesCache = sdrClientesCache;
-    sdrMapRenderClients();
-    sdrUpdateMapInfo();
-  });
-  // Carregar OLTs
-  sdrRef('olt_connections').once('value').then(snap => {
-    sdrOltsCache = snap.val() || {};
-    window.sdrOltsCache = sdrOltsCache;
-    sdrMapRenderOlts();
-    sdrUpdateMapInfo();
-  });
-}
-
-function sdrMapRenderInfra() {
-  // Delega para a versão Sprint 5 com ícones profissionais
-  if (typeof window.sdrMapRenderInfra === 'function') {
-    window.sdrMapRenderInfra();
-    return;
-  }
-}
-
-function sdrMapRenderClients() {
-  // MIGRADO para src/map/render.js (sdr-bundle.js)
-  if (typeof window.sdrMapRenderClients === 'function') { window.sdrMapRenderClients(); return; }
-}
-
-function sdrMapRenderOlts() {
-  // MIGRADO para src/map/render.js (sdr-bundle.js)
-  if (typeof window.sdrMapRenderOlts === 'function') { window.sdrMapRenderOlts(); return; }
-}
-
-function _infraPopup(id, item) {
-  // MIGRADO para src/map/render.js (sdr-bundle.js)
-  if (typeof window._infraPopup === 'function') return window._infraPopup(id, item);
-  return '';
-}
-
-function sdrUpdateMapInfo() {
-  // MIGRADO para src/map/render.js (sdr-bundle.js)
-  if (typeof window.sdrUpdateMapInfo === 'function') { window.sdrUpdateMapInfo(); return; }
-}
-
-// sdrMapInfoToggle, sdrMapToggleLayer, sdrMapCenterOnMe
-// MIGRADOS para src/map/render.js (sdr-bundle.js) — definidos via window lá
-
-window.sdrMapAddItem = window.sdrMapAddItem || function() { window._sdrShowAddModal(null, null); };
+// ── MAPA — migrado para src/map/core.js (Fase 30) ──
+window.sdrMapInit       = window.sdrMapInit       || function() {};
+window.sdrMapReloadData = window.sdrMapReloadData || function() {};
+window.sdrMapAddItem    = window.sdrMapAddItem    || function() { window._sdrShowAddModal(null, null); };
 
 // ════════════════════════════════════════════════════
 // PAINEL LATERAL + MODAL INFRA CRUD — migrado para src/infra/index.js (Fase 14)
@@ -761,36 +640,9 @@ window.sdrOpenOnuPanel  = window.sdrOpenOnuPanel  || function() {};
 // Gerar alertas baseado em status de ONUs
 window.sdrCheckAlerts = window.sdrCheckAlerts || async function() {};
 
-// Botão para gerar alertas no render de alertas
-const _origAlertasRender = window.sdrAlertasRender;
-window.sdrAlertasRender = function() {
-  _origAlertasRender();
-  // Adicionar botão de check após render
-  setTimeout(() => {
-    const el = document.getElementById('alertas-lista');
-    if (el) {
-      const btnWrap = document.createElement('div');
-      btnWrap.style.cssText = 'text-align:center;margin-top:14px;padding:8px';
-      btnWrap.innerHTML = `<button class="btn-map" onclick="sdrCheckAlerts()" style="padding:8px 16px;font-size:.82rem"><i class="fas fa-sync-alt" style="margin-right:4px"></i>Verificar ONUs e gerar alertas</button>`;
-      el.appendChild(btnWrap);
-    }
-  }, 200);
-};
-
-// ════════════════════════════════════════════════════
-// SPRINT 4 — HEATMAP + DASHBOARD CHARTS + TICKETS
-// ════════════════════════════════════════════════════
-
-// ── 4A: HEATMAP DE SINAL ──
-// ── HEATMAP — MIGRADO para src/map/heatmap.js ──────────────────────────
-// sdrRenderHeatmap → window.sdrRenderHeatmap via sdr-bundle.js
-// Hook sdrMapReloadData → still here in IIFE to call window.sdrRenderHeatmap after reload
-const _origMapReload = sdrMapReloadData;
-sdrMapReloadData = function() {
-  _origMapReload();
-  setTimeout(function() { if (typeof window.sdrRenderHeatmap === 'function') window.sdrRenderHeatmap(); }, 500);
-};
-window.sdrMapReloadData = sdrMapReloadData;
+// ── Patch alertas + heatmap hook — removidos (Fase 30) ──
+// sdrAlertasRender: já inclui "Verificar Agora" em src/realtime/index.js
+// sdrRenderHeatmap: hook integrado em window.sdrMapReloadData (src/map/core.js)
 
 
 // ── 4B: DASHBOARD REDE COM GRÁFICOS ──

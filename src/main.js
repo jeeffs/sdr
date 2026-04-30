@@ -56,6 +56,9 @@ import './olt/lightpath.js';
 // Cord Drawing + Slots + Rastreabilidade + CordEdit — fase 29
 import './olt/cord.js';
 
+// Mapa core: sdrMapInit + sdrMapReloadData — fase 30
+import './map/core.js';
+
 export {
   haversineM,
   SDR_FIBER_STANDARDS,
@@ -76,4 +79,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v29.0 carregado — ... + olt/cord OK');
+console.log('[SDR Bundle] sdr-bundle.js v30.0 carregado — ... + map/core OK');
