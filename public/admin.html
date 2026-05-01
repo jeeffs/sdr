@@ -4097,43 +4097,11 @@ if ('serviceWorker' in navigator) {
   }
 })();
 
-// ── Patch criarNovoUsuario — adicionar firebaseAuthLinked: false ──────────
-// Intercepta a função do bundle para garantir que novos técnicos sejam
-// marcados como pendentes de migração Firebase Auth.
-// Sem este campo, o login os trata como não-migrados (comportamento correto),
-// mas marcar explicitamente facilita auditoria e futuros scripts de migração.
-(function _patchCriarUsuario() {
-  function _tentarPatch() {
-    if (typeof window.criarNovoUsuario !== 'function') return false;
-
-    const _orig = window.criarNovoUsuario;
-    window.criarNovoUsuario = async function() {
-      // Snapshot dos UIDs antes da criação
-      const _uidsBefore = new Set(Object.keys(window.usersCache || {}));
-      await _orig.apply(this, arguments);
-      // Encontra o UID novo (adicionado ao usersCache durante _orig)
-      const _uidsAfter = Object.keys(window.usersCache || {});
-      const _novos = _uidsAfter.filter(uid => !_uidsBefore.has(uid));
-      for (const uid of _novos) {
-        try {
-          await window.db.ref(`users/${uid}/firebaseAuthLinked`).set(false);
-          if (window.usersCache[uid]) window.usersCache[uid].firebaseAuthLinked = false;
-          console.log('[SDR Auth] firebaseAuthLinked: false definido para novo usuário:', uid);
-        } catch(e) {
-          console.warn('[SDR Auth] Falha ao marcar firebaseAuthLinked:', uid, e.message);
-        }
-      }
-    };
-    console.log('[SDR Auth] criarNovoUsuario patchado — novos técnicos serão marcados para migração Firebase Auth');
-    return true;
-  }
-
-  // Tenta aplicar imediatamente; se bundle ainda não carregou, aguarda
-  if (!_tentarPatch()) {
-    const _t = setInterval(() => { if (_tentarPatch()) clearInterval(_t); }, 500);
-    setTimeout(() => clearInterval(_t), 10000); // desiste após 10s
-  }
-})();
+// Nota Wave 1 Firebase Auth: criarNovoUsuario é encapsulada internamente pelo
+// bundle (não exposta como global), portanto novos usuários não recebem
+// firebaseAuthLinked: false explícito. Isso é seguro: o login mobile trata
+// firebaseAuthLinked === undefined identicamente a false — chama
+// _vincularFirebaseAuth() e define true após o primeiro login bem-sucedido.
 </script>
 </body>
 </html>

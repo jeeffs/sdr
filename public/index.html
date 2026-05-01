@@ -481,13 +481,38 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
       <div class="login-err" id="first-login-err"></div>
 
       <label>Nova Senha *</label>
-      <input type="password" id="fl-pwd1" class="form-input" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+      <input type="password" id="fl-pwd1" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
 
       <label style="margin-top:14px">Confirmar Senha *</label>
       <input type="password" id="fl-pwd2" class="form-input" placeholder="Repita a senha" autocomplete="new-password">
 
       <button class="btn-login" id="btn-set-pwd" onclick="salvarSenhaInicial()" style="margin-top:16px">
         <i class="fas fa-check"></i> Definir Senha
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ UPGRADE SENHA OBRIGATÓRIO ═══ -->
+<div class="screen" id="scr-upgrade-senha">
+  <div style="flex:1;overflow-y:auto;width:100%;max-width:500px;padding:24px 18px;display:flex;flex-direction:column;justify-content:center">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:2.5rem;margin-bottom:12px">🔒</div>
+      <h1 style="color:#fff;font-size:1.3rem;margin-bottom:8px">Atualização de Senha Obrigatória</h1>
+      <p style="color:#94a3b8;font-size:.85rem;line-height:1.5">Para sua segurança, crie uma nova senha com no mínimo <strong style="color:#fff">6 caracteres</strong>.</p>
+    </div>
+
+    <div class="login-box">
+      <div class="login-err" id="upgrade-senha-err"></div>
+
+      <label>Nova Senha *</label>
+      <input type="password" id="us-pwd1" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+
+      <label style="margin-top:14px">Confirmar Senha *</label>
+      <input type="password" id="us-pwd2" class="form-input" placeholder="Repita a nova senha" autocomplete="new-password">
+
+      <button class="btn-login" onclick="salvarUpgradeSenha()" style="margin-top:16px">
+        <i class="fas fa-shield-alt"></i> Salvar Nova Senha
       </button>
     </div>
   </div>
@@ -1436,14 +1461,14 @@ async function salvarSenhaInicial() {
   errEl.textContent = '';
 
   if (!p1) { errEl.textContent = 'Digite uma senha.'; return; }
-  if (p1.length < 4) { errEl.textContent = 'Mínimo 4 caracteres.'; return; }
+  if (p1.length < 6) { errEl.textContent = 'Mínimo 6 caracteres.'; return; }
   if (p1 !== p2) { errEl.textContent = 'As senhas não coincidem.'; return; }
 
   try {
     const salt = gerarSalt();
     const hash = await hashComSalt(p1, salt);
-    await db.ref(`users/${_pendingFirstLoginUid}`).update({ passwordHash: hash, salt, firstLogin: false });
-    usersCache[_pendingFirstLoginUid] = { ...usersCache[_pendingFirstLoginUid], passwordHash: hash, salt, firstLogin: false };
+    await db.ref(`users/${_pendingFirstLoginUid}`).update({ passwordHash: hash, salt, firstLogin: false, senhaMinima: true });
+    usersCache[_pendingFirstLoginUid] = { ...usersCache[_pendingFirstLoginUid], passwordHash: hash, salt, firstLogin: false, senhaMinima: true };
     const uid = _pendingFirstLoginUid;
     _pendingFirstLoginUid = null;
     // Primeira vez que o técnico define senha: cria conta Firebase Auth em background
@@ -1452,6 +1477,50 @@ async function salvarSenhaInicial() {
   } catch(e) {
     console.error(e);
     errEl.textContent = 'Erro ao salvar senha.';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// UPGRADE OBRIGATÓRIO DE SENHA (mínimo 6 chars)
+// ════════════════════════════════════════════════════════
+let _pendingUpgradeUid = null;
+let _pendingUpgradeSenhaAtual = null;
+
+function _verificarUpgradeSenha(uid, senhaDigitada) {
+  // Retorna true se o usuário precisa trocar a senha
+  const u = usersCache[uid];
+  return !u || u.senhaMinima !== true;
+}
+
+async function salvarUpgradeSenha() {
+  if (!_pendingUpgradeUid) return;
+  const p1 = document.getElementById('us-pwd1').value;
+  const p2 = document.getElementById('us-pwd2').value;
+  const errEl = document.getElementById('upgrade-senha-err');
+  errEl.textContent = '';
+
+  if (!p1) { errEl.textContent = 'Digite a nova senha.'; return; }
+  if (p1.length < 6) { errEl.textContent = 'A senha deve ter no mínimo 6 caracteres.'; return; }
+  if (p1 !== p2) { errEl.textContent = 'As senhas não coincidem.'; return; }
+
+  const btnEl = document.querySelector('#scr-upgrade-senha .btn-login');
+  if (btnEl) btnEl.disabled = true;
+
+  try {
+    const uid = _pendingUpgradeUid;
+    const salt = gerarSalt();
+    const hash = await hashComSalt(p1, salt);
+    await db.ref(`users/${uid}`).update({ passwordHash: hash, salt, senhaMinima: true });
+    usersCache[uid] = { ...usersCache[uid], passwordHash: hash, salt, senhaMinima: true };
+    _pendingUpgradeUid = null;
+    _pendingUpgradeSenhaAtual = null;
+    // Vincula (ou atualiza) conta Firebase Auth com a nova senha
+    _vincularFirebaseAuth(uid, p1); // sem await — não bloqueia
+    loginSuccess(uid);
+  } catch(e) {
+    console.error('[salvarUpgradeSenha]', e);
+    errEl.textContent = 'Erro ao salvar. Tente novamente.';
+    if (btnEl) btnEl.disabled = false;
   }
 }
 
@@ -1495,6 +1564,18 @@ async function doLogin() {
   // Verifica senha com hash
   const ok = await verificarSenha(pass, u);
   if (!ok) { errEl.textContent = 'Senha incorreta.'; return; }
+
+  // Verifica se precisa upgrade obrigatório de senha (mínimo 6 chars)
+  if (_verificarUpgradeSenha(uid, pass)) {
+    _pendingUpgradeUid = uid;
+    _pendingUpgradeSenhaAtual = pass;
+    document.getElementById('us-pwd1').value = '';
+    document.getElementById('us-pwd2').value = '';
+    document.getElementById('upgrade-senha-err').textContent = '';
+    screen('upgrade-senha');
+    setTimeout(() => { const el = document.getElementById('us-pwd1'); if(el) el.focus(); }, 200);
+    return;
+  }
 
   // Firebase Auth — autenticação por conta individual (em background)
   // Se já migrado: usa signInWithEmailAndPassword para renovar token Firebase Auth.
