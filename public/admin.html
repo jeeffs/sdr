@@ -3519,7 +3519,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     FIREBASE_CONFIG=FIREBASE_CONFIG_PRESET;
     localStorage.setItem(CONFIG_KEY,JSON.stringify(FIREBASE_CONFIG));
   }
-  const result = await iniciarFirebase(FIREBASE_CONFIG);
+  // Timeout de 8s: SDK RTDB pode ficar pendurado indefinidamente tentando WebSocket.
+  // Se não responder em 8s, tratamos como 'error' e usamos REST API (que funciona).
+  const result = await Promise.race([
+    iniciarFirebase(FIREBASE_CONFIG),
+    new Promise(resolve => setTimeout(() => resolve('error'), 8000))
+  ]);
 
   if(result === 'permission') {
     // Firebase rules are blocking — show instructions
