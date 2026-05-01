@@ -1474,14 +1474,27 @@ async function loginBiometria() {
       publicKey: { challenge, timeout: 60000, userVerification: 'required' }
     });
     const credId = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
-    // Find user with this credentialId
     const found = Object.entries(usersCache).find(([id, u]) => u.biometria?.credentialId === credId);
-    if (found) {
-      errEl.textContent = '';
-      loginSuccess(found[0]);
-    } else {
-      errEl.textContent = 'Biometria não reconhecida.';
+    if (!found) { errEl.textContent = 'Biometria não reconhecida.'; return; }
+    const [uid] = found;
+
+    // Garante sessão Firebase Auth ativa para o usuário correto
+    const fbUser = firebase.auth().currentUser;
+    if (!fbUser || fbUser.email !== _fbAuthEmail(uid)) {
+      // Tenta reautenticar usando hash armazenado na sessão (definido no último login por senha)
+      const stored = sessionStorage.getItem('sdr_bio_fhash');
+      if (stored && stored.startsWith(uid + ':')) {
+        const hash = stored.slice(uid.length + 1);
+        await firebase.auth().signInWithEmailAndPassword(_fbAuthEmail(uid), hash).catch(() => {});
+      } else if (!fbUser) {
+        // Sem sessão Firebase e sem hash armazenado — exige login por senha primeiro
+        errEl.textContent = 'Sessão expirada. Faça login com senha para reativar a biometria.';
+        return;
+      }
     }
+
+    errEl.textContent = '';
+    loginSuccess(uid);
   } catch(e) {
     if (e.name === 'NotAllowedError') {
       errEl.textContent = 'Biometria cancelada ou não reconhecida.';
@@ -1666,6 +1679,9 @@ async function doLogin() {
     // Hash local ok — recria conta Firebase Auth em background
     _vincularFirebaseAuth(uid, pass);
   }
+
+  // Armazena hash Firebase derivado para reautenticação biométrica na mesma sessão
+  _fbAuthSenha(uid, pass).then(h => sessionStorage.setItem('sdr_bio_fhash', uid + ':' + h));
 
   // Verifica se precisa upgrade obrigatório de senha (mínimo 6 chars)
   if (_verificarUpgradeSenha(uid)) {
@@ -3078,10 +3094,13 @@ function doLogout() {
   clearTimeout(_sessionTimer);
   sessionStorage.removeItem('sdr_mobile_uid');
   sessionStorage.removeItem('sdr_impersonate');
+  sessionStorage.removeItem('sdr_bio_fhash');
   _impersonating = false;
   currentUser = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-pass').value = '';
+  // Encerra sessão Firebase Auth para que o próximo usuário não herde o token
+  firebase.auth().signOut().catch(() => {});
   screen('login');
 }
 
