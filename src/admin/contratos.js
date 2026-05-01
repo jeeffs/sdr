@@ -449,7 +449,7 @@ async function tecUploadTermoAssinado(event, fbKey) {
       toast('Contrato verificado com sucesso! Acesso liberado.', 'success');
       await new Promise(r => setTimeout(r, 900));
       const temPendente = await verificarTermosPendentes();
-      if (!temPendente) { screen('app'); showPage('meu-dash'); }
+      if (!temPendente) { appScreen('app'); showPage('meu-dash'); }
 
     } else if (score >= 2) {
       if (lbl) { lbl.style.pointerEvents = ''; lbl.innerHTML = '<i class="fas fa-upload"></i> Tentar novamente'; }
@@ -1168,7 +1168,7 @@ async function iniciarFluxoContrato(uid) {
     console.error('[iniciarFluxoContrato] Firebase erro:', e);
   }
   renderContratoPendente(uid, hash);
-  screen('contrato-pendente');
+  appScreen('contrato-pendente');
 }
 
 async function verificarContratoPendente() {
@@ -1189,7 +1189,7 @@ async function verificarContratoPendente() {
     if (!dados) return false;
     // Pendente — exibe bloqueio
     renderContratoPendente(uid, dados.hash || uid);
-    screen('contrato-pendente');
+    appScreen('contrato-pendente');
     return true;
   } catch(e) {
     console.error('[verificarContratoPendente]', e);
@@ -1318,7 +1318,7 @@ async function tecUploadContratoAssinado(event, uid) {
       // Continua login normalmente
       await carregarDados();
       const bloqueadoPorTermo = currentUser.role !== 'master' && await verificarTermosPendentes();
-      if (!bloqueadoPorTermo) { screen('app'); showPage('meu-dash'); }
+      if (!bloqueadoPorTermo) { appScreen('app'); showPage('meu-dash'); }
 
     } else if (!conteudo.valido && sig.score < 2) {
       // Sem assinatura E conteúdo não reconhecido — PDF errado
@@ -1339,7 +1339,7 @@ async function tecUploadContratoAssinado(event, uid) {
       await new Promise(r => setTimeout(r, 1000));
       await carregarDados();
       const bloqueadoPorTermo = currentUser.role !== 'master' && await verificarTermosPendentes();
-      if (!bloqueadoPorTermo) { screen('app'); showPage('meu-dash'); }
+      if (!bloqueadoPorTermo) { appScreen('app'); showPage('meu-dash'); }
     } else if (sig.score >= 2) {
       // Assinatura parcial mas conteúdo não reconhecido
       if (lbl) { lbl.style.pointerEvents = ''; lbl.innerHTML = '<i class="fas fa-upload"></i> Tentar novamente'; }

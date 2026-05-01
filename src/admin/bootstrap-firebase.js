@@ -220,7 +220,7 @@ window.salvarCadastroEmpresa = async function () {
     }
     const bloqueadoPorTermo = currentUser.role !== 'master' && await verificarTermosPendentes();
     if (!bloqueadoPorTermo) {
-      screen('app');
+      appScreen('app');
       const firstPage = _isFiscal(currentUser) ? 'meu-dash' : _isObservador(currentUser) ? 'observador-dash' : 'meu-dash';
       showPage(firstPage);
     }
@@ -244,7 +244,7 @@ window.logout = function () {
   sessionStorage.removeItem('srua_sessao_uid');
   // Encerra sessão Firebase Auth
   try { if (auth) auth.signOut(); } catch(_e) { console.warn('[logout]', _e.message); }
-  screen('login');
+  appScreen('login');
   document.querySelectorAll('.user-card').forEach(c=>c.classList.remove('selected'));
   document.getElementById('pwd-block').style.display = 'none';
   document.getElementById('btn-entrar').style.display = 'none';

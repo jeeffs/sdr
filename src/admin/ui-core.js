@@ -2,7 +2,7 @@
 
 window.fecharModal = function (id){const el = document.getElementById(id); if(el) el.classList.remove('open');}
 
-window.screen = function (name){
+window.appScreen = function (name){
   document.getElementById('screen-loading').style.display='none';
   document.getElementById('screen-setup').style.display='none';
   document.getElementById('screen-login').style.display='none';

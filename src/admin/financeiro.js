@@ -68,7 +68,7 @@ async function verificarTermosPendentes() {
     '| aguardandoMaster:', aguardandoMaster.length);
   if (paraAssinar.length === 0 && aguardandoMaster.length === 0) return false;
   renderTermosPendentes(paraAssinar, aguardandoMaster);
-  screen('termo-pendente');
+  appScreen('termo-pendente');
   return true;
 }
 
@@ -313,7 +313,7 @@ async function aceitarTermoAbatimento(fbKey) {
     // Re-verifica se ainda há termos pendentes
     const temPendente = await verificarTermosPendentes();
     if (!temPendente) {
-      screen('app');
+      appScreen('app');
       showPage(_isAdmin(currentUser) ? 'dashboard' : 'meu-dash');
     }
   } catch(e) {
@@ -330,7 +330,7 @@ async function verificarAtualizacaoTermos() {
     await carregarDescontosTec(currentUser.id);
     const temPendente = await verificarTermosPendentes();
     if (!temPendente) {
-      screen('app');
+      appScreen('app');
       showPage(_isAdmin(currentUser) ? 'dashboard' : 'meu-dash');
       toast('Acesso liberado!', 'success');
     }

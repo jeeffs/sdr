@@ -823,7 +823,7 @@ async function verificarRescisaoPendente() {
 
   // Mostra tela de bloqueio com termo de rescisão
   renderTermoRescisao(rescisao);
-  screen('termo-pendente');
+  appScreen('termo-pendente');
   return true;
 }
 
