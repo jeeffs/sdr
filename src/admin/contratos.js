@@ -1443,3 +1443,19 @@ async function escolherOpcaoPagamento(fbKey, opcao) {
 // ── Window bridge ──
 window.renderDocumentosAutenticados = renderDocumentosAutenticados;
 window.renderContratoPendente = renderContratoPendente;
+window.visualizarDocAutenticado = visualizarDocAutenticado;
+window._parsePDFSignature = _parsePDFSignature;
+window._validarConteudoTermo = _validarConteudoTermo;
+window.tecUploadTermoAssinado = tecUploadTermoAssinado;
+window.verificarPDFAssinado = verificarPDFAssinado;
+window.confirmarTermoAbatimento = confirmarTermoAbatimento;
+window.reabrirTermoAbatimento = reabrirTermoAbatimento;
+window._gerarContratoFiscal = _gerarContratoFiscal;
+window.gerarContratoServicos = gerarContratoServicos;
+window._ecTexto = _ecTexto;
+window.iniciarFluxoContrato = iniciarFluxoContrato;
+window.verificarContratoPendente = verificarContratoPendente;
+window.abrirContratoGerado = abrirContratoGerado;
+window.tecUploadContratoAssinado = tecUploadContratoAssinado;
+window.renderMeusDocsPage = renderMeusDocsPage;
+window.escolherOpcaoPagamento = escolherOpcaoPagamento;

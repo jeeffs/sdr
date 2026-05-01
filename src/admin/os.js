@@ -409,3 +409,6 @@ window.deletarOS              = deletarOS;
 window.verificarTermoServicos = verificarTermoServicos;
 window.mostrarTermoServicos   = mostrarTermoServicos;
 window.aceitarTermoServicos   = aceitarTermoServicos;
+window._validarOS = _validarOS;
+window._montarObjOS = _montarObjOS;
+window._montarCorpoTermoServicos = _montarCorpoTermoServicos;
