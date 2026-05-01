@@ -1,10 +1,10 @@
-// Service Worker — Solução de Rua PWA v35
+// Service Worker — Solução de Rua PWA v36
 // Estratégia: cache-first para assets locais, network-first para app shell
 // Firebase RTDB usa WebSocket (não interceptável pelo SW) — offline tratado pelo keepSynced
 // CDN assets (Leaflet, xlsx, FA, etc.) NÃO são interceptados — o browser/HTTP cache cuida deles
 
-const CACHE_NAME  = 'sdr-v35';
-const CACHE_SHELL = 'sdr-shell-v35';
+const CACHE_NAME  = 'sdr-v36';
+const CACHE_SHELL = 'sdr-shell-v36';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
 const SHELL_ASSETS = [

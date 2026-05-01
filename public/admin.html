@@ -4059,6 +4059,43 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('offline', _atualizarBanner);
   _atualizarBanner(); // verifica estado inicial (útil em reload offline)
 })();
+
+// ── Hook showPage — chamar render por seção ──────────────────────────
+// Firebase SDK WebSocket não entrega dados via .on(); o monkey-patch cobre
+// apenas .once(). Este hook garante que seções com render explícito sejam
+// populadas corretamente ao navegar pelo menu.
+(function _hookShowPage() {
+  // Mapa: id-da-page → função de render a chamar após showPage
+  const PAGE_RENDER_MAP = {
+    'seguranca':   () => typeof renderSegurancaPage  === 'function' && renderSegurancaPage(),
+    'tecnicos':    () => typeof renderTecnicosPage   === 'function' && renderTecnicosPage(),
+    'usuarios':    () => typeof renderUsuariosPage   === 'function' && renderUsuariosPage(),
+    'fiscalizacao':() => typeof renderFiscalizacao   === 'function' && renderFiscalizacao(),
+    'meus-docs':   () => typeof renderMeusDocsPage   === 'function' && renderMeusDocsPage(),
+  };
+
+  // Aguardar bundle carregar antes de sobrescrever showPage
+  function _patchShowPage() {
+    if (typeof window.showPage !== 'function') return;
+    const _showPageOrig = window.showPage.bind(window);
+    window.showPage = function(pageId, ...args) {
+      _showPageOrig(pageId, ...args);
+      const hook = PAGE_RENDER_MAP[pageId];
+      if (hook) {
+        try { hook(); } catch(e) { console.warn('[SDR] hook showPage erro em', pageId, e); }
+      }
+    };
+    console.log('[SDR] showPage hook ativo —', Object.keys(PAGE_RENDER_MAP).join(', '));
+  }
+
+  // Tentar aplicar imediatamente; se bundle ainda não carregou, esperar DOMContentLoaded
+  if (typeof window.showPage === 'function') {
+    _patchShowPage();
+  } else {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(_patchShowPage, 500));
+    window.addEventListener('load', () => setTimeout(_patchShowPage, 100));
+  }
+})();
 </script>
 </body>
 </html>
