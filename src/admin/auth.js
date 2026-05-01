@@ -104,7 +104,7 @@ window.entrar = async function() {
       window.pendingFirstLogin = uid;
       const titleEl = document.getElementById('first-login-title');
       if (titleEl) titleEl.textContent = `Bem-vindo, ${u.name}!`;
-      window.screen('first-login');
+      window.appScreen('first-login');
       setTimeout(() => { const el = document.getElementById('new-pwd'); if (el) el.focus(); }, 200);
       return;
     }
