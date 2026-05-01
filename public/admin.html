@@ -3471,88 +3471,6 @@ const FIREBASE_CONFIG_PRESET = {
   appId: "1:887171396568:web:2a54f4332f25f1300db8ad"
 };
 
-(async()=>{
-  screen('loading');
-  // Use saved config or preset config
-  // Migração: se config salvo é do projeto antigo, descarta e usa o novo
-  const saved=localStorage.getItem(CONFIG_KEY);
-  if(saved){
-    try{
-      const parsed=JSON.parse(saved);
-      if(parsed.projectId && parsed.projectId!=='solucaoderua'){
-        localStorage.removeItem(CONFIG_KEY);
-      } else {
-        FIREBASE_CONFIG=parsed;
-      }
-    }catch{localStorage.removeItem(CONFIG_KEY);}
-  }
-  if(!FIREBASE_CONFIG){
-    FIREBASE_CONFIG=FIREBASE_CONFIG_PRESET;
-    localStorage.setItem(CONFIG_KEY,JSON.stringify(FIREBASE_CONFIG));
-  }
-  const result = await iniciarFirebase(FIREBASE_CONFIG);
-
-  if(result === 'permission') {
-    // Firebase rules are blocking — show instructions
-    document.querySelector('#screen-loading .spinner').style.display='none';
-    document.getElementById('loading-msg').innerHTML =
-      '<div style="background:#fff;border:2px solid #f97316;border-radius:12px;padding:24px;max-width:460px;text-align:left;box-shadow:0 4px 20px rgba(0,0,0,.1)">' +
-      '<div style="font-size:1.1rem;font-weight:700;color:#ea580c;margin-bottom:12px">⚠️ Configuração necessária</div>' +
-      '<div style="font-size:.87rem;color:#374151;line-height:1.7">O Firebase está bloqueando o acesso.<br>Siga os passos abaixo <b>uma única vez</b>:</div>' +
-      '<ol style="font-size:.84rem;color:#374151;line-height:2;margin:14px 0 14px 18px;padding:0">' +
-      '<li>Abra <a href="https://console.firebase.google.com" target="_blank" style="color:#2563eb;font-weight:600">console.firebase.google.com</a></li>' +
-      '<li>Selecione o projeto <b>solucaoderua</b></li>' +
-      '<li>Menu esquerdo: <b>Build → Realtime Database</b></li>' +
-      '<li>Clique na aba <b>Regras</b></li>' +
-      '<li>Substitua todo o conteúdo por:<br>' +
-      '<code style="display:block;background:#f1f5f9;padding:8px;border-radius:6px;font-size:.8rem;margin-top:4px">{ "rules": { ".read": "auth != null", ".write": "auth != null" } }</code></li>' +
-      '<li>Clique em <b>Publicar</b></li>' +
-      '</ol>' +
-      '<button onclick="location.reload()" style="background:#2563eb;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:.9rem;cursor:pointer;font-weight:600;width:100%">🔄 Tentar novamente</button>' +
-      '</div>';
-    return;
-  }
-
-  if(result !== 'ok') {
-    localStorage.removeItem(CONFIG_KEY);
-    const setupEl = document.getElementById('screen-setup');
-    const pEl = setupEl ? setupEl.querySelector('p') : null;
-    if(pEl) pEl.textContent='Erro ao conectar ao Firebase. Verifique a configuração e tente novamente.';
-    screen('setup'); return;
-  }
-
-  try {
-    await garantirUsuarios();
-    await garantirPrecos();
-    await _carregarConfig();
-
-    // Impersonate via URL: ?loginComo=uid (master entra como outro usuário)
-    const _urlParams = new URLSearchParams(window.location.search);
-    const _loginComoUid = _urlParams.get('loginComo');
-    if (_loginComoUid && usersCache[_loginComoUid] && usersCache[_loginComoUid].ativo !== false) {
-      // Limpa o parâmetro da URL sem reload (não fica exposto na barra)
-      history.replaceState({}, '', window.location.pathname);
-      const _lcu = usersCache[_loginComoUid];
-      await loginSuccess({ id: _loginComoUid, name: _lcu.name, role: _lcu.role, nivel: _lcu.nivel || 'V1' });
-      return;
-    }
-
-    // Auto-login: se há sessão ativa (reload/F5), restaura sem pedir senha
-    const _sessaoUid = sessionStorage.getItem('srua_sessao_uid');
-    if (_sessaoUid && usersCache[_sessaoUid] && usersCache[_sessaoUid].ativo !== false) {
-      const _su = usersCache[_sessaoUid];
-      await loginSuccess({ id: _sessaoUid, name: _su.name, role: _su.role, nivel: _su.nivel || 'V1' });
-    } else {
-      screen('login');
-    }
-  } catch(e) {
-    console.error('Erro na inicialização:', e);
-    document.querySelector('#screen-loading .spinner').style.display='none';
-    document.getElementById('loading-msg').textContent = 'Erro inesperado: ' + (e.message || e);
-    document.getElementById('loading-msg').style.cssText = 'color:#dc2626;font-size:.85rem;padding:12px;background:#fef2f2;border-radius:8px;border:1px solid #fca5a5;margin-top:12px';
-  }
-})();
-
 // ═══════════════════════════════════════════════════════════════
 // SEGURANÇA — Documentos, EPI, Inventário, Veículo
 // (migrado de APP/interface/index.html)
@@ -3754,6 +3672,92 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('offline', _atualizarBanner);
   _atualizarBanner(); // verifica estado inicial (útil em reload offline)
 })();
+
+// ════════════════════════════════════════════════════
+// ⑱ INIT — executado após sdr-bundle.js carregar
+// ════════════════════════════════════════════════════
+(async()=>{
+  screen('loading');
+  // Use saved config or preset config
+  // Migração: se config salvo é do projeto antigo, descarta e usa o novo
+  const saved=localStorage.getItem(CONFIG_KEY);
+  if(saved){
+    try{
+      const parsed=JSON.parse(saved);
+      if(parsed.projectId && parsed.projectId!=='solucaoderua'){
+        localStorage.removeItem(CONFIG_KEY);
+      } else {
+        FIREBASE_CONFIG=parsed;
+      }
+    }catch{localStorage.removeItem(CONFIG_KEY);}
+  }
+  if(!FIREBASE_CONFIG){
+    FIREBASE_CONFIG=FIREBASE_CONFIG_PRESET;
+    localStorage.setItem(CONFIG_KEY,JSON.stringify(FIREBASE_CONFIG));
+  }
+  const result = await iniciarFirebase(FIREBASE_CONFIG);
+
+  if(result === 'permission') {
+    // Firebase rules are blocking — show instructions
+    document.querySelector('#screen-loading .spinner').style.display='none';
+    document.getElementById('loading-msg').innerHTML =
+      '<div style="background:#fff;border:2px solid #f97316;border-radius:12px;padding:24px;max-width:460px;text-align:left;box-shadow:0 4px 20px rgba(0,0,0,.1)">' +
+      '<div style="font-size:1.1rem;font-weight:700;color:#ea580c;margin-bottom:12px">⚠️ Configuração necessária</div>' +
+      '<div style="font-size:.87rem;color:#374151;line-height:1.7">O Firebase está bloqueando o acesso.<br>Siga os passos abaixo <b>uma única vez</b>:</div>' +
+      '<ol style="font-size:.84rem;color:#374151;line-height:2;margin:14px 0 14px 18px;padding:0">' +
+      '<li>Abra <a href="https://console.firebase.google.com" target="_blank" style="color:#2563eb;font-weight:600">console.firebase.google.com</a></li>' +
+      '<li>Selecione o projeto <b>solucaoderua</b></li>' +
+      '<li>Menu esquerdo: <b>Build → Realtime Database</b></li>' +
+      '<li>Clique na aba <b>Regras</b></li>' +
+      '<li>Substitua todo o conteúdo por:<br>' +
+      '<code style="display:block;background:#f1f5f9;padding:8px;border-radius:6px;font-size:.8rem;margin-top:4px">{ "rules": { ".read": "auth != null", ".write": "auth != null" } }</code></li>' +
+      '<li>Clique em <b>Publicar</b></li>' +
+      '</ol>' +
+      '<button onclick="location.reload()" style="background:#2563eb;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:.9rem;cursor:pointer;font-weight:600;width:100%">🔄 Tentar novamente</button>' +
+      '</div>';
+    return;
+  }
+
+  if(result !== 'ok') {
+    localStorage.removeItem(CONFIG_KEY);
+    const setupEl = document.getElementById('screen-setup');
+    const pEl = setupEl ? setupEl.querySelector('p') : null;
+    if(pEl) pEl.textContent='Erro ao conectar ao Firebase. Verifique a configuração e tente novamente.';
+    screen('setup'); return;
+  }
+
+  try {
+    await garantirUsuarios();
+    await garantirPrecos();
+    await _carregarConfig();
+
+    // Impersonate via URL: ?loginComo=uid (master entra como outro usuário)
+    const _urlParams = new URLSearchParams(window.location.search);
+    const _loginComoUid = _urlParams.get('loginComo');
+    if (_loginComoUid && usersCache[_loginComoUid] && usersCache[_loginComoUid].ativo !== false) {
+      // Limpa o parâmetro da URL sem reload (não fica exposto na barra)
+      history.replaceState({}, '', window.location.pathname);
+      const _lcu = usersCache[_loginComoUid];
+      await loginSuccess({ id: _loginComoUid, name: _lcu.name, role: _lcu.role, nivel: _lcu.nivel || 'V1' });
+      return;
+    }
+
+    // Auto-login: se há sessão ativa (reload/F5), restaura sem pedir senha
+    const _sessaoUid = sessionStorage.getItem('srua_sessao_uid');
+    if (_sessaoUid && usersCache[_sessaoUid] && usersCache[_sessaoUid].ativo !== false) {
+      const _su = usersCache[_sessaoUid];
+      await loginSuccess({ id: _sessaoUid, name: _su.name, role: _su.role, nivel: _su.nivel || 'V1' });
+    } else {
+      screen('login');
+    }
+  } catch(e) {
+    console.error('Erro na inicialização:', e);
+    document.querySelector('#screen-loading .spinner').style.display='none';
+    document.getElementById('loading-msg').textContent = 'Erro inesperado: ' + (e.message || e);
+    document.getElementById('loading-msg').style.cssText = 'color:#dc2626;font-size:.85rem;padding:12px;background:#fef2f2;border-radius:8px;border:1px solid #fca5a5;margin-top:12px';
+  }
+})();
+
 </script>
 </body>
 </html>
