@@ -545,7 +545,10 @@ window.cfgMostrarSubTab = function(sub) {
       }
     }
   }
-  // cfg-sub-precos agora contém apenas Gerenciar Profiles & Cidades (sem tabela de preços)
+  // cfg-sub-precos: Gerenciar Profiles & Cidades
+  if (sub === 'precos') {
+    if (typeof window.renderGerenciarProfiles === 'function') window.renderGerenciarProfiles();
+  }
   if (sub === 'documentos') {
     window.renderDocumentosAutenticados();
   }
