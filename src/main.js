@@ -108,4 +108,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v36.0 carregado — Fases A+B+C+D+E (56 modulos)');
+console.log('[SDR Bundle] sdr-bundle.js v37.0 carregado — Fases A+B+C+D+E+F (56 modulos, admin.html finalizado)');

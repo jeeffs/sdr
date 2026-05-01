@@ -144,3 +144,30 @@ window.impAtualizarLinha = function (inp) {
   renderImpostos();
 }
 
+window._impCarregar = async function () {
+  try {
+    const snap = await db.ref('impostos_mensais/faturamentos').once('value');
+    _impFaturamentos = snap.val() || {};
+  } catch(e) { _impFaturamentos = {}; }
+}
+
+window.salvarFaturamentos = async function () {
+  // Coleta valores da tabela
+  document.querySelectorAll('#imp-tbody input[data-ym]').forEach(inp => {
+    const ym = inp.dataset.ym;
+    const val = parseFloat(inp.value.replace(',','.')) || 0;
+    if (val > 0) _impFaturamentos[ym] = val;
+    else delete _impFaturamentos[ym];
+  });
+  try {
+    await db.ref('impostos_mensais/faturamentos').set(_impFaturamentos);
+    toast('Faturamentos salvos!', 'success');
+  } catch(e) { toast('Erro ao salvar: ' + e.message, 'error'); }
+  renderImpostos();
+}
+
+window.initImpostos = async function () {
+  await _impCarregar();
+  renderImpostos();
+}
+

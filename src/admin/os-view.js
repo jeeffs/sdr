@@ -239,3 +239,37 @@ window.confirmarLimparTudo = function (){
   };
 }
 
+window.salvarEdicaoOS = async function () {
+  try {
+    if (!_editFbKey) return;
+    const servicos = [];
+    for (let i = 1; i <= 5; i++) {
+      const tipo = (document.getElementById(`edit-s-tipo-${i}`)?.value || '').trim();
+      if (!tipo) continue;
+      const qtd  = parseInt(document.getElementById(`edit-s-qtd-${i}`)?.value) || 0;
+      const val  = parseFloat(document.getElementById(`edit-s-val-${i}`)?.value) || 0;
+      servicos.push({ tipo, qtd, valor: val, total: qtd * val });
+    }
+    if (!servicos.length) { toast('Adicione pelo menos 1 serviço.', 'error'); return; }
+    const total = servicos.reduce((s, x) => s + x.total, 0);
+    const updates = {
+      data:       document.getElementById('edit-data').value,
+      hora:       document.getElementById('edit-hora').value,
+      codigo_os:  document.getElementById('edit-codigo').value.trim(),
+      profile:    document.getElementById('edit-profile').value,
+      tipo:       document.getElementById('edit-tipo').value,
+      cto_ceo:    document.getElementById('edit-cto').value.trim(),
+      cidade:     document.getElementById('edit-cidade').value.trim(),
+      referencia: document.getElementById('edit-referencia').value.trim(),
+      servicos, total,
+    };
+    await _dbUpdate(`os/${_editFbKey}`, updates);
+    await carregarDados();
+    fecharModal('modal-edit-os');
+    toast('OS atualizada com sucesso!', 'success');
+  } catch(e) {
+    console.error('[salvarEdicaoOS]', e);
+    toast('Erro ao atualizar OS. Tente novamente.', 'error');
+  }
+}
+
