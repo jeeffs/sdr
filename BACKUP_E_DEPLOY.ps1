@@ -2,7 +2,11 @@
 # BACKUP_E_DEPLOY.ps1 - SDR Solucoes de Rua
 # Faz backup do Firebase + build Vite + deploy seguro
 # Uso: .\BACKUP_E_DEPLOY.ps1
+# Uso sem rebuild Vite: .\BACKUP_E_DEPLOY.ps1 -SkipBuild
+# (use -SkipBuild quando o sdr-bundle.js ja esta correto no repo)
 # ============================================================
+
+param([switch]$SkipBuild)
 
 $ErrorActionPreference = "Continue"
 $DATA = Get-Date -Format "yyyy-MM-dd_HH-mm"
@@ -50,13 +54,17 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 # --- 4. Build Vite (gera public/sdr-bundle.js) ---
-Write-Host "[4/6] Compilando modulos Vite..." -ForegroundColor Yellow
-npm run build
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERRO] Build Vite falhou. Deploy cancelado." -ForegroundColor Red
-    exit 1
+if ($SkipBuild) {
+    Write-Host "[4/6] Build Vite IGNORADO (-SkipBuild) — usando sdr-bundle.js existente" -ForegroundColor Yellow
+} else {
+    Write-Host "[4/6] Compilando modulos Vite..." -ForegroundColor Yellow
+    npm run build
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERRO] Build Vite falhou. Deploy cancelado." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "    Build concluido: public/sdr-bundle.js OK" -ForegroundColor Green
 }
-Write-Host "    Build concluido: public/sdr-bundle.js OK" -ForegroundColor Green
 
 # --- 5. Deploy das Security Rules do banco ---
 Write-Host "[5/6] Deployando Security Rules do banco..." -ForegroundColor Yellow
