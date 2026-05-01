@@ -2584,7 +2584,7 @@ tbody tr:last-child{border-bottom:none}
 // ══════════════════════════════════════════════════════════════
 // js/constants.js — Tabelas de preços, serviços e usuários
 // ══════════════════════════════════════════════════════════════
-let SERVICOS = [
+var SERVICOS = [
   'MANUTENÇÃO EM CEO','MANUTENÇÃO EM CTO','INSTALAÇÃO DE PTO','INSTALAÇÃO DE CEIP-BW',
   'INSTALAÇÃO DE CEO','INSTALAÇÃO DE CTO','ACOMPANHAMENTO CPFL','LANÇAMENTO DE CABO',
   'LEVANTAMENTO DE REDE (POR CTO)','FUSÃO DE CORDÃO','REPUXE','CABO CROCADO',
@@ -2595,7 +2595,7 @@ let SERVICOS = [
   'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)','INSTALAÇÃO DE PLAQUETAS',
   'ORGANIZAÇÃO DE CABOS EM CTO','RETIRADA DE EQUIPAMENTO',
 ];
-const PRECOS_V1 = {
+var PRECOS_V1 = {
   'MANUTENÇÃO EM CEO':62,'MANUTENÇÃO EM CTO':34,'INSTALAÇÃO DE PTO':20,
   'INSTALAÇÃO DE CEIP-BW':62,'INSTALAÇÃO DE CEO':62,'INSTALAÇÃO DE CTO':62,
   'ACOMPANHAMENTO CPFL':30,'LANÇAMENTO DE CABO':0.65,'LEVANTAMENTO DE REDE (POR CTO)':20,
@@ -2607,7 +2607,7 @@ const PRECOS_V1 = {
   'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)':30,'INSTALAÇÃO DE PLAQUETAS':8,
   'ORGANIZAÇÃO DE CABOS EM CTO':5,'RETIRADA DE EQUIPAMENTO':30,
 };
-const PRECOS_V2 = {
+var PRECOS_V2 = {
   'MANUTENÇÃO EM CEO':64,'MANUTENÇÃO EM CTO':35.5,'INSTALAÇÃO DE PTO':20,
   'INSTALAÇÃO DE CEIP-BW':64,'INSTALAÇÃO DE CEO':64,'INSTALAÇÃO DE CTO':64,
   'ACOMPANHAMENTO CPFL':31,'LANÇAMENTO DE CABO':0.8,'LEVANTAMENTO DE REDE (POR CTO)':20,
@@ -2619,7 +2619,7 @@ const PRECOS_V2 = {
   'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)':30,'INSTALAÇÃO DE PLAQUETAS':8,
   'ORGANIZAÇÃO DE CABOS EM CTO':5,'RETIRADA DE EQUIPAMENTO':30,
 };
-const PRECOS_V3 = {
+var PRECOS_V3 = {
   'MANUTENÇÃO EM CEO':106,'MANUTENÇÃO EM CTO':57,'INSTALAÇÃO DE PTO':27,
   'INSTALAÇÃO DE CEIP-BW':106,'INSTALAÇÃO DE CEO':106,'INSTALAÇÃO DE CTO':106,
   'ACOMPANHAMENTO CPFL':49,'LANÇAMENTO DE CABO':1.3,'LEVANTAMENTO DE REDE (POR CTO)':36,
@@ -2631,7 +2631,7 @@ const PRECOS_V3 = {
   'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)':36,'INSTALAÇÃO DE PLAQUETAS':13,
   'ORGANIZAÇÃO DE CABOS EM CTO':11,'RETIRADA DE EQUIPAMENTO':44,
 };
-const SERVICOS_DESC = {
+var SERVICOS_DESC = {
   'INSTALAÇÃO DE CEO':'CEO e CRUZETA instalada no poste, cordoalha ou cabo.',
   'INSTALAÇÃO DE CRUZETA':'Somente em CEO antigas que NÃO tenha a cruzeta ou mudança da CEO para outro ponto.',
   'INSTALAÇÃO DE CTO':'CTO, SPLITER CTO, ACOPLADORES, instalada no poste, cordoalha ou cabo e 1 FUSÃO.',
@@ -2661,7 +2661,7 @@ const SERVICOS_DESC = {
   'RETIRADA DE EQUIPAMENTO':'NÃO executa mais este serviço.',
   'ORGANIZAÇÃO DE CABOS EM CTO':'NÃO executa mais este serviço.',
 };
-const SERVICE_ALIASES = {
+var SERVICE_ALIASES = {
   'LEVANTAMENTO DE REDE':            'LEVANTAMENTO DE REDE (POR CTO)',
   'LEVANTAMENTO DE REDE POR CTO':    'LEVANTAMENTO DE REDE (POR CTO)',
   'EQUIPAGEM DE POSTE':              'EQUIPAGEM DE POSTE (FERRAGEN LEVE)',
@@ -2679,428 +2679,63 @@ const SERVICE_ALIASES = {
   'CERTIFICAÇÃO DE PORTAS':          'CERTIFICAÇÃO DE PORTAS OCUPADAS',
   'CERTIFICACAO DE PORTAS':          'CERTIFICAÇÃO DE PORTAS OCUPADAS',
 };
-function _normServico(tipo) {
-  if (!tipo) return tipo;
-  const t = tipo.replace(/\xa0/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
-  if (SERVICE_ALIASES[t]) return SERVICE_ALIASES[t];
-  const sem = t.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  for (const [alias, canon] of Object.entries(SERVICE_ALIASES)) {
-    const aliasNorm = alias.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-    if (sem === aliasNorm) return canon;
-  }
-  const tSlash = t.replace(/\//g, '-');
-  if (tSlash !== t && SERVICE_ALIASES[tSlash]) return SERVICE_ALIASES[tSlash];
-  return tipo.replace(/\xa0/g,' ').replace(/\s+/g,' ').trim();
-}
-const FILIAL_CIDADES = ['VÁRZEA PAULISTA','JUNDIAÍ','ITATIBA','ITUPEVA','INDAIATUBA','CABREUVA','LOUVEIRA','SP3','JACARÉ'];
-const MATRIZ_CIDADES = ['CAMPO LIMPO PAULISTA','JARINU','BOM JESUS DOS PERDÕES','ATIBAIA','SP4','ITATIBA','BOTUJURU','FRANCISCO MORATO'];
-const USERS_INIT = [
+// _normServico → src/admin/constants.js (sdr-bundle)
+var FILIAL_CIDADES = ['VÁRZEA PAULISTA','JUNDIAÍ','ITATIBA','ITUPEVA','INDAIATUBA','CABREUVA','LOUVEIRA','SP3','JACARÉ'];
+var MATRIZ_CIDADES = ['CAMPO LIMPO PAULISTA','JARINU','BOM JESUS DOS PERDÕES','ATIBAIA','SP4','ITATIBA','BOTUJURU','FRANCISCO MORATO'];
+var USERS_INIT = [
   {id:'master',    name:'JA',       role:'master'},
   {id:'jefferson', name:'Jefferson', role:'user', nivel:'V1'},
   ...Array.from({length:10},(_,i)=>({id:`tecnico${i+1}`,name:`Prestador ${i+1}`,role:'user',nivel:'V1'}))
 ];
 
 // ══════════════════════════════════════════════════════════════
-// js/firebase-helpers.js — Wrappers do Firebase Realtime DB
-// ══════════════════════════════════════════════════════════════
-async function _dbRead(path, defaultVal = null) {
-  const snap = await db.ref(path).once('value');
-  return snap.exists() ? snap.val() : defaultVal;
-}
-async function _dbSet(path, value) { await db.ref(path).set(value); }
-async function _dbUpdate(path, updates) { await db.ref(path).update(updates); }
-async function _dbPush(path, value) { const ref = await db.ref(path).push(value); return ref.key; }
-async function _dbRemove(path) { await db.ref(path).remove(); }
-
-// ══════════════════════════════════════════════════════════════
-// js/finance.js — Preços e normalização de serviços
-// ══════════════════════════════════════════════════════════════
-const _normTipo = t => { try { return (decodeURIComponent(t)||t).replace(/\//g,'-'); } catch(_){ return (t||'').replace(/\//g,'-'); } };
-function _decodePrecos(obj){ const r={}; Object.entries(obj).forEach(([k,v])=>{ r[_normTipo(k)]=v; }); return r; }
-
-async function _carregarTodosPrecos() {
-  const snap = await db.ref('precos').once('value');
-  const raw  = snap.val() || {};
-  if (raw.v1 || raw.v2 || raw.v3) {
-    precosV1map = raw.v1 ? _decodePrecos(raw.v1) : {...PRECOS_V1};
-    precosV2map = raw.v2 ? _decodePrecos(raw.v2) : {...PRECOS_V2};
-    precosV3map = raw.v3 ? _decodePrecos(raw.v3) : {...PRECOS_V3};
-    precosV4map = raw.v4 ? _decodePrecos(raw.v4) : {...precosV3map};
-  } else {
-    precosV1map = {...PRECOS_V1};
-    precosV2map = {...PRECOS_V2};
-    precosV3map = {...PRECOS_V3};
-    precosV4map = {...PRECOS_V3};
-    await db.ref('precos').set({ v1: PRECOS_V1, v2: PRECOS_V2, v3: PRECOS_V3, v4: PRECOS_V3 });
-  }
-}
-
-// ══════════════════════════════════════════════════════════════
-// js/ui-helpers.js — Blob URL Manager (Fase 5)
-// ══════════════════════════════════════════════════════════════
-let _blobUrls = [];
-function _createBlobUrl(blob) {
-  const url = URL.createObjectURL(blob);
-  _blobUrls.push(url);
-  return url;
-}
-function _revokeAllBlobs() {
-  _blobUrls.forEach(u => { try { URL.revokeObjectURL(u); } catch(_){} });
-  _blobUrls = [];
-}
-const _activityListenersList = [];
-function _setupActivityListeners() {
-  // Instala listeners de atividade do usuário (click, keydown, etc)
-  ['click','keydown','touchstart','scroll'].forEach(evt => {
-    const handler = () => { if(currentUser) _resetSessionTimer(); };
-    document.addEventListener(evt, handler, {passive:true});
-    _activityListenersList.push({el:document, evt, fn:handler});
-  });
-}
-function _removeActivityListeners() {
-  _activityListenersList.forEach(({el, evt, fn}) => { try { el.removeEventListener(evt, fn); } catch(_){} });
-  _activityListenersList.length = 0;
-}
-
-// ══════════════════════════════════════════════════════════════
-// js/auth.js — Autenticação, sessão e biometria
+// js/firebase-helpers.js → src/admin/firebase-helpers.js (sdr-bundle)
 // ══════════════════════════════════════════════════════════════
 
-// ── Hash SHA-256 ──
-async function sha256(msg) {
-  const buf = new TextEncoder().encode(msg);
-  const hash = await crypto.subtle.digest('SHA-256', buf);
-  return Array.from(new Uint8Array(hash)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-function gerarSalt(len=16) {
-  const arr = new Uint8Array(len);
-  crypto.getRandomValues(arr);
-  return Array.from(arr).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-async function hashComSalt(senha, salt) { return await sha256(salt + ':' + senha); }
-async function verificarSenha(senha, user) {
-  if (user.salt) { const hash = await hashComSalt(senha, user.salt); return hash === user.passwordHash; }
-  const hash = await sha256(senha);
-  return hash === user.passwordHash;
-}
-
-// ── Rate Limiting ──
-const _loginAttempts = {};
-const MAX_LOGIN_ATTEMPTS = 5;
-const LOCKOUT_SECONDS = 60;
-function _checkRateLimit(nome) {
-  const entry = _loginAttempts[nome];
-  if (!entry) return { allowed: true };
-  if (entry.lockedUntil && Date.now() < entry.lockedUntil) {
-    const restante = Math.ceil((entry.lockedUntil - Date.now()) / 1000);
-    return { allowed: false, restante };
-  }
-  if (entry.lockedUntil && Date.now() >= entry.lockedUntil) { delete _loginAttempts[nome]; return { allowed: true }; }
-  return { allowed: true };
-}
-function _registrarFalha(nome) {
-  if (!_loginAttempts[nome]) _loginAttempts[nome] = { count: 0 };
-  _loginAttempts[nome].count++;
-  if (_loginAttempts[nome].count >= MAX_LOGIN_ATTEMPTS) {
-    _loginAttempts[nome].lockedUntil = Date.now() + LOCKOUT_SECONDS * 1000;
-    return { locked: true, seconds: LOCKOUT_SECONDS };
-  }
-  return { locked: false, remaining: MAX_LOGIN_ATTEMPTS - _loginAttempts[nome].count };
-}
-function _limparFalhas(nome) { delete _loginAttempts[nome]; }
-
-// ── Sessão com Timeout ──
-const SESSION_TIMEOUT_MIN = 30;
-let _sessionTimer = null;
-function _resetSessionTimer() {
-  clearTimeout(_sessionTimer);
-  if (!currentUser) return;
-  _sessionTimer = setTimeout(() => {
-    if (currentUser) { toast('Sessão expirada por inatividade. Faça login novamente.', 'error'); logout(); }
-  }, SESSION_TIMEOUT_MIN * 60 * 1000);
-}
-['click','keydown','touchstart','scroll'].forEach(evt => {
-  document.addEventListener(evt, () => { if(currentUser) _resetSessionTimer(); }, {passive:true});
-});
-
-function togglePwdVis() {
-  const inp = document.getElementById('pwd-input');
-  const ico = document.getElementById('pwd-eye-icon');
-  if (inp.type === 'password') { inp.type = 'text'; ico.classList.replace('fa-eye','fa-eye-slash'); }
-  else { inp.type = 'password'; ico.classList.replace('fa-eye-slash','fa-eye'); }
-}
-
-async function entrar() {
-  try {
-    const nomeDigitado = (document.getElementById('login-user-input').value||'').trim().toLowerCase();
-    if (!nomeDigitado) { showLoginErr('Digite seu usuário.'); return; }
-    const rl = _checkRateLimit(nomeDigitado);
-    if (!rl.allowed) { showLoginErr(`Muitas tentativas. Aguarde ${rl.restante}s antes de tentar novamente.`); return; }
-    const uid = Object.keys(usersCache).find(k => (usersCache[k].name||'').toLowerCase() === nomeDigitado);
-    if (!uid) { _registrarFalha(nomeDigitado); showLoginErr('Usuário não encontrado. Verifique o nome digitado.'); return; }
-    const u = usersCache[uid];
-    if (u.ativo === false) { showLoginErr('Este usuário é somente para consulta histórica e não pode fazer login.'); return; }
-    selectedUserId = uid;
-    if (u.firstLogin) {
-      pendingFirstLogin = uid;
-      const titleEl = document.getElementById('first-login-title');
-      if (titleEl) titleEl.textContent = `Bem-vindo, ${u.name}!`;
-      screen('first-login');
-      setTimeout(()=>{const el=document.getElementById('new-pwd'); if(el)el.focus();},200);
-      return;
-    }
-    const pwd = document.getElementById('pwd-input').value;
-    if (!pwd) { showLoginErr('Digite sua senha.'); const el=document.getElementById('pwd-input'); if(el)el.focus(); return; }
-    const senhaOk = await verificarSenha(pwd, u);
-    if (!senhaOk) {
-      const falha = _registrarFalha(nomeDigitado);
-      if (falha.locked) { showLoginErr(`Conta bloqueada por ${falha.seconds}s. Muitas tentativas incorretas.`); }
-      else { showLoginErr(`Senha incorreta. ${falha.remaining} tentativa${falha.remaining!==1?'s':''} restante${falha.remaining!==1?'s':''}.`); }
-      const el=document.getElementById('pwd-input'); if(el){el.value = ''; el.focus();}
-      return;
-    }
-    if (!u.salt) {
-      const novoSalt = gerarSalt();
-      const novoHash = await hashComSalt(pwd, novoSalt);
-      await db.ref(`users/${uid}`).update({ salt: novoSalt, passwordHash: novoHash });
-      usersCache[uid] = { ...u, salt: novoSalt, passwordHash: novoHash };
-    }
-    _limparFalhas(nomeDigitado);
-    _resetSessionTimer();
-    loginSuccess({id:uid, name:u.name, role:u.role, nivel:u.nivel||'V1'});
-  } catch(e) { console.error('[entrar]', e); showLoginErr('Erro ao fazer login. Tente novamente.'); }
-}
-
-async function criarSenha() {
-  try {
-    const p1 = document.getElementById('new-pwd').value;
-    const p2 = document.getElementById('new-pwd2').value;
-    const err = document.getElementById('first-login-err');
-    if (!err) return;
-    err.style.display = 'none';
-    if (p1.length < 4) { err.textContent='A senha deve ter pelo menos 4 caracteres.'; err.style.display='block'; return; }
-    if (p1 !== p2) { err.textContent='As senhas não coincidem.'; err.style.display='block'; return; }
-    const salt = gerarSalt();
-    const hash = await hashComSalt(p1, salt);
-    await db.ref(`users/${pendingFirstLogin}`).update({passwordHash: hash, salt, firstLogin: false});
-    usersCache[pendingFirstLogin] = {...usersCache[pendingFirstLogin], passwordHash: hash, salt, firstLogin: false};
-    const u = usersCache[pendingFirstLogin];
-    loginSuccess({id:pendingFirstLogin, name:u.name, role:u.role, nivel:u.nivel||'V1'});
-    pendingFirstLogin = null;
-  } catch(e) {
-    console.error('[criarSenha]', e);
-    const err = document.getElementById('first-login-err');
-    if (err) { err.textContent='Erro ao criar senha. Tente novamente.'; err.style.display='block'; }
-  }
-}
-
-function showLoginErr(msg) {
-  const el = document.getElementById('login-err');
-  if (el) { el.textContent = msg; el.style.display = 'block'; }
-}
-
-async function _bioDiagnostico() {
-  if (!window.isSecureContext) return { ok: false, motivo: 'sem-https', msg: 'Biometria requer HTTPS.' };
-  if (!window.PublicKeyCredential) return { ok: false, motivo: 'sem-api', msg: 'WebAuthn não está disponível neste navegador.' };
-  try {
-    const avail = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    if (!avail) return { ok: false, motivo: 'sem-autenticador', msg: 'Nenhum autenticador de plataforma encontrado.' };
-  } catch(e) { return { ok: false, motivo: 'erro-verificacao', msg: 'Erro ao verificar disponibilidade de biometria.' }; }
-  return { ok: true };
-}
-
-function initLoginScreen() {
-  const lastUser = localStorage.getItem('srua_lastUser');
-  if (lastUser) {
-    const inp = document.getElementById('login-user-input');
-    if (inp) { inp.value = lastUser; setTimeout(() => { const el=document.getElementById('pwd-input'); if(el) el.focus(); }, 100); }
-  }
-  const lastUid = localStorage.getItem('srua_lastUid');
-  const credB64 = lastUid ? localStorage.getItem('srua_cred_' + lastUid) : null;
-  const bioBtn  = document.getElementById('btn-biometrico');
-  if (bioBtn) {
-    if (credB64 && lastUser && window.isSecureContext && window.PublicKeyCredential) {
-      const sp = bioBtn.querySelector('span');
-      if (sp) sp.textContent = 'Entrar como ' + lastUser + ' com biometria';
-      bioBtn.style.display = 'block';
-    } else { bioBtn.style.display = 'none'; }
-  }
-}
-
-async function loginBiometrico() {
-  const lastUid = localStorage.getItem('srua_lastUid');
-  const credB64 = lastUid ? localStorage.getItem('srua_cred_' + lastUid) : null;
-  if (!credB64 || !lastUid) { showLoginErr('Nenhuma biometria cadastrada para este usuário.'); return; }
-  const diag = await _bioDiagnostico();
-  if (!diag.ok) { showLoginErr(diag.msg); return; }
-  try {
-    const rawId     = Uint8Array.from(atob(credB64), c => c.charCodeAt(0));
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    await navigator.credentials.get({ publicKey: { challenge, allowCredentials: [{ type: 'public-key', id: rawId }], userVerification: 'required', timeout: 60000 } });
-    const u = usersCache[lastUid];
-    if (!u) { showLoginErr('Usuário não encontrado.'); return; }
-    if (u.ativo === false) { showLoginErr('Usuário inativo.'); return; }
-    loginSuccess({ id: lastUid, name: u.name, role: u.role, nivel: u.nivel||'V1' });
-  } catch(e) {
-    if (e.name === 'NotAllowedError') showLoginErr('Biometria cancelada ou não reconhecida pelo dispositivo.');
-    else if (e.name === 'SecurityError') showLoginErr('Erro de segurança: acesse via HTTPS para usar biometria.');
-    else showLoginErr('Erro na autenticação biométrica: ' + e.message);
-  }
-}
-
-let _biometricoUserPending = null;
-async function ofereceRegistrarBiometria(user) {
-  if (localStorage.getItem('srua_cred_' + user.id)) return;
-  const diag = await _bioDiagnostico();
-  if (!diag.ok) {
-    if (!sessionStorage.getItem('bio_diag_shown')) {
-      sessionStorage.setItem('bio_diag_shown', '1');
-      if (diag.motivo !== 'sem-https') toast('Biometria indisponível: ' + diag.msg, 'error');
-    }
-    return;
-  }
-  _biometricoUserPending = user;
-  const banner = document.getElementById('bio-offer-banner');
-  if (banner) banner.style.display = 'flex';
-}
-
-async function ativarBiometriaOffer() {
-  const banner = document.getElementById('bio-offer-banner');
-  if (banner) banner.style.display = 'none';
-  if (!_biometricoUserPending) return;
-  await registrarBiometria(_biometricoUserPending);
-}
-
-async function registrarBiometria(user) {
-  const diag = await _bioDiagnostico();
-  if (!diag.ok) { toast(diag.msg, 'error'); return; }
-  try {
-    const challenge   = crypto.getRandomValues(new Uint8Array(32));
-    const userIdBytes = new TextEncoder().encode(user.id);
-    const rpId = location.hostname || 'localhost';
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { name: 'Solução de Rua', id: rpId },
-        user: { id: userIdBytes, name: user.name, displayName: user.name },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
-        timeout: 60000,
-      }
-    });
-    const rawId = new Uint8Array(cred.rawId);
-    const b64   = btoa(String.fromCharCode(...rawId));
-    localStorage.setItem('srua_cred_' + user.id, b64);
-    toast('Biometria ativada com sucesso! Use-a no próximo login.', 'success');
-    _biometricoUserPending = null;
-  } catch(e) {
-    if (e.name === 'NotAllowedError') toast('Registro de biometria cancelado pelo usuário.', 'error');
-    else if (e.name === 'SecurityError') toast('Erro de segurança: acesse via HTTPS para registrar biometria.', 'error');
-    else toast('Não foi possível registrar a biometria: ' + e.message, 'error');
-  }
-}
+// ══════════════════════════════════════════════════════════════
+// js/finance.js → src/admin/finance.js (sdr-bundle)
+// ══════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════
-// js/seguranca.js — verificarBloqueioSeguranca
+// js/ui-helpers.js → src/admin/ui-helpers.js (sdr-bundle)
 // ══════════════════════════════════════════════════════════════
-async function verificarBloqueioSeguranca(uid) {
-  try {
-    const snapBlq = await db.ref(`seguranca/${uid}/bloqueio`).once('value');
-    if (snapBlq.val()) return {bloqueado:true, motivo: snapBlq.val().motivo || 'Bloqueio de segurança ativo. Procure o fiscal.'};
-  } catch(_){}
-  let dispensas = {};
-  try { const snapDisp = await db.ref(`seguranca/${uid}/dispensas`).once('value'); dispensas = snapDisp.val() || {}; } catch(_){}
-  try {
-    const snapDocs = await db.ref(`seguranca/${uid}/documentos`).once('value');
-    const docs = snapDocs.val() || {};
-    const vencidos = [];
-    Object.entries(docs).forEach(([tipo,d]) => {
-      if (dispensas[tipo]) return;
-      if (d.validade) { const st = _segStatusDoc(d.validade); if (st.status === 'vencido') vencidos.push(SEG_DOC_TIPOS[tipo]?.nome || tipo); }
-    });
-    if (vencidos.length > 0) return {bloqueado:true, motivo:`Documento(s) vencido(s): ${vencidos.join(', ')}. Envie documentos atualizados.`};
-  } catch(_){}
-  const hoje = new Date();
-  if (hoje.getDate() > 2) {
-    const mesAnt = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
-    const mesAntKey = `${mesAnt.getFullYear()}-${String(mesAnt.getMonth()+1).padStart(2,'0')}`;
-    try {
-      const snapInv = await db.ref(`seguranca/${uid}/inventarios/${mesAntKey}/pendencias`).once('value');
-      const pends = snapInv.val() || {};
-      const naoResolvidas = Object.entries(pends).filter(([,p]) => !p.resolvido);
-      if (naoResolvidas.length > 0) return {bloqueado:true, motivo:`Pendência(s) de inventário ${mesAntKey.replace('-','/')} não resolvida(s): ${naoResolvidas.map(([item])=>item).join(', ')}. Procure o fiscal.`};
-    } catch(_){}
-  }
-  if (hoje.getDate() > 2) {
-    try {
-      const snapTemplate = await db.ref('seguranca/fichaEpiTemplate/itens').once('value');
-      const templateItems = snapTemplate.val() || {};
-      if (Object.keys(templateItems).length > 0) {
-        const snapFicha = await db.ref(`seguranca/${uid}/fichaEpi`).once('value');
-        const fichaEpi = snapFicha.val() || {};
-        const itensFaltantes = [];
-        const itensRejeitados = [];
-        Object.entries(templateItems).forEach(([itemId, item]) => {
-          if (dispensas[itemId]) return;
-          const epiData = fichaEpi[itemId];
-          if (!epiData || epiData.status === 'nao_preenchido' || epiData.status === 'rejeitado') {
-            itensFaltantes.push(item.descricao);
-            if (epiData?.status === 'rejeitado') itensRejeitados.push(item.descricao);
-          }
-        });
-        if (itensFaltantes.length > 0) {
-          const motivo = itensRejeitados.length > 0
-            ? `Ficha de EPI: ${itensRejeitados.join(', ')} rejeitado(s) pela Gestão. Corrija e reenvie.`
-            : `Ficha de EPI incompleta: ${itensFaltantes.join(', ')}. Preencha os itens obrigatórios.`;
-          return {bloqueado:true, motivo};
-        }
-      }
-    } catch(_){}
-  }
-  if (hoje.getDate() >= 2) {
-    try {
-      const snapVeiculo = await db.ref(`seguranca/${uid}/veiculo`).once('value');
-      const veiculo = snapVeiculo.val();
-      if (veiculo && veiculo.mesLicenciamento) {
-        const mesAtual = hoje.getMonth() + 1;
-        if (mesAtual === veiculo.mesLicenciamento && veiculo.status === 'com_debitos') {
-          return {bloqueado:true, motivo:`Veículo ${veiculo.placa} possui débitos no mês de licenciamento. Resolva os débitos com o DETRAN.`};
-        }
-      }
-    } catch(_){}
-  }
-  return {bloqueado:false};
-}
+
+// ══════════════════════════════════════════════════════════════
+// js/auth.js → src/admin/auth.js (sdr-bundle)
+// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// js/seguranca.js → src/admin/seguranca.js (sdr-bundle)
+// ══════════════════════════════════════════════════════════════
 </script>
 
 <script>
 // ════════════════════════════════════════════════════
 // ① CONFIGURAÇÃO FIREBASE — cole aqui após setup
 // ════════════════════════════════════════════════════
-let FIREBASE_CONFIG = null;
+var FIREBASE_CONFIG = null;
 const CONFIG_KEY = 'sdr_firebase_cfg';
 
 
 // ════════════════════════════════════════════════════
 // ③ STATE
 // ════════════════════════════════════════════════════
-let db   = null;
-let auth = null; // Firebase Authentication instance
-let currentUser = null; // { id, name, role }
-let allRecords = [];
-let precosV1map = {...PRECOS_V1};
-let precosV2map = {...PRECOS_V2};
-let precosV3map = {...PRECOS_V3};
-let precosV4map = {...PRECOS_V3}; // V4 inicia com valores iguais a V3
-let usersCache = {};
-let profilesCidades = { FILIAL: [...FILIAL_CIDADES], MATRIZ: [...MATRIZ_CIDADES] };
-let selectedUserId = null;
-let precosDesbloqueado = false; // true após PIN correto (até logout)
-let pendingFirstLogin = null; // userId for first-login flow
-let _dataVersion = 0; // versão dos dados (para saber se página precisa re-renderizar)
-let _pageRenderVersion = {}; // rastreia versão de cada página renderizada
+var db   = null;
+var auth = null; // Firebase Authentication instance
+var currentUser = null; // { id, name, role }
+var allRecords = [];
+var precosV1map = {...PRECOS_V1};
+var precosV2map = {...PRECOS_V2};
+var precosV3map = {...PRECOS_V3};
+var precosV4map = {...PRECOS_V3}; // V4 inicia com valores iguais a V3
+var usersCache = {};
+var profilesCidades = { FILIAL: [...FILIAL_CIDADES], MATRIZ: [...MATRIZ_CIDADES] };
+var selectedUserId = null;
+var precosDesbloqueado = false; // true após PIN correto (até logout)
+var pendingFirstLogin = null; // userId for first-login flow
+var _dataVersion = 0; // versão dos dados (para saber se página precisa re-renderizar)
+var _pageRenderVersion = {}; // rastreia versão de cada página renderizada
 const PAGE_SIZE = 10; // registros por página (paginação)
-let assinaturaMaster = null; // { dataUrl, nome, cpfCnpj, endereco, cidade, cargo } — carregado do Firebase
+var assinaturaMaster = null; // { dataUrl, nome, cpfCnpj, endereco, cidade, cargo } — carregado do Firebase
 
 
 
