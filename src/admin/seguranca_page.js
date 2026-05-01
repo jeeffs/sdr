@@ -1722,3 +1722,10 @@ async function verificarLicenciamentos() {
     }
   }
 }
+// ── Window bridge ──
+window.renderSegurancaPage = renderSegurancaPage;
+window.segDocAnalisar = segDocAnalisar;
+window.segDocValidar = segDocValidar;
+window.calcMesLicenciamento = calcMesLicenciamento;
+window.segSalvarDadosVeiculo = segSalvarDadosVeiculo;
+window.segSalvarConsultaManual = segSalvarConsultaManual;

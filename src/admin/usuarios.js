@@ -1099,3 +1099,25 @@ function abrirRenomearMaster() {
   if (mren2) mren2.classList.add('open');
   setTimeout(() => { inp.select(); inp.focus(); }, 150);
 }
+// ── Window bridge ──
+window.loginComo = loginComo;
+window.confirmarRenomear = confirmarRenomear;
+window.salvarFotoPerfil = salvarFotoPerfil;
+window.abrirRenomearMaster = abrirRenomearMaster;
+window.renderUsuariosPage      = renderUsuariosPage;
+window.toggleFormNovoTecnico   = toggleFormNovoTecnico;
+window.criarUsuarioAtivo       = criarUsuarioAtivo;
+window.criarUsuarioHistorico   = criarUsuarioHistorico;
+window.toggleAtivoUsuario      = toggleAtivoUsuario;
+window.resetarSenha            = resetarSenha;
+window.salvarNivel             = salvarNivel;
+window.salvarProfileObservador = salvarProfileObservador;
+window.verFichaEmpresa         = verFichaEmpresa;
+window.abrirEditarFichaAdmin   = abrirEditarFichaAdmin;
+window.salvarFichaAdmin        = salvarFichaAdmin;
+window.dispensarFichaEmpresa   = dispensarFichaEmpresa;
+window.invalidarAssinaturaGovBr = invalidarAssinaturaGovBr;
+window.resetarFichaEmpresa     = resetarFichaEmpresa;
+window.reverterDispensaFicha   = reverterDispensaFicha;
+window.importarContrato        = importarContrato;
+window.travarPrestador         = travarPrestador;

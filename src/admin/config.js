@@ -416,3 +416,25 @@ async function confirmarPin() {
     toast('Senha alterada com sucesso!', 'success');
   }
 }
+// ── Window bridge ──
+window.garantirPrecos          = garantirPrecos;
+window.salvarConfig            = salvarConfig;
+window._carregarConfig         = _carregarConfig;
+window.renderPrecosPage        = renderPrecosPage;
+window.salvarTodosPrecos       = salvarTodosPrecos;
+window.restaurarPrecosPadrao   = restaurarPrecosPadrao;
+window.adicionarServico        = adicionarServico;
+window.removerServico          = removerServico;
+window.renderGerenciarProfiles = renderGerenciarProfiles;
+window.adicionarProfile        = adicionarProfile;
+window.removerProfile          = removerProfile;
+window.adicionarCidadeAoProfile= adicionarCidadeAoProfile;
+window.removerCidade           = removerCidade;
+window.onPinInput              = onPinInput;
+window.abrirPinPrecos          = abrirPinPrecos;
+window.abrirAlterarPinPrecos   = abrirAlterarPinPrecos;
+window.confirmarPin            = confirmarPin;
+window._nivelEfetivoPreco      = _nivelEfetivoPreco;
+window._precoUnitario          = _precoUnitario;
+window._buildPrecosHistoricoMes= _buildPrecosHistoricoMes;
+window._nivelDoMapa            = _nivelDoMapa;

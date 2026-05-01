@@ -398,3 +398,5 @@ function renderTabela(records) {
     }
   }
 }
+// ── Window bridge ──
+window.salvarOS = salvarOS;

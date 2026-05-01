@@ -1299,3 +1299,7 @@ async function apagarPlanilhaImportada(userId, mesAno, profile, tipo) {
     toast('Erro ao apagar planilha: ' + e.message, 'error');
   }
 }
+// ── Window bridge ──
+window.previewImport = previewImport;
+window.executarImport = executarImport;
+window.confirmarApagarImportados = confirmarApagarImportados;

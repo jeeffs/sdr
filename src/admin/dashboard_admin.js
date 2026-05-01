@@ -2101,3 +2101,11 @@ function renderDashboardAnual() {
   // ── Conteúdo da tab ──
   _renderDaTabContent(rec);
 }
+// ── Window bridge ──
+window._batchFixServicos = _batchFixServicos;
+window.renderObservadorRegs = renderObservadorRegs;
+window.renderFiscalizacao = renderFiscalizacao;
+window.renderInventarioFiscal = renderInventarioFiscal;
+window.mudarAnoAnual = mudarAnoAnual;
+window.daToggleMetrica = daToggleMetrica;
+window.daShowTab = daShowTab;

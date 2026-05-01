@@ -1335,3 +1335,17 @@ async function adicionarDescontoFin() {
     if (btn) { btn.disabled = false; btn.innerHTML = btnOrigHtml; }
   }
 }
+// ── Window bridge ──
+window.verificarTermosPendentes = verificarTermosPendentes;
+window.finMudarMes = finMudarMes;
+window.adicionarDescontoFin = adicionarDescontoFin;
+window.renderFinanceiro = renderFinanceiro;
+window.carregarDescontos       = carregarDescontos;
+window.carregarDescontosTec    = carregarDescontosTec;
+window.renderTermosPendentes   = renderTermosPendentes;
+window.aceitarTermoAbatimento  = aceitarTermoAbatimento;
+window.verificarAtualizacaoTermos = verificarAtualizacaoTermos;
+window.renderDescontosLista    = renderDescontosLista;
+window.removerDesconto         = removerDesconto;
+window.renderFinanceiro        = renderFinanceiro;
+window.exportarCardTecnico     = exportarCardTecnico;

@@ -752,3 +752,12 @@ function exportarTecnicoMes(uid, mesAno) {
 }
 
 function _expReset(...ids) { ids.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; }); }
+// ── Window bridge ──
+window._buildXlsxGeral = _buildXlsxGeral;
+window._gerarArquivosPorGrupo = _gerarArquivosPorGrupo;
+window.atualizarTecsMes = atualizarTecsMes;
+window.atualizarProfileStep = atualizarProfileStep;
+window.selecionarProfile = selecionarProfile;
+window.selecionarTipo = selecionarTipo;
+window.corrigirPrecosDoMes = corrigirPrecosDoMes;
+window.exportarTecnico = exportarTecnico;

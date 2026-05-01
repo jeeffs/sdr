@@ -1440,3 +1440,6 @@ async function escolherOpcaoPagamento(fbKey, opcao) {
     toast('Erro ao registrar escolha: ' + (e.message || e), 'error');
   }
 }
+// ── Window bridge ──
+window.renderDocumentosAutenticados = renderDocumentosAutenticados;
+window.renderContratoPendente = renderContratoPendente;
