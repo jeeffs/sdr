@@ -400,3 +400,12 @@ function renderTabela(records) {
 }
 // ── Window bridge ──
 window.salvarOS = salvarOS;
+
+window.carregarDados          = carregarDados;
+window.filteredRecords        = filteredRecords;
+window.filtrarTabela          = filtrarTabela;
+window.renderTabela           = renderTabela;
+window.deletarOS              = deletarOS;
+window.verificarTermoServicos = verificarTermoServicos;
+window.mostrarTermoServicos   = mostrarTermoServicos;
+window.aceitarTermoServicos   = aceitarTermoServicos;
