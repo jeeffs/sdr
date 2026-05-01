@@ -375,8 +375,3 @@ window._sdrHtml_alertas     = window._sdrHtml_alertas     || function() { return
 window.sdrOnusFiltrar       = window.sdrOnusFiltrar       || function() {};
 window.sdrConverterCtoCeo   = window.sdrConverterCtoCeo   || function() {};
 window.sdrConverterRtNome   = window.sdrConverterRtNome   || function() {};
-
-
-
-// Fecha a IIFE (function(){"use strict"; ...}) que envolve todo o codigo SDR
-}());

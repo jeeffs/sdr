@@ -3463,7 +3463,7 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 // ════════════════════════════════════════════════════
 // ⑰ HELPERS
 // ════════════════════════════════════════════════════
-    // → window.screen() em sdr-bundle (admin/Fase-E/ui-core.js)
+    // → window.appScreen() em sdr-bundle (admin/Fase-E/ui-core.js)
 // ── SIDEBAR TOGGLE ──────────────────────────────────
     // → window.atualizarDados() em sdr-bundle (admin/Fase-E/ui-core.js)
 
@@ -3503,7 +3503,7 @@ const FIREBASE_CONFIG_PRESET = {
 };
 
 (async()=>{
-  screen('loading');
+  appScreen('loading');
   // Use saved config or preset config
   // Migração: se config salvo é do projeto antigo, descarta e usa o novo
   const saved=localStorage.getItem(CONFIG_KEY);
@@ -3549,7 +3549,7 @@ const FIREBASE_CONFIG_PRESET = {
     const setupEl = document.getElementById('screen-setup');
     const pEl = setupEl ? setupEl.querySelector('p') : null;
     if(pEl) pEl.textContent='Erro ao conectar ao Firebase. Verifique a configuração e tente novamente.';
-    screen('setup'); return;
+    appScreen('setup'); return;
   }
 
   try {
@@ -3608,7 +3608,7 @@ const FIREBASE_CONFIG_PRESET = {
       const _su = usersCache[_sessaoUid];
       await loginSuccess({ id: _sessaoUid, name: _su.name, role: _su.role, nivel: _su.nivel || 'V1' });
     } else {
-      screen('login');
+      appScreen('login');
     }
   } catch(e) {
     console.error('Erro na inicialização:', e);
