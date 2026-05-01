@@ -1,18 +1,34 @@
 {
   "rules": {
 
-    // ── Regra raiz: requer auth para tudo ────────────────────────────────
-    // Cobre TODOS os paths automaticamente — sem risco de path esquecido
+    // ── Regra raiz: leitura requer auth ──────────────────────────────────────
+    // Write restrito a contas @solucaoderua.app — bloqueia auth anônima
     ".read":  "auth != null",
-    ".write": "auth != null",
+    ".write": "auth != null && auth.token.email != null && auth.token.email.matches('.*@solucaoderua\\.app$')",
 
-    // ── Audit Log — append-only (sobrescreve a regra raiz) ───────────────
-    // Usuário autenticado pode criar registros, mas NUNCA editar ou deletar
+    // ── Mapeamento Firebase UID → App UID ────────────────────────────────────
+    // Cada técnico só pode gravar seu próprio mapeamento (auth.uid === $fbUid)
+    // Leitura liberada para auth (usado pelas rules e pelo admin)
+    "authUidToAppUid": {
+      ".read": "auth != null",
+      "$fbUid": {
+        ".write": "auth != null && auth.uid === $fbUid && auth.token.email != null && auth.token.email.matches('.*@solucaoderua\\.app$')"
+      }
+    },
+
+    // ── Audit Log — append-only ──────────────────────────────────────────────
+    // Usuário autenticado com conta SDR pode criar registros, mas NUNCA editar ou deletar
     "audit_log": {
       ".read": "auth != null",
       "$entry": {
-        ".write": "auth != null && !data.exists()"
+        ".write": "auth != null && auth.token.email != null && auth.token.email.matches('.*@solucaoderua\\.app$') && !data.exists()"
       }
+    },
+
+    // ── Índice: permite query /os?orderBy="userId" na REST API ───────────────
+    // Usado pelo mobile para carregar só as OS do técnico logado
+    "os": {
+      ".indexOn": ["userId"]
     }
 
   }

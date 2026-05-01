@@ -4053,13 +4053,21 @@ async function gerarPdfExportDocs() {
         try {
           const email   = _adminFbEmail(user.id);
           const fbSenha = await _adminFbSenha(user.id, pwd);
-          await firebase.auth().signInWithEmailAndPassword(email, fbSenha)
-            .catch(async e => {
-              // Conta ainda não existe — cria na primeira vez
-              if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
-                await firebase.auth().createUserWithEmailAndPassword(email, fbSenha).catch(() => {});
-              }
-            });
+          let fbUser = null;
+          try {
+            const cred = await firebase.auth().signInWithEmailAndPassword(email, fbSenha);
+            fbUser = cred && cred.user ? cred.user : null;
+          } catch(e) {
+            // Conta ainda não existe — cria na primeira vez
+            if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
+              const cred2 = await firebase.auth().createUserWithEmailAndPassword(email, fbSenha).catch(() => null);
+              fbUser = cred2 && cred2.user ? cred2.user : null;
+            }
+          }
+          // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
+          if (fbUser) {
+            firebase.database().ref(`authUidToAppUid/${fbUser.uid}`).set(user.id).catch(() => {});
+          }
           console.log('[SDR Admin] Firebase Auth OK:', user.id);
         } catch(e) {
           console.warn('[SDR Admin] Firebase Auth falhou (não-crítico):', e.message);

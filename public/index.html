@@ -1350,11 +1350,18 @@ async function _vincularFirebaseAuth(uid, senha) {
     const fbSenha = await _fbAuthSenha(uid, senha);
     try {
       const cred = await authInst.createUserWithEmailAndPassword(email, fbSenha);
+      // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
+      if (cred && cred.user) {
+        db.ref(`authUidToAppUid/${cred.user.uid}`).set(uid).catch(() => {});
+      }
       console.log('[SDR Auth] Conta Firebase Auth criada para:', uid);
     } catch(e) {
       if (e.code === 'auth/email-already-in-use') {
         // Conta já existe — faz login com ela
-        await authInst.signInWithEmailAndPassword(email, fbSenha);
+        const cred2 = await authInst.signInWithEmailAndPassword(email, fbSenha);
+        if (cred2 && cred2.user) {
+          db.ref(`authUidToAppUid/${cred2.user.uid}`).set(uid).catch(() => {});
+        }
         console.log('[SDR Auth] Login Firebase Auth (conta existente):', uid);
       } else if (e.code === 'auth/network-request-failed' || e.code === 'auth/too-many-requests') {
         console.warn('[SDR Auth] Vinculação adiada (rede/limite):', uid, e.code);
@@ -1379,7 +1386,11 @@ async function _loginFirebaseAuth(uid, senha) {
     const authInst = firebase.auth();
     const email = _fbAuthEmail(uid);
     const fbSenha = await _fbAuthSenha(uid, senha);
-    await authInst.signInWithEmailAndPassword(email, fbSenha);
+    const cred = await authInst.signInWithEmailAndPassword(email, fbSenha);
+    // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
+    if (cred && cred.user) {
+      db.ref(`authUidToAppUid/${cred.user.uid}`).set(uid).catch(() => {});
+    }
     console.log('[SDR Auth] Login Firebase Auth OK:', uid);
     return true;
   } catch(e) {
