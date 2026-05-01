@@ -3564,6 +3564,45 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
+  // ── Monkey-patch: db.ref().once() → REST API ─────────────────────────────────
+  // O SDK Firebase abre o WebSocket no nível TCP mas falha no handshake de auth da aplicação.
+  // Todas as chamadas .once('value') no bundle (carregarDados, _carregarConfig, etc.)
+  // ficam penduradas indefinidamente. Redirecionamos para REST que funciona perfeitamente.
+  if (window.db) {
+    const _rtdbBase = 'https://solucaoderua-default-rtdb.firebaseio.com';
+    const _dbRefOrig = window.db.ref.bind(window.db);
+    window.db.ref = function(path) {
+      const _ref = _dbRefOrig(path);
+      const _onceOrig = _ref.once.bind(_ref);
+      _ref.once = async function(eventType) {
+        try {
+          const _u = firebase.auth().currentUser;
+          if (!_u) return _onceOrig(eventType);
+          const _tk2 = await _u.getIdToken();
+          const _cleanPath = String(path || '').replace(/^\/+/, '');
+          const _r = await fetch(`${_rtdbBase}/${_cleanPath}.json?auth=${_tk2}`,
+            { signal: AbortSignal.timeout(10000) });
+          const _val = _r.ok ? await _r.json() : null;
+          // Snapshot compatível com Firebase SDK
+          const _snap = {
+            val:     () => _val,
+            exists:  () => _val !== null,
+            key:     _cleanPath.split('/').pop() || '',
+            ref:     _ref,
+            child:   (c) => ({ val: () => (_val||{})[c]??null, exists: () => (_val||{})[c]!=null }),
+            forEach: (cb) => { if (_val && typeof _val === 'object') Object.entries(_val).forEach(([k,v]) => cb({ key:k, val:()=>v, exists:()=>true })); }
+          };
+          return _snap;
+        } catch(e) {
+          console.warn('[SDR REST] .once() erro:', path, e.message);
+          return { val:()=>null, exists:()=>false, key:'', child:()=>({val:()=>null,exists:()=>false}), forEach:()=>{} };
+        }
+      };
+      return _ref;
+    };
+    console.log('[SDR] db.ref().once() → REST API ativo');
+  }
+
   try {
     // Usar REST API para carga inicial — funciona em Chrome e Edge
     // (WebSocket RTDB bloqueado em Edge por Tracking Prevention, e pode retornar 503 em Chrome)
