@@ -2814,21 +2814,19 @@ const _isImportadaConcluida = r => {
 
 // Regra: APENAS role='master' → acesso total
 // Jefferson (nivel='V3', role='user') é prestador com acesso a import V3 apenas
-const _isAdmin = u => u?.role === 'master';
-// Helper: Jefferson (V3 import) — identificado por nivel='V3' AND role!='master'
-// Helper: Jefferson (V3 import) — identificado pelo NOME, não pelo nivel (ele é V1 no cadastro)
-const _isV3Import = u => (u?.name||'').toLowerCase() === 'jefferson' && u?.role !== 'master';
-// Fiscal: nivel V0 — salário fixo, sem OS, valida OS dos técnicos
-const _isFiscal = u => (u?.nivel || 'V1') === 'V0';
+// window.* — obrigatório: sdr-bundle usa window._isAdmin / window._isFiscal / window._isObservador
+window._isAdmin     = u => u?.role === 'master';
+window._isV3Import  = u => (u?.name||'').toLowerCase() === 'jefferson' && u?.role !== 'master';
+window._isFiscal    = u => (u?.nivel || 'V1') === 'V0';
+window._isObservador= u => (u?.nivel || 'V1') === 'V4';
+window._isMasterUid = uid => { const u = usersCache[uid]; return u?.role === 'master'; };
 const SALARIO_V0 = 3000; // R$ fixo/mês para o Fiscal
-// Observador: nivel V4 — somente leitura, filtrado por profile vinculado
-const _isObservador = u => (u?.nivel || 'V1') === 'V4';
-// Helper: verifica se um userId pertence ao usuário master (JA)
-// Fiscal NÃO pode ver nem validar OS do master em nenhuma hipótese
-const _isMasterUid = uid => {
-  const u = usersCache[uid];
-  return u?.role === 'master';
-};
+// Aliases locais (retrocompatibilidade com código inline no admin.html)
+const _isAdmin      = window._isAdmin;
+const _isV3Import   = window._isV3Import;
+const _isFiscal     = window._isFiscal;
+const _isObservador = window._isObservador;
+const _isMasterUid  = window._isMasterUid;
 
 // ════════════════════════════════════════════════════
 // ④ FIREBASE SETUP
