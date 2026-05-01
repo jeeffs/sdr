@@ -82,4 +82,17 @@ export {
 // Bootstrap: injetar pages HTML + CSS + patch showPage — fase 33
 import './core/bootstrap.js';
 
-console.log('[SDR Bundle] sdr-bundle.js v31.0 carregado — ... + map/core OK + bootstrap');
+// Admin: constants, helpers, auth, seguranca — Fase A
+import './admin/constants.js';
+import './admin/firebase-helpers.js';
+import './admin/finance.js';
+import './admin/ui-helpers.js';
+import './admin/auth.js';
+import './admin/seguranca.js';
+
+// Admin: navegação, OS, assinatura — Fase B
+import './admin/tecnicos.js';
+import './admin/os.js';
+import './admin/assinatura.js';
+
+console.log('[SDR Bundle] sdr-bundle.js v33.0 carregado — ... + bootstrap + admin/Fase-A + admin/Fase-B');

@@ -63,12 +63,13 @@ window._limparFalhas = function(nome) {
 
 // ── Sessão com Timeout ──
 const SESSION_TIMEOUT_MIN = 30;
-let _sessionTimer = null;
+// _sessionTimer fica em window para que logout() em admin.html possa acessar
+window._sessionTimer = window._sessionTimer || null;
 
 window._resetSessionTimer = function() {
-  clearTimeout(_sessionTimer);
+  clearTimeout(window._sessionTimer);
   if (!window.currentUser) return;
-  _sessionTimer = setTimeout(() => {
+  window._sessionTimer = setTimeout(() => {
     if (window.currentUser) {
       window.toast('Sessão expirada por inatividade. Faça login novamente.', 'error');
       window.logout();
