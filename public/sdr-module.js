@@ -322,7 +322,6 @@ window._sdrHtml_tickets = window._sdrHtml_tickets || function() { return ''; };
 // sdrClientesFiltrar — sobrescrita por src/ui/index.js (bundle)
 window.sdrClientesFiltrar = window.sdrClientesFiltrar || function() {};
 // CSS das paginas SDR
-)();
 
 // ============================================================
 // MK SOLUTIONS — Página de Configuração e Integração

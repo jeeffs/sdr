@@ -2,7 +2,7 @@
 // Estratégia: cache-first para assets estáticos, network-first para app shell
 // Firebase RTDB usa WebSocket (não interceptável pelo SW) — offline tratado pelo keepSynced
 
-const CACHE_NAME  = 'sdr-v30';
+const CACHE_NAME  = 'sdr-v31';
 const CACHE_SHELL = 'sdr-shell-v30';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
