@@ -1,8 +1,8 @@
 # ============================================================
 # BACKUP_E_DEPLOY.ps1 - SDR Solucoes de Rua
 # Faz backup do Firebase + build Vite + deploy seguro
-# Uso: .\BACKUP_E_DEPLOY.ps1
-# Uso sem rebuild Vite: .\BACKUP_E_DEPLOY.ps1 -SkipBuild
+# Uso normal:           .\BACKUP_E_DEPLOY.ps1
+# Sem rebuild do Vite:  .\BACKUP_E_DEPLOY.ps1 -SkipBuild
 # (use -SkipBuild quando o sdr-bundle.js ja esta correto no repo)
 # ============================================================
 
@@ -55,7 +55,8 @@ if ($LASTEXITCODE -eq 0) {
 
 # --- 4. Build Vite (gera public/sdr-bundle.js) ---
 if ($SkipBuild) {
-    Write-Host "[4/6] Build Vite IGNORADO (-SkipBuild) — usando sdr-bundle.js existente" -ForegroundColor Yellow
+    Write-Host "[4/6] Build Vite ignorado (flag -SkipBuild ativa)" -ForegroundColor Yellow
+    Write-Host "      Usando sdr-bundle.js existente no repositorio" -ForegroundColor Yellow
 } else {
     Write-Host "[4/6] Compilando modulos Vite..." -ForegroundColor Yellow
     npm run build
