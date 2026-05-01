@@ -3502,8 +3502,8 @@ const FIREBASE_CONFIG_PRESET = {
   appId: "1:887171396568:web:2a54f4332f25f1300db8ad"
 };
 
-(async()=>{
-  // #screen-loading já visível por CSS (display:flex) — appScreen definida no bundle que carrega depois
+document.addEventListener('DOMContentLoaded', async function() {
+  // Roda após todos os <script> carregarem (bundle na linha ~3988 já está disponível)
   // Use saved config or preset config
   // Migração: se config salvo é do projeto antigo, descarta e usa o novo
   const saved=localStorage.getItem(CONFIG_KEY);
@@ -3616,7 +3616,7 @@ const FIREBASE_CONFIG_PRESET = {
     document.getElementById('loading-msg').textContent = 'Erro inesperado: ' + (e.message || e);
     document.getElementById('loading-msg').style.cssText = 'color:#dc2626;font-size:.85rem;padding:12px;background:#fef2f2;border-radius:8px;border:1px solid #fca5a5;margin-top:12px';
   }
-})();
+});
 
 // ═══════════════════════════════════════════════════════════════
 // SEGURANÇA — Documentos, EPI, Inventário, Veículo
