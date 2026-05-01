@@ -1399,6 +1399,31 @@ async function _loginFirebaseAuth(uid, senha) {
   }
 }
 
+// Atualiza senha do Firebase Auth quando técnico troca a senha local.
+// Usa a senha antiga para autenticar no Firebase Auth, depois chama updatePassword().
+async function _atualizarSenhaFirebaseAuth(uid, senhaAntiga, senhaNova) {
+  try {
+    const authInst = firebase.auth();
+    const email = _fbAuthEmail(uid);
+    const fbSenhaAntiga = await _fbAuthSenha(uid, senhaAntiga);
+    const fbSenhaNova   = await _fbAuthSenha(uid, senhaNova);
+    try {
+      const cred = await authInst.signInWithEmailAndPassword(email, fbSenhaAntiga);
+      await cred.user.updatePassword(fbSenhaNova);
+      console.log('[SDR Auth] Senha Firebase Auth atualizada:', uid);
+    } catch(e) {
+      if (e.code === 'auth/invalid-login-credentials' || e.code === 'auth/user-not-found') {
+        // Conta não existe ou senha antiga diverge — cria do zero com nova senha
+        await _vincularFirebaseAuth(uid, senhaNova);
+      } else {
+        throw e;
+      }
+    }
+  } catch(e) {
+    console.warn('[SDR Auth] Falha ao atualizar senha Firebase Auth (não-crítico):', uid, e.message);
+  }
+}
+
 // ════════════════════════════════════════════════════════
 // WEBAUTHN BIOMETRIC LOGIN
 // ════════════════════════════════════════════════════════
@@ -1582,14 +1607,15 @@ async function salvarUpgradeSenha() {
 
   try {
     const uid = _pendingUpgradeUid;
+    const senhaAntiga = _pendingUpgradeSenhaAtual; // guarda antes de limpar
     const salt = gerarSalt();
     const hash = await hashComSalt(p1, salt);
     await db.ref(`users/${uid}`).update({ passwordHash: hash, salt, senhaMinima: true });
     usersCache[uid] = { ...usersCache[uid], passwordHash: hash, salt, senhaMinima: true };
     _pendingUpgradeUid = null;
     _pendingUpgradeSenhaAtual = null;
-    // Vincula (ou atualiza) conta Firebase Auth com a nova senha
-    _vincularFirebaseAuth(uid, p1); // sem await — não bloqueia
+    // Atualiza senha do Firebase Auth: usa senha antiga para autenticar, depois troca
+    _atualizarSenhaFirebaseAuth(uid, senhaAntiga, p1); // sem await — não bloqueia
     loginSuccess(uid);
   } catch(e) {
     console.error('[salvarUpgradeSenha]', e);
