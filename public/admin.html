@@ -2810,12 +2810,7 @@ const _isImportadaConcluida = r => {
 // Exclui: fiscal (V0), observador (V4), e quem não fez 1º login.
 // NÃO exclui: master/Jefferson — ele aparece em inventário, segurança etc.
 // ════════════════════════════════════════════════════════════════════════
-function _getTecnicosAtivos() {
-  return Object.entries(usersCache)
-    .filter(([,u]) => u.ativo !== false && !u.firstLogin && !_isFiscal(u) && !_isObservador(u))
-    .map(([id,u]) => ({id, nome:u.name||id, nivel:u.nivel||'V1'}))
-    .sort((a,b) => a.nome.localeCompare(b.nome));
-}
+    // → window._getTecnicosAtivos() em sdr-bundle (admin/Fase-E/bootstrap-firebase.js)
 
 // Regra: APENAS role='master' → acesso total
 // Jefferson (nivel='V3', role='user') é prestador com acesso a import V3 apenas
@@ -2840,235 +2835,20 @@ const _isMasterUid = uid => {
 // ════════════════════════════════════════════════════
 // → config.js em sdr-bundle (admin/Fase-C)
 
-async function iniciarFirebase(cfg) {
-  try {
-    firebase.initializeApp(cfg);
-    db   = firebase.database();
-    auth = firebase.auth();
-    // Expoe db e auth no window para o sdr-bundle.js (audit log, etc.)
-    window.db   = db;
-    window.auth = auth;
-    // keepSynced: mantém cópia local dos paths críticos para acesso offline
-    // O Firebase RTDB usa WebSocket — SW não intercepta. keepSynced garante
-    // que os dados fiquem em memória mesmo sem conexão.
-    try {
-      ['os','users','precos','config'].forEach(path => {
-        db.ref(path).keepSynced(true);
-      });
-      console.log('[SDR] keepSynced ativado para: os, users, precos, config');
-    } catch(_ks) { console.warn('[SDR] keepSynced nao disponivel:', _ks.message); }
-    // Test connectivity
-    await db.ref('.info/connected').once('value');
-    // Faz sign-in anônimo para satisfazer regras "auth != null".
-    // Se o provedor anônimo ainda não estiver habilitado no console,
-    // o try interno falha silenciosamente (banco ainda em modo aberto).
-    try { await auth.signInAnonymously(); } catch(_e) { console.warn('[iniciarFirebase]', _e.message); }
-    // Testa permissão de leitura (a sessão anônima permanece ativa para
-    // todas as chamadas subsequentes de inicialização)
-    await db.ref('users').limitToFirst(1).once('value');
-    return 'ok';
-  } catch(e) {
-    const msg = String(e.message || e).toLowerCase();
-    if(msg.includes('permission') || msg.includes('denied')) return 'permission';
-    return 'error';
-  }
-}
+    // → window.iniciarFirebase() em sdr-bundle (admin/Fase-E/bootstrap-firebase.js)
 
 // ════════════════════════════════════════════════════
 // ⑤ USERS INIT
 // ════════════════════════════════════════════════════
-async function garantirUsuarios() {
-  const snap = await db.ref('users').once('value');
-  const existing = snap.val() || {};
-  const updates = {};
-  for (const u of USERS_INIT) {
-    if (!existing[u.id]) {
-      // Cria usuário novo
-      const dados = { name: u.name, role: u.role, passwordHash: null, firstLogin: true };
-      if (u.nivel) dados.nivel = u.nivel;
-      updates[`users/${u.id}`] = dados;
-    } else {
-      // Para usuários existentes: NUNCA sobrescreve o nome (preserva renomeações feitas pelo master)
-      // Sincroniza nivel se ainda não estiver definido no Firebase (cobre V1 e V3)
-      const nivelEsperado = u.nivel || 'V1';
-      if (!existing[u.id].nivel) updates[`users/${u.id}/nivel`] = nivelEsperado;
-    }
-  }
-  // Corrige Jefferson para V1 no Firebase (caso tenha sido alterado para V3 anteriormente)
-  Object.entries(existing).forEach(([uid, u]) => {
-    if ((uid === 'jefferson' || (u.name||'').toLowerCase() === 'jefferson') && (u.nivel||'V1') === 'V3') {
-      updates[`users/${uid}/nivel`] = 'V1';
-    }
-  });
-  if (Object.keys(updates).length > 0) await db.ref().update(updates);
-  // Cache
-  usersCache = await _dbRead('users', {});
-}
+    // → window.garantirUsuarios() em sdr-bundle (admin/Fase-E/bootstrap-firebase.js)
 
 
 // ── Cadastro de Empresa do Prestador ──
-function _precisaCadastroEmpresa(user) {
-  // Master e Observador (V4) não precisam de cadastro
-  if (_isAdmin(user) || _isObservador(user)) return false;
-  // Se o master dispensou a ficha, não precisa
-  if (user.empresa?.dispensado) return false;
-  // Fiscal (V0), Técnico (V1), Supervisor (V2) precisam
-  return !user.empresa || !user.empresa.razaoSocial;
-}
+    // → window._precisaCadastroEmpresa() em sdr-bundle (admin/Fase-E/bootstrap-firebase.js)
 
-function _preencherFormEmpresa(empresa) {
-  if (!empresa) return;
-  const campos = {
-    // Dados da Empresa
-    'cad-razao':    empresa.razaoSocial || '',
-    'cad-fantasia': empresa.nomeFantasia || '',
-    'cad-cnpj':     empresa.cnpj || '',
-    'cad-cnae':     empresa.cnae || '',
-    'cad-ie':       empresa.inscricaoEstadual || '',
-    'cad-im':       empresa.inscricaoMunicipal || '',
-    // Endereço
-    'cad-rua':    empresa.rua || '',
-    'cad-num':    empresa.numero || '',
-    'cad-compl':  empresa.complemento || '',
-    'cad-bairro': empresa.bairro || '',
-    'cad-cep':    empresa.cep || '',
-    'cad-cidade': empresa.cidade || '',
-    'cad-estado': empresa.estado || '',
-    // Contato
-    'cad-tel':       empresa.telefone || '',
-    'cad-cel':       empresa.celular || '',
-    'cad-email':     empresa.email || '',
-    'cad-email-fin': empresa.emailFinanceiro || '',
-    'cad-site':      empresa.site || '',
-    // Representante Legal
-    'cad-resp-nome':  empresa.responsavel?.nome || empresa.respNome || '',
-    'cad-resp-cpf':   empresa.responsavel?.cpf || empresa.respCpf || '',
-    'cad-resp-rg':    empresa.responsavel?.rg || empresa.respRg || '',
-    'cad-resp-nac':   empresa.responsavel?.nacionalidade || empresa.respNacionalidade || '',
-    'cad-resp-ec':    empresa.responsavel?.ec || empresa.respEc || '',
-    'cad-resp-cargo': empresa.responsavel?.cargo || empresa.respCargo || '',
-    // Dados Bancários
-    'cad-banco':      empresa.banco || '',
-    'cad-agencia':    empresa.agencia || '',
-    'cad-conta':      empresa.conta || '',
-    'cad-tipo-conta': empresa.tipoConta || '',
-    'cad-titular':    empresa.titular || '',
-    // PIX
-    'cad-pix-tipo':       empresa.pixTipo || '',
-    'cad-pix':            empresa.pix || '',
-    'cad-pix-favorecido': empresa.pixFavorecido || '',
-    'cad-pix-banco':      empresa.pixBanco || '',
-    // Contratos
-    'cad-foro':           empresa.foro || '',
-    'cad-dia-pgto':       empresa.diaPgto || '',
-    'cad-dia-choice':     empresa.diaChoice || '',
-    'cad-contrato-resp':  empresa.contratoResp || '',
-    'cad-contrato-versao':empresa.contratoVersao || '',
-  };
-  Object.entries(campos).forEach(([id, val]) => {
-    const el = document.getElementById(id);
-    if (el) el.value = val;
-  });
-}
+    // → window._preencherFormEmpresa() em sdr-bundle (admin/Fase-E/bootstrap-firebase.js)
 
-async function salvarCadastroEmpresa() {
-  const err = document.getElementById('cad-empresa-err');
-  const btn = document.getElementById('btn-salvar-empresa');
-
-  // Campos obrigatórios
-  const razao = (document.getElementById('cad-razao')?.value || '').trim();
-  const cnpj = (document.getElementById('cad-cnpj')?.value || '').trim();
-  const rua = (document.getElementById('cad-rua')?.value || '').trim();
-  const num = (document.getElementById('cad-num')?.value || '').trim();
-  const bairro = (document.getElementById('cad-bairro')?.value || '').trim();
-  const cidade = (document.getElementById('cad-cidade')?.value || '').trim();
-  const estado = (document.getElementById('cad-estado')?.value || '').trim();
-  const tel = (document.getElementById('cad-tel')?.value || '').trim();
-  const respNome = (document.getElementById('cad-resp-nome')?.value || '').trim();
-  const respCpf = (document.getElementById('cad-resp-cpf')?.value || '').trim();
-
-  if (!razao || !cnpj || !rua || !num || !bairro || !cidade || !estado || !tel || !respNome || !respCpf) {
-    if (err) { err.textContent = 'Preencha todos os campos obrigatórios (*).'; err.style.display = 'block'; }
-    return;
-  }
-  if (err) err.style.display = 'none';
-
-  const _cv = id => (document.getElementById(id)?.value || '').trim();
-  const empresa = {
-    // Dados da Empresa
-    razaoSocial:        razao,
-    nomeFantasia:       _cv('cad-fantasia'),
-    cnpj,
-    cnae:               _cv('cad-cnae'),
-    inscricaoEstadual:  _cv('cad-ie'),
-    inscricaoMunicipal: _cv('cad-im'),
-    // Endereço
-    rua, numero: num,
-    complemento:        _cv('cad-compl'),
-    bairro, cep:        _cv('cad-cep'),
-    cidade, estado,
-    // Contato
-    telefone:           tel,
-    celular:            _cv('cad-cel'),
-    email:              _cv('cad-email'),
-    emailFinanceiro:    _cv('cad-email-fin'),
-    site:               _cv('cad-site'),
-    // Representante Legal
-    respNome, respCpf,
-    respRg:             _cv('cad-resp-rg'),
-    respNacionalidade:  _cv('cad-resp-nac'),
-    respEc:             _cv('cad-resp-ec'),
-    respCargo:          _cv('cad-resp-cargo'),
-    // Dados Bancários
-    banco:              _cv('cad-banco'),
-    agencia:            _cv('cad-agencia'),
-    conta:              _cv('cad-conta'),
-    tipoConta:          _cv('cad-tipo-conta'),
-    titular:            _cv('cad-titular'),
-    // PIX
-    pixTipo:            _cv('cad-pix-tipo'),
-    pix:                _cv('cad-pix'),
-    pixFavorecido:      _cv('cad-pix-favorecido'),
-    pixBanco:           _cv('cad-pix-banco'),
-    // Contratos
-    foro:               _cv('cad-foro'),
-    diaPgto:            _cv('cad-dia-pgto'),
-    diaChoice:          _cv('cad-dia-choice'),
-    contratoResp:       _cv('cad-contrato-resp'),
-    contratoVersao:     _cv('cad-contrato-versao'),
-    atualizadoEm: new Date().toISOString(),
-  };
-
-  if (btn) btn.disabled = true;
-  try {
-    await _dbSet(`users/${currentUser.id}/empresa`, empresa);
-    currentUser.empresa = empresa;
-    usersCache[currentUser.id] = { ...(usersCache[currentUser.id] || {}), empresa };
-    toast('Dados da empresa salvos com sucesso!', 'success');
-
-    // Continua para o app
-    await carregarDados();
-    // Verifica rescisão pendente primeiro
-    const bloqueadoPorRescisao2 = await verificarRescisaoPendente();
-    if (bloqueadoPorRescisao2) return;
-    // Para V0/V1/V2: inicia (ou verifica) o fluxo de contrato de prestação de serviços
-    if (['V0','V1','V2'].includes(currentUser.nivel||'V1')) {
-      const bloqueadoPorContrato = await verificarContratoPendente();
-      if (bloqueadoPorContrato) return;
-    }
-    const bloqueadoPorTermo = currentUser.role !== 'master' && await verificarTermosPendentes();
-    if (!bloqueadoPorTermo) {
-      screen('app');
-      const firstPage = _isFiscal(currentUser) ? 'meu-dash' : _isObservador(currentUser) ? 'observador-dash' : 'meu-dash';
-      showPage(firstPage);
-    }
-  } catch(e) {
-    console.error('[salvarCadastroEmpresa]', e);
-    if (err) { err.textContent = 'Erro ao salvar: ' + (e.message || e); err.style.display = 'block'; }
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
+    // → window.salvarCadastroEmpresa() em sdr-bundle (admin/Fase-E/bootstrap-firebase.js)
 
 // ─── CADASTRO DA EMPRESA (admin — página interna do app) ───────────────────
     // → window.renderCadastroAdmin() em sdr-bundle (admin/Fase-B)
@@ -3078,24 +2858,7 @@ async function salvarCadastroEmpresa() {
 
     // → window.loginSuccess() em sdr-bundle (admin/Fase-B)
 
-function logout() {
-  clearTimeout(_sessionTimer); // para timer de inatividade
-  _removeActivityListeners();  // Fase5: limpa listeners
-  _revokeAllBlobs();           // Fase5: libera Blob URLs
-  currentUser = null;
-  allRecords = [];
-  selectedUserId = null;
-  precosDesbloqueado = false; // bloqueia PIN novamente ao sair
-  // Remove sessão persistida (impede auto-login no próximo reload)
-  sessionStorage.removeItem('srua_sessao_uid');
-  // Encerra sessão Firebase Auth
-  try { if (auth) auth.signOut(); } catch(_e) { console.warn('[logout]', _e.message); }
-  screen('login');
-  document.querySelectorAll('.user-card').forEach(c=>c.classList.remove('selected'));
-  document.getElementById('pwd-block').style.display = 'none';
-  document.getElementById('btn-entrar').style.display = 'none';
-  document.getElementById('pwd-input').value = '';
-}
+    // → window.logout() em sdr-bundle (admin/Fase-E/bootstrap-firebase.js)
 
 // ════════════════════════════════════════════════════
 // ⑦ SIDEBAR / NAVIGATION
@@ -3165,135 +2928,19 @@ function logout() {
 // Atualiza os dropdowns de cidade com base nos registros ativos (pós-filtro de importado/busca)
 // Atualiza o dropdown de técnicos para o master, habilitando só os que têm OS
 // conforme o filtro de importado atualmente ativo (todos / somente importados / somente lançados)
-function _atualizarDropdownTecnicos() {
-  const imp = document.getElementById('filter-importado')?.value || '';
-  // Base: registros filtrados pelo critério de importado
-  const base = imp === ''     ? allRecords
-             : imp === 'imp'  ? allRecords.filter(r =>  r.importado)
-             :                  allRecords.filter(r => !r.importado);
-
-  const comOS = new Set(base.map(r => r.userId).filter(Boolean));
-  const todosUsers = Object.entries(usersCache)
-    .filter(([, u]) => u.ativo !== false && !u.firstLogin && u.name)
-    .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || '', 'pt-BR'));
-
-  ['filter-tec', 'exp-tec'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    const prev = el.value;
-    const first = el.options[0].outerHTML;
-    el.innerHTML = first + todosUsers.map(([uid, u]) =>
-      comOS.has(uid)
-        ? `<option value="${uid}">${u.name}</option>`
-        : `<option value="${uid}" disabled style="color:#cbd5e1">${u.name} (sem OS)</option>`
-    ).join('');
-    // Mantém seleção anterior se ainda válida (não desabilitada)
-    if (prev && comOS.has(prev)) el.value = prev;
-    else if (prev) el.value = ''; // era inválido — reseta para "Todos os prestadores"
-  });
-}
+    // → window._atualizarDropdownTecnicos() em sdr-bundle (admin/Fase-E/os-view.js)
 
 // activeRecords = registros já filtrados por todos os critérios exceto cidade
-function _atualizarDropdownCidades(activeRecords) {
-  ['filter-cidade','exp-cidade'].forEach(id=>{
-    const el=document.getElementById(id); if(!el)return;
-    const prev=el.value;
-    const first=el.options[0].outerHTML;
+    // → window._atualizarDropdownCidades() em sdr-bundle (admin/Fase-E/os-view.js)
 
-    if (!_isAdmin(currentUser)) {
-      // Técnico: lista todas as cidades do sistema — habilita só as que têm OS nos registros ativos
-      const todasCidades = [
-        ...new Set([
-          ...(profilesCidades.FILIAL || []),
-          ...(profilesCidades.MATRIZ || []),
-          ...allRecords.filter(r=>r.userId===currentUser.id&&r.cidade).map(r=>r.cidade)
-        ])
-      ].sort();
-      const comOS = new Set((activeRecords||[]).filter(r=>r.cidade).map(r=>r.cidade));
-      el.innerHTML = first + todasCidades.map(c =>
-        comOS.has(c)
-          ? `<option value="${c}">${c}</option>`
-          : `<option value="${c}" disabled style="color:#cbd5e1">${c} (sem OS)</option>`
-      ).join('');
-    } else {
-      // Admin: lista TODAS as cidades do sistema — habilita só as que têm OS, desabilita o restante
-      const todasCidades = [
-        ...new Set([
-          ...(profilesCidades.FILIAL || []),
-          ...(profilesCidades.MATRIZ || []),
-          ...allRecords.filter(r => r.cidade).map(r => r.cidade)
-        ])
-      ].sort();
-      const comOS = new Set(allRecords.filter(r => r.cidade).map(r => r.cidade));
-      el.innerHTML = first + todasCidades.map(c =>
-        comOS.has(c)
-          ? `<option value="${c}">${c}</option>`
-          : `<option value="${c}" disabled style="color:#cbd5e1">${c} (sem OS)</option>`
-      ).join('');
-    }
-
-    if(prev) el.value=prev;
-  });
-}
-
-function popularFiltros() {
-  // Cidade: usa todos os registros do usuário como base inicial
-  _atualizarDropdownCidades(filteredRecords());
-
-  if (_isAdmin(currentUser)) {
-    _atualizarDropdownTecnicos();
-  }
-}
+    // → window.popularFiltros() em sdr-bundle (admin/Fase-E/os-view.js)
 
 // ════════════════════════════════════════════════════
 // ⑩ DETAIL
 // ════════════════════════════════════════════════════
-function abrirFotoModal(fbKey) {
-  const r = _getRecordByKey(fbKey);
-  if (!r || !r.foto) return;
-  verDetalhe(fbKey);
-}
+    // → window.abrirFotoModal() em sdr-bundle (admin/Fase-E/os-view.js)
 
-function verDetalhe(fbKey) {
-  const r=_getRecordByKey(fbKey); if(!r)return;
-  const rows=r.servicos?.map(s=>`<tr>
-    <td style="padding:7px 10px">${s.tipo}</td>
-    <td style="padding:7px 10px;text-align:center">${s.qtd}</td>
-    <td style="padding:7px 10px;text-align:right">${fmtMoeda(s.valor)}</td>
-    <td style="padding:7px 10px;text-align:right;font-weight:700;color:var(--success)">${fmtMoeda(s.total)}</td>
-  </tr>`).join('')||'';
-  const mapsLink=r.lat?`<a href="https://www.google.com/maps?q=${r.lat},${r.lon}" target="_blank" style="font-size:.78rem;color:var(--primary)"><i class="fas fa-map"></i> Ver no mapa</a>`:'';
-  document.getElementById('modal-detail-content').innerHTML=`
-    <table style="width:100%;font-size:.84rem;margin-bottom:14px;border-collapse:collapse">
-      <tr><td style="color:var(--muted);width:110px;padding:4px 0">Data/Hora</td><td><b>${fmtData(r.data)}${r.hora?' às '+r.hora:''}</b></td></tr>
-      <tr><td style="color:var(--muted);padding:4px 0">Código OS</td><td><b>${r.codigo_os||'—'}</b></td></tr>
-      <tr><td style="color:var(--muted);padding:4px 0">Prestador</td><td>${r.userName||'—'}</td></tr>
-      <tr><td style="color:var(--muted);padding:4px 0">Profile</td><td>${r.profile}</td></tr>
-      <tr><td style="color:var(--muted);padding:4px 0">Tipo</td><td>${r.tipo||'—'}</td></tr>
-      <tr><td style="color:var(--muted);padding:4px 0">Cidade</td><td>${r.cidade||'—'}</td></tr>
-      <tr><td style="color:var(--muted);padding:4px 0">Referência</td><td>${r.referencia||'—'}</td></tr>
-      <tr><td style="color:var(--muted);padding:4px 0">CTO/CEO</td><td>${r.cto_ceo||'—'}</td></tr>
-      ${r.lat?`<tr><td style="color:var(--muted);padding:4px 0">GPS</td><td>${r.lat}, ${r.lon} ${mapsLink}</td></tr>`:''}
-    </table>
-    ${r.foto?`<div style="margin-bottom:14px"><div style="font-weight:600;font-size:.84rem;margin-bottom:8px;color:var(--primary)"><i class="fas fa-camera"></i> Foto do Local</div><img src="${r.foto}" alt="Foto" style="max-width:100%;border-radius:10px;border:1px solid var(--border)"></div>`:''}
-    <div style="font-weight:600;margin-bottom:8px;font-size:.84rem">Serviços</div>
-    <table style="width:100%;font-size:.81rem;border-collapse:collapse">
-      <thead style="background:var(--primary);color:#fff"><tr>
-        <th style="padding:7px 10px;text-align:left">Serviço</th><th style="padding:7px 10px">Qtde</th>
-        <th style="padding:7px 10px">Valor Unit.</th><th style="padding:7px 10px">Total</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr style="background:#f0fdf4;font-weight:700">
-        <td colspan="3" style="padding:7px 10px;text-align:right">TOTAL GERAL:</td>
-        <td style="padding:7px 10px;text-align:right;color:var(--success)">${fmtMoeda(r.total)}</td>
-      </tr></tfoot>
-    </table>
-    ${r.nota_correcao ? `
-    <div style="margin-top:14px;padding:10px 14px;background:#fff7ed;border-radius:8px;border-left:4px solid #f59e0b;font-size:.79rem;color:#92400e;line-height:1.5">
-      <i class="fas fa-info-circle" style="margin-right:5px;color:#d97706"></i><b>Nota de correção:</b> ${r.nota_correcao}
-    </div>` : ''}`;
-  const md = document.getElementById('modal-detail');
-  if (md) md.classList.add('open');
-}
+    // → window.verDetalhe() em sdr-bundle (admin/Fase-E/os-view.js)
 
 // ════════════════════════════════════════════════════
 // ⑩b EDITAR OS (master)
@@ -3301,64 +2948,11 @@ function verDetalhe(fbKey) {
 let _editFbKey = null;
 
 // ── Fase3-Refactor: helper extraído de editarOS ──
-function _editPreencherForm(r) {
-  document.getElementById('edit-data').value       = r.data || '';
-  document.getElementById('edit-hora').value       = r.hora || '';
-  document.getElementById('edit-codigo').value     = r.codigo_os || '';
-  document.getElementById('edit-profile').value    = r.profile || 'FILIAL';
-  document.getElementById('edit-tipo').value       = r.tipo || 'MANUTENÇÃO';
-  document.getElementById('edit-cto').value        = r.cto_ceo || '';
-  document.getElementById('edit-cidade').value     = r.cidade || '';
-  document.getElementById('edit-referencia').value = r.referencia || '';
-  const cont = document.getElementById('edit-servicos-rows');
-  cont.innerHTML = '';
-  const OPTS = SERVICOS.map(s => `<option>${s}</option>`).join('');
-  for (let i = 1; i <= MAX_SERVICOS_POR_OS; i++) {
-    const sv = (r.servicos || [])[i-1] || {};
-    cont.innerHTML += `<div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px;margin-bottom:6px">
-      <select id="edit-s-tipo-${i}" onchange="calcEditTotal()">
-        <option value="">-- ${i}º Serviço --</option>${OPTS}
-      </select>
-      <input type="number" id="edit-s-qtd-${i}" placeholder="Qtde" min="0" step="1" value="${sv.qtd||''}"
-        oninput="calcEditTotal()">
-      <input type="number" id="edit-s-val-${i}" placeholder="0,00" min="0" step="0.01" value="${sv.valor||''}"
-        style="background:#f0fdf4" readonly>
-    </div>`;
-    if (sv.tipo) {
-      setTimeout(() => {
-        const sel = document.getElementById(`edit-s-tipo-${i}`);
-        if (sel) { sel.value = sv.tipo; }
-      }, 0);
-    }
-  }
-  calcEditTotal();
-}
+    // → window._editPreencherForm() em sdr-bundle (admin/Fase-E/os-view.js)
 
-function editarOS(fbKey) {
-  const r = _getRecordByKey(fbKey);
-  if (!r) return;
-  if (_isImportadaConcluida(r) && !_isAdmin(currentUser)) {
-    toast('OS importada (histórica) não pode ser editada.', 'error'); return;
-  }
-  _editFbKey = fbKey;
-  _editPreencherForm(r);
-  const meo = document.getElementById('modal-edit-os');
-  if (meo) meo.classList.add('open');
-}
+    // → window.editarOS() em sdr-bundle (admin/Fase-E/os-view.js)
 
-function calcEditTotal() {
-  let t = 0;
-  for (let i = 1; i <= 5; i++) {
-    const tipo = (document.getElementById(`edit-s-tipo-${i}`)?.value || '');
-    const qtd  = parseInt(document.getElementById(`edit-s-qtd-${i}`)?.value) || 0;
-    const valEl = document.getElementById(`edit-s-val-${i}`);
-    const preco = (tipo && precosV1map[tipo] !== undefined) ? precosV1map[tipo] : 0;
-    if (valEl) valEl.value = preco || '';
-    t += qtd * preco;
-  }
-  const el = document.getElementById('edit-total-preview');
-  if (el) el.innerHTML = fmtMoeda(t);
-}
+    // → window.calcEditTotal() em sdr-bundle (admin/Fase-E/os-view.js)
 
 async function salvarEdicaoOS() {
   try {
@@ -3399,484 +2993,40 @@ async function salvarEdicaoOS() {
 // ════════════════════════════════════════════════════
 let _dashMes = null; // null = mês atual; formato 'YYYY-MM'
 
-function mudarMesDash(delta) {
-  const hoje = new Date();
-  let base;
-  if (_dashMes) {
-    // Usa construtor com números (hora local) para evitar UTC shift no fuso de Brasília (UTC-3)
-    const [_a, _m] = _dashMes.split('-');
-    base = new Date(parseInt(_a), parseInt(_m) - 1, 1);
-  } else {
-    base = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  }
-  base.setMonth(base.getMonth() + delta);
-  const novoMes = `${base.getFullYear()}-${String(base.getMonth()+1).padStart(2,'0')}`;
-  const atualMes = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-  _dashMes = novoMes === atualMes ? null : novoMes;
-  renderDashboard();
-}
+    // → window.mudarMesDash() em sdr-bundle (admin/Fase-E/render-dashboard.js)
 
-function renderDashboard() {
-  const rec=allRecords;
-
-  // ── Mês selecionado ──
-  const hoje   = new Date();
-  const MESES_NOME = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-  let anoM, mesM;
-  if (_dashMes) {
-    [anoM, mesM] = _dashMes.split('-');
-  } else {
-    anoM = String(hoje.getFullYear());
-    mesM = String(hoje.getMonth()+1).padStart(2,'0');
-  }
-  const prefM = `${anoM}-${mesM}`;
-  const mesLabel = `${MESES_NOME[parseInt(mesM)-1]} ${anoM}`;
-  const fmt = v => `<span class="money-val">R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
-  const _n  = s => (s||'').normalize('NFC').trim().toUpperCase();
-
-  // Atualiza label e botão avançar
-  const labelEl = document.getElementById('dash-mes-label');
-  if (labelEl) labelEl.textContent = mesLabel;
-  const btnNext = document.getElementById('btn-dash-next');
-  if (btnNext) {
-    const atualMes = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-    btnNext.disabled = prefM >= atualMes;
-    btnNext.style.opacity = prefM >= atualMes ? '0.4' : '1';
-  }
-
-  // ── Cards stats do mês ──
-  // Normaliza prefM: garante formato YYYY-MM sem componente de horário
-  const recMes = rec.filter(r => {
-    const d = (r.data || '').toString().trim();
-    return d.startsWith(prefM);
-  });
-
-  // Banner "sem dados" — aparece logo abaixo da navegação quando o mês está vazio
-  const _bannerEl = document.getElementById('dash-sem-dados');
-  if (_bannerEl) {
-    _bannerEl.style.display = recMes.length === 0 ? 'block' : 'none';
-    _bannerEl.innerHTML = recMes.length === 0
-      ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:14px 18px;margin-bottom:16px;color:#92400e;font-size:.88rem;display:flex;align-items:center;gap:10px">
-           <i class="fas fa-info-circle" style="font-size:1.1rem"></i>
-           <span>Nenhum registro encontrado em <b>${mesLabel}</b>. Os dados serão exibidos assim que houver OS lançadas para este período.</span>
-         </div>`
-      : '';
-  }
-
-  const statsEl = document.getElementById('dash-stats-mes');
-  if (statsEl) {
-    const totalMes = recMes.reduce((s,r)=>s+(r.total||0),0);
-    const svsMes   = recMes.reduce((s,r)=>s+(r.servicos?.length||0),0);
-    const tecsMes  = new Set(recMes.map(r=>r.userId).filter(Boolean)).size;
-    statsEl.innerHTML = `
-      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-file-alt"></i></div>
-        <div><div class="stat-val">${recMes.length}</div><div class="stat-lbl">OS no Mês</div></div></div>
-      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-dollar-sign"></i></div>
-        <div><div class="stat-val" style="font-size:1rem">${fmtMoeda(totalMes)}</div><div class="stat-lbl">Valor no Mês</div></div></div>
-      <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-tools"></i></div>
-        <div><div class="stat-val">${svsMes}</div><div class="stat-lbl">Serviços no Mês</div></div></div>
-      <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-users"></i></div>
-        <div><div class="stat-val">${tecsMes}</div><div class="stat-lbl">Prestadores no Mês</div></div></div>`;
-  }
-
-  // ── Breakdown V1 / V2 / V3 por mês ──
-  const _nivelRec = r => {
-    if (r.importado && r.nivelImp) return r.nivelImp;
-    const u = usersCache[r.userId];
-    if (!u) return 'V1';
-    if (u.role === 'master' || _isV3Import(u)) return 'V3';
-    return u.nivel || 'V1';
-  };
-  const recV1 = recMes.filter(r => _nivelRec(r) === 'V1');
-  const recV2 = recMes.filter(r => _nivelRec(r) === 'V2');
-  const recV3 = recMes.filter(r => _nivelRec(r) === 'V3');
-  const nivelEl = document.getElementById('dash-nivel-breakdown');
-  if (nivelEl) {
-    const nivCard = (label, cor, bg, recs) => {
-      const tv = recs.reduce((s,r)=>s+(r.total||0),0);
-      const tecs = new Set(recs.map(r=>r.userId).filter(Boolean)).size;
-      return `<div style="background:${bg};border-radius:12px;padding:16px 18px;border-left:4px solid ${cor}">
-        <div style="font-size:.68rem;font-weight:800;color:${cor};text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${label}</div>
-        <div style="font-size:1.25rem;font-weight:800;color:#1e293b">${recs.length} <span style="font-size:.75rem;font-weight:500;color:#64748b">OS</span></div>
-        <div style="font-size:.9rem;font-weight:700;color:${cor};margin-top:4px">${fmt(tv)}</div>
-        <div style="font-size:.7rem;color:#94a3b8;margin-top:2px">${tecs} técnico${tecs!==1?'s':''}</div>
-      </div>`;
-    };
-    nivelEl.innerHTML =
-      nivCard('Prestador',  '#16a34a','#f0fdf4', recV1) +
-      nivCard('PRESTADOR',  '#ea580c','#fff7ed', recV2) +
-      nivCard('Admin',      '#7c3aed','#f5f3ff', recV3);
-  }
-
-  // ── Investimento por Profile (Filial / Matriz) ──
-  const filialRec = recMes.filter(r => _n(r.profile) === 'FILIAL');
-  const matrizRec = recMes.filter(r => _n(r.profile) === 'MATRIZ');
-  const elFilialVal = document.getElementById('dash-filial-val');
-  const elFilialOS  = document.getElementById('dash-filial-os');
-  const elMatrizVal = document.getElementById('dash-matriz-val');
-  const elMatrizOS  = document.getElementById('dash-matriz-os');
-  if (elFilialVal) elFilialVal.innerHTML = fmt(filialRec.reduce((s,r)=>s+(r.total||0),0));
-  if (elFilialOS)  elFilialOS.textContent  = `${filialRec.length} OS`;
-  if (elMatrizVal) elMatrizVal.innerHTML = fmt(matrizRec.reduce((s,r)=>s+(r.total||0),0));
-  if (elMatrizOS)  elMatrizOS.textContent  = `${matrizRec.length} OS`;
-
-  // Total rendimentos = soma(V3-V2) de todos os registros do mês
-  // Jefferson: sem V2 → rendimento = V3 integral (sem custo intermediário)
-  // Demais: usa totalV3-totalV2 armazenados (correto para todas as eras)
-  let totalRend = 0;
-  recMes.forEach(r => {
-    const v3 = Number(r.totalV3 || 0);
-    if (r.totalV3 !== undefined) {
-      const v2 = Number(r.totalV2 || 0);
-      totalRend += v3 - v2;
-    } else {
-      (r.servicos||[]).forEach(sv => {
-        const sv3 = Number(sv.valorV3) || (Number(sv.qtd)||0) * (precosV3map[sv.tipo] ?? precosV3map[_normServico(sv.tipo)] ?? 0);
-        const sv2 = Number(sv.valorV2) || (Number(sv.qtd)||0) * (precosV2map[sv.tipo] ?? precosV2map[_normServico(sv.tipo)] ?? 0);
-        totalRend += sv3 - sv2;
-      });
-    }
-  });
-
-  const elRend = document.getElementById('s-rendimentos');
-  const elPer  = document.getElementById('s-rend-periodo');
-  if (elRend) elRend.innerHTML = fmt(totalRend);
-  if (elPer)  elPer.textContent  = mesLabel;
-
-  // ── Detalhamento por técnico × profile × tipo ──
-  const byTec = {};
-  recMes.forEach(r => {
-    const nome    = r.userName || r.userId || '—';
-    const profile = _n(r.profile) || '—';
-    const tipo    = _n(r.tipo)    || '—';
-    const key     = `${nome}||${profile}||${tipo}`;
-    if (!byTec[key]) byTec[key] = { nome, profile, tipo, v: 0 };
-    if (r.totalV3 !== undefined) {
-      const v2 = Number(r.totalV2 || 0);
-      byTec[key].v += (Number(r.totalV3)||0) - v2;
-    } else {
-      (r.servicos||[]).forEach(sv => {
-        const v3 = Number(sv.valorV3) || (Number(sv.qtd)||0) * (precosV3map[sv.tipo] ?? precosV3map[_normServico(sv.tipo)] ?? 0);
-        const v2 = Number(sv.valorV2) || (Number(sv.qtd)||0) * (precosV2map[sv.tipo] ?? precosV2map[_normServico(sv.tipo)] ?? 0);
-        byTec[key].v += v3 - v2;
-      });
-    }
-  });
-
-  const rendRows = Object.values(byTec).filter(x => x.v > 0).sort((a,b)=>b.v-a.v);
-  const thS = 'padding:9px 12px;font-size:.78rem;font-weight:700;text-align:left;white-space:nowrap';
-  const tdS = 'padding:8px 12px;font-size:.82rem;border-bottom:1px solid #e5e7eb';
-  const elTec = document.getElementById('dash-rend-tec');
-  if (elTec) {
-    elTec.innerHTML = rendRows.length
-      ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-          <thead style="background:#7c3aed;color:#fff">
-            <tr>
-              <th style="${thS}">Prestador</th>
-              <th style="${thS}">Profile</th>
-              <th style="${thS}">Tipo</th>
-              <th style="${thS};text-align:right;color:#e9d5ff">Rendimentos</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rendRows.map((x,i)=>`<tr style="background:${i%2===0?'#faf5ff':'#fff'}">
-              <td style="${tdS}">${x.nome}</td>
-              <td style="${tdS}">${x.profile}</td>
-              <td style="${tdS}">${x.tipo}</td>
-              <td style="${tdS};text-align:right;color:#7c3aed;font-weight:700">${fmt(x.v)}</td>
-            </tr>`).join('')}
-          </tbody>
-          <tfoot style="background:#f3e8ff;border-top:2px solid #c4b5fd">
-            <tr>
-              <td colspan="3" style="padding:9px 12px;font-weight:700;font-size:.82rem">Total</td>
-              <td style="padding:9px 12px;text-align:right;font-weight:800;color:#7c3aed">${fmt(totalRend)}</td>
-            </tr>
-          </tfoot>
-        </table></div>`
-      : `<p style="color:var(--muted);font-size:.85rem">Nenhum registro em ${mesLabel}.</p>`;
-  }
-
-}
+    // → window.renderDashboard() em sdr-bundle (admin/Fase-E/render-dashboard.js)
 
 // ════════════════════════════════════════════════════
 // ⑫ FORM / GPS / OS CODE
 // ════════════════════════════════════════════════════
-async function gerarCodigoOS() {
-  const icon=document.getElementById('icon-os');
-  if(icon)icon.classList.add('fa-spinner','fa-spin');
-  const ano=new Date().getFullYear();
-  const doAno=allRecords.filter(r=>r.data&&r.data.startsWith(String(ano)));
-  const seq=String(doAno.length+1).padStart(4,'0');
-  const fCodigo=document.getElementById('f-codigo');
-  if(fCodigo)fCodigo.value=`OS-${ano}-${seq}`;
-  if(icon)setTimeout(()=>icon.classList.remove('fa-spinner','fa-spin'),400);
-}
+    // → window.gerarCodigoOS() em sdr-bundle (admin/Fase-E/render-dashboard.js)
 
-function decimalToDMS(decimal, isLat) {
-  const abs = Math.abs(decimal);
-  const deg = Math.floor(abs);
-  const minFloat = (abs - deg) * 60;
-  const min = Math.floor(minFloat);
-  const sec = ((minFloat - min) * 60).toFixed(1);
-  const dir = isLat
-    ? (decimal >= 0 ? 'N' : 'S')
-    : (decimal >= 0 ? 'E' : 'W');
-  return `${deg}°${String(min).padStart(2,'0')}'${String(sec).padStart(4,'0')}"${dir}`;
-}
+    // → window.decimalToDMS() em sdr-bundle (admin/Fase-E/render-dashboard.js)
 
-async function capturarGPS() {
-  const btn    = document.getElementById('btn-gps');
-  const status = document.getElementById('gps-status');
+    // → window.capturarGPS() em sdr-bundle (admin/Fase-E/render-dashboard.js)
 
-  // ── Diagnóstico preventivo ──────────────────────────────────────────────
-  // 1) Contexto não seguro (arquivo aberto via file://)
-  if (!window.isSecureContext) {
-    status.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#d97706"></i>
-      <b>GPS bloqueado pelo navegador.</b><br>
-      <span style="font-size:.8rem;line-height:1.5">
-        O arquivo está sendo aberto diretamente (<code>file://</code>), o que bloqueia
-        a geolocalização por segurança.<br>
-        <b>Solução:</b> Publique o app no Firebase Hosting ou acesse via
-        <code>http://localhost</code> com um servidor local.
-      </span>`;
-    return;
-  }
-  // 2) API ausente
-  if (!navigator.geolocation) {
-    status.innerHTML = `<i class="fas fa-times-circle" style="color:var(--danger)"></i>
-      <b>Geolocalização não suportada</b> neste navegador.`;
-    return;
-  }
+    // → window.buildServiceRows() em sdr-bundle (admin/Fase-E/form-os.js)
 
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refinando GPS...';
-  status.innerHTML = '<i class="fas fa-satellite-dish" style="color:var(--primary)"></i> Aguardando sinal GPS...';
+    // → window.preencherPreco() em sdr-bundle (admin/Fase-E/form-os.js)
 
-  const ACURACIA_ALVO = 5;   // metros — aceita quando atingir ≤5m
-  const TIMEOUT_MAX   = 15000; // 15s — desiste e usa o melhor disponível
-  let melhorPos = null;
-  let watchId   = null;
-  let timerMax  = null;
+    // → window.calcTotal() em sdr-bundle (admin/Fase-E/form-os.js)
 
-  const _finalizarGPS = async (pos) => {
-    clearTimeout(timerMax);
-    navigator.geolocation.clearWatch(watchId);
-
-    const lat = pos.coords.latitude.toFixed(7);
-    const lon = pos.coords.longitude.toFixed(7);
-    const acc = Math.round(pos.coords.accuracy);
-
-    document.getElementById('f-lat').value = lat;
-    document.getElementById('f-lon').value = lon;
-    const dms = `${decimalToDMS(parseFloat(lat), true)}  ${decimalToDMS(parseFloat(lon), false)}`;
-    document.getElementById('f-gps-dms').value = dms;
-    status.innerHTML = `<i class="fas fa-check-circle" style="color:var(--success)"></i> Posição capturada ±${acc}m. Buscando endereço...`;
-
-    try {
-      const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=pt-BR&addressdetails=1`, {headers:{'Accept-Language':'pt-BR'}});
-      const data = await res.json();
-      const addr = data.address || {};
-      const rua    = addr.road || addr.pedestrian || addr.footway || '';
-      const num    = addr.house_number || '';
-      const bairro = addr.suburb || addr.neighbourhood || '';
-      let ref = rua; if (num) ref += ', ' + num; if (bairro) ref += ' — ' + bairro;
-      if (ref) document.getElementById('f-referencia').value = ref;
-      const cidadeGPS = (addr.city || addr.town || addr.village || addr.municipality || '').toUpperCase().trim();
-      if (cidadeGPS) {
-        const sel = document.getElementById('f-cidade');
-        const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
-        const cidadeNorm = norm(cidadeGPS);
-        let found = false;
-        for (const opt of sel.options) {
-          if (opt.value && opt.value !== '_outro' && norm(opt.value) === cidadeNorm) { sel.value = opt.value; found = true; break; }
-        }
-        if (!found) {
-          for (const opt of sel.options) {
-            if (opt.value && opt.value !== '_outro') {
-              const ov = norm(opt.value);
-              if (cidadeNorm.includes(ov) || ov.includes(cidadeNorm)) { sel.value = opt.value; found = true; break; }
-            }
-          }
-        }
-        if (!found) {
-          sel.value = '_outro';
-          document.getElementById('grp-cidade-custom').style.display = 'block';
-          document.getElementById('f-cidade-custom').value = cidadeGPS;
-        } else {
-          document.getElementById('grp-cidade-custom').style.display = 'none';
-        }
-
-        // ── Validação de compatibilidade Profile × Cidade ───────────────
-        const profileSel   = document.getElementById('f-profile');
-        const profileAtual = (profileSel?.value || '').toUpperCase();
-        const cidadeSet    = (sel.value && sel.value !== '_outro') ? norm(sel.value) : cidadeNorm;
-
-        // Descobre em quais profiles a cidade detectada está cadastrada
-        const profilesDaCidade = Object.entries(profilesCidades)
-          .filter(([, cids]) => cids.some(c => norm(c) === cidadeSet || norm(c).includes(cidadeSet) || cidadeSet.includes(norm(c))))
-          .map(([p]) => p);
-
-        if (profilesDaCidade.length > 0 && profileAtual && !profilesDaCidade.includes(profileAtual)) {
-          // Divergência: cidade pertence a outro(s) profile(s)
-          const sugerido = profilesDaCidade.join(' ou ');
-          if (profileSel) {
-            profileSel.style.border = '2px solid #dc2626';
-            profileSel.style.background = '#fff1f1';
-            profileSel.title = `Cidade "${cidadeGPS}" pertence ao profile ${sugerido}`;
-          }
-          status.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#dc2626"></i>
-            <b style="color:#dc2626">Divergência de Profile!</b>
-            A cidade <b>${cidadeGPS}</b> está cadastrada em <b>${sugerido}</b>,
-            mas o profile selecionado é <b>${profileAtual}</b>.
-            <span style="color:#dc2626">(±${acc}m)</span>`;
-        } else {
-          // Sem divergência — limpa destaque se havia
-          if (profileSel) { profileSel.style.border = ''; profileSel.style.background = ''; profileSel.title = ''; }
-          status.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> Endereço preenchido! (±${acc}m)`;
-        }
-      } else {
-        status.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> Endereço preenchido! (±${acc}m)`;
-      }
-    } catch {
-      status.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:var(--secondary)"></i> Posição obtida, mas endereço não carregado.`;
-    }
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Recapturar GPS';
-  };
-
-  // Timeout máximo: usa o melhor sinal obtido até agora
-  timerMax = setTimeout(() => {
-    navigator.geolocation.clearWatch(watchId);
-    if (melhorPos) {
-      _finalizarGPS(melhorPos);
-    } else {
-      status.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:var(--secondary)"></i> Tempo esgotado sem sinal preciso.`;
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente';
-    }
-  }, TIMEOUT_MAX);
-
-  watchId = navigator.geolocation.watchPosition(pos => {
-    const acc = Math.round(pos.coords.accuracy);
-    // Guarda o melhor sinal recebido (menor acurácia = mais preciso)
-    if (!melhorPos || acc < Math.round(melhorPos.coords.accuracy)) melhorPos = pos;
-    status.innerHTML = `<i class="fas fa-satellite-dish" style="color:var(--primary)"></i> Refinando... ±${acc}m`;
-    // Aceita imediatamente se atingir a meta
-    if (acc <= ACURACIA_ALVO) _finalizarGPS(pos);
-  }, err => {
-    clearTimeout(timerMax);
-    navigator.geolocation.clearWatch(watchId);
-    const msgs = {
-      1: `<b>Permissão negada pelo navegador.</b><br>
-          <span style="font-size:.79rem">Clique no ícone de cadeado/câmera na barra de endereços e permita "Localização".</span>`,
-      2: `<b>Posição indisponível.</b><br>
-          <span style="font-size:.79rem">Em computadores, ative os <b>Serviços de Localização</b>:
-          Windows: <i>Configurações → Privacidade → Localização → Ativar</i>.
-          Mac: <i>Preferências → Segurança → Serviços de Localização → Ativar</i>.</span>`,
-      3: `<b>Tempo esgotado.</b><br>
-          <span style="font-size:.79rem">Verifique se os Serviços de Localização estão ativos e tente novamente.</span>`,
-    };
-    status.innerHTML = `<i class="fas fa-times-circle" style="color:var(--danger)"></i> ${msgs[err.code] || 'Erro ao obter localização.'}`;
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente';
-  }, {enableHighAccuracy: true, timeout: TIMEOUT_MAX, maximumAge: 0});
-}
-
-function buildServiceRows() {
-  const c=document.getElementById('servicos-rows'); if(!c)return;
-  c.innerHTML='';
-  for(let i=1;i<=5;i++){
-    const opts=SERVICOS.map(s=>`<option>${s}</option>`).join('');
-    c.innerHTML+=`<div class="service-row">
-      <select id="s-tipo-${i}" onchange="preencherPreco(${i})">
-        <option value="">-- ${i}º Serviço --</option>${opts}
-      </select>
-      <input type="number" id="s-qtd-${i}" placeholder="Qtde" min="0" step="1"
-        oninput="this.value=Math.floor(Math.abs(this.value))||'';calcTotal()">
-      <div style="position:relative">
-        <input type="number" id="s-val-${i}" placeholder="Sem preço" min="0" step="0.01"
-          style="background:#f0fdf4;padding-right:26px;width:100%" readonly
-          title="Valor da Tabela de Preços">
-        <i class="fas fa-lock" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.68rem;pointer-events:none"></i>
-      </div>
-    </div>`;
-  }
-}
-
-function preencherPreco(i){
-  const tipoEl = document.getElementById(`s-tipo-${i}`);
-  const vi = document.getElementById(`s-val-${i}`);
-  if (!tipoEl || !vi) return;
-  const tipo = tipoEl.value;
-  const pm = getActivePriceMap();
-  vi.value=(tipo&&pm&&pm[tipo]!==undefined)?pm[tipo]:'';
-  calcTotal();
-}
-
-function calcTotal(){
-  let t=0;
-  for(let i=1;i<=5;i++){
-    t+=(parseInt(document.getElementById(`s-qtd-${i}`)?.value)||0)*(parseFloat(document.getElementById(`s-val-${i}`)?.value)||0);
-  }
-  const el=document.getElementById('total-preview');
-  if(el)el.innerHTML=fmtMoeda(t);
-}
-
-function limparForm(){
-  const f=document.getElementById('form-os'); if(f)f.reset();
-  buildServiceRows();
-  atualizarCidadesPorProfile();
-  const tp=document.getElementById('total-preview'); if(tp)tp.textContent='R$ 0,00';
-  const gcc=document.getElementById('grp-cidade-custom'); if(gcc)gcc.style.display='none';
-  const dmsF=document.getElementById('f-gps-dms'); if(dmsF)dmsF.value='';
-  const gs=document.getElementById('gps-status');
-  if(gs)gs.innerHTML='<i class="fas fa-info-circle"></i> Clique em "Capturar localização" para preencher via GPS.';
-  const bg=document.getElementById('btn-gps');
-  if(bg){bg.disabled=false;bg.innerHTML='<i class="fas fa-map-marker-alt"></i> Capturar localização';}
-  const now=new Date();
-  const df=document.getElementById('f-data'); if(df)df.value=_dateLocalStr(now);
-  const hf=document.getElementById('f-hora'); if(hf)hf.value=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  removerFoto();
-  gerarCodigoOS();
-}
+    // → window.limparForm() em sdr-bundle (admin/Fase-E/form-os.js)
 
 // ════════════════════════════════════════════════════
 // FOTO — preview, compressão, limpeza
 // ════════════════════════════════════════════════════
 let fotoBase64 = null;
 
-function removerFoto() {
-  fotoBase64 = null;
-  const inp = document.getElementById('f-foto');
-  if (inp) inp.value = '';
-  const prev = document.getElementById('foto-preview');
-  if (prev) prev.src = '';
-  const wrap = document.getElementById('foto-preview-wrap');
-  if (wrap) wrap.style.display = 'none';
-}
+    // → window.removerFoto() em sdr-bundle (admin/Fase-E/form-os.js)
 
 // ════════════════════════════════════════════════════
 // ⑬ PREÇOS
 // ════════════════════════════════════════════════════
-function _inputPreco(s, nivel, map) {
-  const v = map[s] !== undefined ? map[s] : '';
-  return `<div style="position:relative;display:inline-flex;align-items:center">
-    <span style="position:absolute;left:6px;color:var(--muted);font-size:.75rem;pointer-events:none">R$</span>
-    <input type="number" data-servico="${s}" data-nivel="${nivel}" value="${v}" min="0" step="0.01" placeholder="0,00"
-      style="padding:5px 6px 5px 22px;width:110px;border:1px solid var(--border);border-radius:7px;font-size:.82rem;text-align:right"
-      oninput="atualizarPrecoMemoria(this)">
-  </div>`;
-}
+    // → window._inputPreco() em sdr-bundle (admin/Fase-E/form-os.js)
 
-function atualizarPrecoMemoria(el) {
-  const s   = el.getAttribute('data-servico');
-  const niv = el.getAttribute('data-nivel');
-  const v   = parseFloat(el.value) || 0;
-  if (niv === 'V1') precosV1map[s] = v;
-  else if (niv === 'V2') precosV2map[s] = v;
-  else if (niv === 'V4') precosV4map[s] = v;
-  else precosV3map[s] = v;
-}
+    // → window.atualizarPrecoMemoria() em sdr-bundle (admin/Fase-E/form-os.js)
 
 
 // ── Adicionar novo serviço ──
@@ -4304,59 +3454,9 @@ let _daMetrica = 'valor'; // 'valor' | 'os'
 let _daTab     = 'tec';   // 'tec' | 'svc' | 'cid' | 'rec'
 
 
-function confirmarDel(fbKey){
-  const mdm = document.getElementById('modal-del-msg');
-  if (mdm) mdm.textContent='Tem certeza que deseja excluir este registro? Esta ação não pode ser desfeita.';
-  const md = document.getElementById('modal-del');
-  if (md) md.classList.add('open');
-  const mok = document.getElementById('modal-del-ok');
-  if (mok) mok.onclick=async()=>{
-    await deletarOS(fbKey);fecharModal('modal-del');
-  };
-}
-function confirmarLimparTudo(){
-  // Identifica filtros ativos
-  const tecUid = document.getElementById('filter-tec')?.value || '';
-  const imp    = document.getElementById('filter-importado')?.value || '';
-  const tecNome = tecUid ? (usersCache[tecUid]?.name || tecUid) : '';
-
-  // Filtra os registros que serão excluídos (respeitando os filtros)
-  const aExcluir = allRecords.filter(r => {
-    if (tecUid && r.userId !== tecUid) return false;
-    if (imp === 'imp' && !r.importado) return false;
-    if (imp === 'nao' && r.importado) return false;
-    return true;
-  });
-
-  if (!aExcluir.length) { toast('Nenhum registro para excluir com os filtros atuais.', 'error'); return; }
-
-  // Monta mensagem descritiva
-  let msg = `Excluir ${aExcluir.length} registro(s)`;
-  if (tecNome) msg += ` de "${tecNome}"`;
-  if (imp === 'imp') msg += ' (somente importados)';
-  else if (imp === 'nao') msg += ' (somente lançados)';
-  else if (!tecUid) msg += ' de TODOS os técnicos';
-  msg += '?\n\nEssa ação não pode ser desfeita.';
-
-  const mdm2 = document.getElementById('modal-del-msg');
-  if (mdm2) mdm2.textContent = msg;
-  const md2 = document.getElementById('modal-del');
-  if (md2) md2.classList.add('open');
-  document.getElementById('modal-del-ok').onclick = async () => {
-    try {
-      const updates = {};
-      aExcluir.forEach(r => { if (r.fbKey) updates[r.fbKey] = null; });
-      await _dbUpdate('os', updates);
-      await carregarDados();
-      fecharModal('modal-del');
-      toast(`${aExcluir.length} registro(s) excluído(s).`, 'success');
-    } catch(e) {
-      console.error('[confirmarLimparTudo]', e);
-      toast('Erro ao excluir: ' + (e.message||e), 'error');
-    }
-  };
-}
-function fecharModal(id){const el = document.getElementById(id); if(el) el.classList.remove('open');}
+    // → window.confirmarDel() em sdr-bundle (admin/Fase-E/os-view.js)
+    // → window.confirmarLimparTudo() em sdr-bundle (admin/Fase-E/os-view.js)
+    // → window.fecharModal() em sdr-bundle (admin/Fase-E/ui-core.js)
 document.querySelectorAll('.modal-overlay').forEach(m=>{
   if(m) m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');});
 });
@@ -4364,65 +3464,17 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 // ════════════════════════════════════════════════════
 // ⑰ HELPERS
 // ════════════════════════════════════════════════════
-function screen(name){
-  document.getElementById('screen-loading').style.display='none';
-  document.getElementById('screen-setup').style.display='none';
-  document.getElementById('screen-login').style.display='none';
-  document.getElementById('screen-first-login').style.display='none';
-  document.getElementById('screen-app').style.display='none';
-  document.getElementById('screen-termo-pendente').style.display='none';
-  document.getElementById('screen-cadastro-empresa').style.display='none';
-  document.getElementById('screen-contrato-pendente').style.display='none';
-  if(name==='loading'){document.getElementById('screen-loading').style.display='flex';}
-  else if(name==='setup'){document.getElementById('screen-setup').style.display='flex';}
-  else if(name==='login'){document.getElementById('screen-login').style.display='flex'; initLoginScreen();}
-  else if(name==='first-login'){document.getElementById('screen-first-login').style.display='flex';}
-  else if(name==='app'){document.getElementById('screen-app').style.display='flex'; initSidebar();}
-  else if(name==='termo-pendente'){document.getElementById('screen-termo-pendente').style.display='flex';}
-  else if(name==='cadastro-empresa'){document.getElementById('screen-cadastro-empresa').style.display='flex';}
-  else if(name==='contrato-pendente'){document.getElementById('screen-contrato-pendente').style.display='flex';}
-}
+    // → window.screen() em sdr-bundle (admin/Fase-E/ui-core.js)
 // ── SIDEBAR TOGGLE ──────────────────────────────────
-function atualizarDados() {
-  const btn = document.getElementById('btn-atualizar');
-  if (!btn || btn.classList.contains('refreshing')) return;
-  btn.classList.add('refreshing');
-  btn.disabled = true;
-  // Reload completo da página — a sessão é mantida via sessionStorage
-  // e o auto-login restaura o usuário sem pedir senha
-  location.reload();
-}
+    // → window.atualizarDados() em sdr-bundle (admin/Fase-E/ui-core.js)
 
-function toggleSidebar() {
-  const sb = document.getElementById('sidebar');
-  const collapsed = sb.classList.toggle('collapsed');
-  try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '0'); } catch(_e) { console.warn('[toggleSidebar]', _e.message); }
-}
-function toggleValores() {
-  const oculto = document.body.classList.toggle('hide-money');
-  const btn = document.getElementById('btn-olho');
-  const ico = document.getElementById('icon-olho');
-  if (btn) btn.classList.toggle('aberto', !oculto);
-  if (ico) ico.className = oculto ? 'fas fa-eye-slash' : 'fas fa-eye';
-}
-function initSidebar() {
-  const sb = document.getElementById('sidebar');
-  if (!sb) return;
-  // Padrão: minimizada. Só expande se o usuário tiver explicitamente expandido antes.
-  const saved = localStorage.getItem('sb-collapsed');
-  const doCollapse = saved === null ? true : saved === '1';
-  if (doCollapse) sb.classList.add('collapsed');
-  else sb.classList.remove('collapsed');
-}
+    // → window.toggleSidebar() em sdr-bundle (admin/Fase-E/ui-core.js)
+    // → window.toggleValores() em sdr-bundle (admin/Fase-E/ui-core.js)
+    // → window.initSidebar() em sdr-bundle (admin/Fase-E/ui-core.js)
 
-function fmtMoeda(v){return '<span class="money-val">R$ '+(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>';}
-function fmtData(d){if(!d)return '—';const[y,m,di]=d.split('-');return `${di}/${m}/${y}`;}
-function toast(msg,type=''){
-  const wrap=document.getElementById('toast-wrap');
-  const el=document.createElement('div');el.className=`toast ${type}`;
-  el.innerHTML=`<i class="fas fa-${type==='success'?'check-circle':type==='error'?'exclamation-circle':'info-circle'}"></i> ${msg}`;
-  wrap.appendChild(el);setTimeout(()=>el.remove(),3500);
-}
+    // → window.fmtMoeda() em sdr-bundle (admin/Fase-E/ui-core.js)
+    // → window.fmtData() em sdr-bundle (admin/Fase-E/ui-core.js)
+    // → window.toast() em sdr-bundle (admin/Fase-E/ui-core.js)
 
 // cidade custom select
 const fCidadeEl = document.getElementById('f-cidade');
@@ -4433,29 +3485,9 @@ if (fCidadeEl) {
   });
 }
 
-function atualizarProfileSelect() {
-  const sel = document.getElementById('f-profile');
-  if (!sel) return;
-  const current = sel.value || 'FILIAL';
-  const profiles = Object.keys(profilesCidades);
-  sel.innerHTML = profiles.map(p => `<option value="${p}"${p===current?' selected':''}>${p}</option>`).join('');
-  atualizarCidadesPorProfile();
-}
+    // → window.atualizarProfileSelect() em sdr-bundle (admin/Fase-E/ui-core.js)
 
-function atualizarCidadesPorProfile() {
-  const profile = document.getElementById('f-profile')?.value || 'FILIAL';
-  const cidades = profilesCidades[profile] || FILIAL_CIDADES;
-  const sel = document.getElementById('f-cidade');
-  if (!sel) return;
-  const current = sel.value;
-  sel.innerHTML = '<option value="">-- Selecione --</option>'
-    + cidades.map(c => `<option value="${c}">${c}</option>`).join('')
-    + '<option value="_outro">Outra cidade...</option>';
-  // Tenta manter a seleção anterior se ainda existir
-  if (cidades.includes(current)) sel.value = current;
-  else sel.value = '';
-  document.getElementById('grp-cidade-custom').style.display = 'none';
-}
+    // → window.atualizarCidadesPorProfile() em sdr-bundle (admin/Fase-E/ui-core.js)
 
 // ════════════════════════════════════════════════════
 // ⑱ INIT
@@ -4685,23 +3717,7 @@ const SIMPLES_FAIXAS = [
   { limInf:3600000.01, limSup:4800000,    aliq:0.330, ded:648000,  irpj:0.350, csll:0.150, cofins:0.1603, pis:0.0347, cpp:0.305, iss:0.000 },
 ];
 
-function _simplesCalc(faturamento, rbt12) {
-  if (!faturamento || !rbt12) return null;
-  const faixa = SIMPLES_FAIXAS.find(f => rbt12 >= f.limInf && rbt12 <= f.limSup);
-  if (!faixa) return null;
-  const aliqEfetiva = (rbt12 * faixa.aliq - faixa.ded) / rbt12;
-  const r2 = (v) => Math.round(v * 100) / 100;
-  const irpj   = r2(faturamento * aliqEfetiva * faixa.irpj);
-  const csll   = r2(faturamento * aliqEfetiva * faixa.csll);
-  const cofins = r2(faturamento * aliqEfetiva * faixa.cofins);
-  const pis    = r2(faturamento * aliqEfetiva * faixa.pis);
-  const cpp    = r2(faturamento * aliqEfetiva * faixa.cpp);
-  const issRaw = faturamento * aliqEfetiva * faixa.iss;
-  const issCap = faturamento * 0.05;
-  const iss    = r2(Math.min(issRaw, issCap));
-  const total  = r2(irpj + csll + cofins + pis + cpp + iss);
-  return { aliqEfetiva, total, irpj, csll, cofins, pis, cpp, iss };
-}
+    // → window._simplesCalc() em sdr-bundle (admin/Fase-E/impostos.js)
 
 // faturamentos armazenados: { "2025-01": 1500, "2025-02": 2000, ... }
 let _impFaturamentos = {};
@@ -4728,132 +3744,10 @@ async function salvarFaturamentos() {
   renderImpostos();
 }
 
-function renderImpostos() {
-  const tbody = document.getElementById('imp-tbody');
-  const tfoot = document.getElementById('imp-tfoot');
-  const resumo = document.getElementById('imp-resumo');
-  if (!tbody) return;
-
-  const anoIni = parseInt(document.getElementById('imp-ano-ini')?.value || 2025);
-  const anos = [anoIni, anoIni + 1];
-  const mesesPt = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-
-  // Monta lista de todos os meses incluindo 12 anteriores para RBT12
-  const allMonths = [];
-  for (let y = anoIni - 1; y <= anoIni + 1; y++) {
-    for (let m = 1; m <= 12; m++) {
-      allMonths.push({ y, m, ym: `${y}-${String(m).padStart(2,'0')}` });
-    }
-  }
-
-  // Calcula RBT12 para cada mês
-  const rbt12Map = {};
-  allMonths.forEach((mo, idx) => {
-    let soma = 0;
-    for (let i = Math.max(0, idx - 11); i <= idx; i++) {
-      soma += _impFaturamentos[allMonths[i].ym] || 0;
-    }
-    rbt12Map[mo.ym] = soma;
-  });
-
-  // Formata moeda
-  const fmt = v => v.toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
-  const fmtPct = v => (v * 100).toFixed(2) + '%';
-
-  let rows = '';
-  let totFat = 0, totDas = 0, totIrpj = 0, totCsll = 0, totCofins = 0, totPis = 0, totCpp = 0, totIss = 0;
-  let anoAtual = null;
-
-  const exibirMonths = allMonths.filter(mo => anos.includes(mo.y));
-
-  exibirMonths.forEach((mo, idx) => {
-    if (mo.y !== anoAtual) {
-      anoAtual = mo.y;
-      rows += `<tr>
-        <td colspan="11" style="background:#dbeafe;color:#1e3a5f;font-weight:700;font-size:.8rem;padding:6px 10px;border-top:2px solid #93c5fd">
-          ▸ ${anoAtual}
-        </td>
-      </tr>`;
-    }
-
-    const fat = _impFaturamentos[mo.ym] || 0;
-    const rbt = rbt12Map[mo.ym] || 0;
-    const calc = fat > 0 ? _simplesCalc(fat, rbt) : null;
-    const bg = idx % 2 === 0 ? '#f8fafc' : '#fff';
-
-    totFat    += fat;
-    totDas    += calc?.total  || 0;
-    totIrpj   += calc?.irpj   || 0;
-    totCsll   += calc?.csll   || 0;
-    totCofins += calc?.cofins || 0;
-    totPis    += calc?.pis    || 0;
-    totCpp    += calc?.cpp    || 0;
-    totIss    += calc?.iss    || 0;
-
-    const tdStyle = `padding:7px 6px;border-bottom:1px solid #e2e8f0;text-align:right;background:${bg}`;
-    rows += `<tr>
-      <td style="${tdStyle};text-align:left;font-weight:600;white-space:nowrap">${mesesPt[mo.m-1]}/${mo.y}</td>
-      <td style="padding:4px 6px;border-bottom:1px solid #e2e8f0;background:#fefce8">
-        <input type="number" data-ym="${mo.ym}" value="${fat || ''}" placeholder="0,00"
-          min="0" step="0.01"
-          style="width:100%;border:1px solid #d1d5db;border-radius:5px;padding:5px 7px;font-size:.82rem;text-align:right;background:transparent"
-          onchange="impAtualizarLinha(this)">
-      </td>
-      <td style="${tdStyle}">${rbt > 0 ? fmt(rbt) : '—'}</td>
-      <td style="${tdStyle};color:${calc ? '#1f4e79' : '#94a3b8'};font-weight:600">${calc ? fmtPct(calc.aliqEfetiva) : '—'}</td>
-      <td style="${tdStyle};font-weight:700;color:${calc ? '#dc2626' : '#94a3b8'};background:${calc ? '#fef2f2' : bg}">${calc ? fmt(calc.total) : '—'}</td>
-      <td style="${tdStyle};font-size:.78rem">${calc ? fmt(calc.irpj)   : '—'}</td>
-      <td style="${tdStyle};font-size:.78rem">${calc ? fmt(calc.csll)   : '—'}</td>
-      <td style="${tdStyle};font-size:.78rem">${calc ? fmt(calc.cofins) : '—'}</td>
-      <td style="${tdStyle};font-size:.78rem">${calc ? fmt(calc.pis)    : '—'}</td>
-      <td style="${tdStyle};font-size:.78rem">${calc ? fmt(calc.cpp)    : '—'}</td>
-      <td style="${tdStyle};font-size:.78rem">${calc ? fmt(calc.iss)    : '—'}</td>
-    </tr>`;
-  });
-
-  tbody.innerHTML = rows;
-
-  // Rodapé total
-  tfoot.innerHTML = `<tr style="background:#1f3a6e;color:#fff;font-weight:700;font-size:.82rem">
-    <td style="padding:9px 10px">TOTAL</td>
-    <td style="padding:9px 6px;text-align:right">${fmt(totFat)}</td>
-    <td></td><td></td>
-    <td style="padding:9px 6px;text-align:right">${fmt(totDas)}</td>
-    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totIrpj)}</td>
-    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totCsll)}</td>
-    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totCofins)}</td>
-    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totPis)}</td>
-    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totCpp)}</td>
-    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totIss)}</td>
-  </tr>`;
-
-  // Cards resumo
-  const cards = [
-    { label:'Faturamento Total', val: fmt(totFat),  icon:'fa-money-bill-wave', color:'#1f4e79' },
-    { label:'Total DAS',         val: fmt(totDas),  icon:'fa-receipt',         color:'#dc2626' },
-    { label:'IRPJ',              val: fmt(totIrpj), icon:'fa-landmark',        color:'#7c3aed' },
-    { label:'CSLL',              val: fmt(totCsll), icon:'fa-university',      color:'#7c3aed' },
-    { label:'Cofins',            val: fmt(totCofins),icon:'fa-coins',          color:'#d97706' },
-    { label:'PIS/Pasep',         val: fmt(totPis),  icon:'fa-coins',           color:'#d97706' },
-    { label:'CPP',               val: fmt(totCpp),  icon:'fa-users',           color:'#059669' },
-    { label:'ISS',               val: fmt(totIss),  icon:'fa-city',            color:'#0891b2' },
-  ];
-  resumo.innerHTML = cards.map(c => `
-    <div class="card" style="padding:14px 16px;text-align:center">
-      <i class="fas ${c.icon}" style="font-size:1.3rem;color:${c.color};margin-bottom:6px"></i>
-      <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${c.label}</div>
-      <div style="font-size:.95rem;font-weight:700;color:${c.color}">R$ ${c.val}</div>
-    </div>`).join('');
-}
+    // → window.renderImpostos() em sdr-bundle (admin/Fase-E/impostos.js)
 
 // Atualiza linha ao mudar faturamento sem salvar no Firebase ainda
-function impAtualizarLinha(inp) {
-  const ym = inp.dataset.ym;
-  const val = parseFloat(inp.value.replace(',','.')) || 0;
-  if (val > 0) _impFaturamentos[ym] = val;
-  else delete _impFaturamentos[ym];
-  renderImpostos();
-}
+    // → window.impAtualizarLinha() em sdr-bundle (admin/Fase-E/impostos.js)
 
 // Chamada quando abre a página
 async function initImpostos() {
@@ -4920,35 +3814,7 @@ async function _renderContratosAssinados() {
 
 // ════════════════════════════════════════════════════
 // EXPORTAR DOCUMENTOS (Fiscal V0)
-function renderExportarDocsPage() {
-  const tecDiv = document.getElementById('exp-docs-tecnicos');
-  const tiposDiv = document.getElementById('exp-docs-tipos');
-  if (!tecDiv || !tiposDiv) return;
-  // Carrega contratos assinados (admin e fiscal)
-  if (_isAdmin(currentUser) || _isFiscal(currentUser)) _renderContratosAssinados().catch(e => console.error('[_renderContratosAssinados]', e));
-
-  const tecs = _segGetTecnicos();
-  tecDiv.innerHTML = tecs.map(t =>
-    `<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:.84rem;transition:background .15s">
-      <input type="checkbox" class="exp-doc-tec" value="${t.id}" style="width:18px;height:18px;accent-color:#2563eb">
-      <span style="font-weight:600">${t.nome}</span>
-    </label>`
-  ).join('');
-
-  // Documentos padrão + Ficha de EPI + Licenciamento
-  const tiposExtra = [
-    ...Object.entries(SEG_DOC_TIPOS).map(([tipo,info]) => ({tipo, nome:info.nome, icon:info.icon})),
-    {tipo:'fichaEpi', nome:'Ficha de EPI', icon:'fa-shield-alt'},
-    {tipo:'licenciamento', nome:'Licenciamento Veicular', icon:'fa-car'}
-  ];
-  tiposDiv.innerHTML = tiposExtra.map(t =>
-    `<label style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:#f8fafc;border-radius:8px;border:1px solid var(--border);cursor:pointer;font-size:.84rem">
-      <input type="checkbox" class="exp-doc-tipo" value="${t.tipo}" checked style="width:18px;height:18px;accent-color:#d97706">
-      <i class="fas ${t.icon}" style="color:#64748b"></i>
-      <span>${t.nome}</span>
-    </label>`
-  ).join('');
-}
+    // → window.renderExportarDocsPage() em sdr-bundle (admin/Fase-E/exportar-docs.js)
 
 async function gerarPdfExportDocs() {
   const empresa = document.getElementById('exp-docs-empresa').value.trim();
