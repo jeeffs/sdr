@@ -90,9 +90,15 @@ import './admin/ui-helpers.js';
 import './admin/auth.js';
 import './admin/seguranca.js';
 
-// Admin: navegação, OS, assinatura — Fase B
+// Admin: navegacao, OS, assinatura — Fase B
 import './admin/tecnicos.js';
 import './admin/os.js';
 import './admin/assinatura.js';
 
-console.log('[SDR Bundle] sdr-bundle.js v33.0 carregado — ... + bootstrap + admin/Fase-A + admin/Fase-B');
+// Admin: config, usuarios, exportar, financeiro — Fase C
+import './admin/config.js';
+import './admin/usuarios.js';
+import './admin/exportar.js';
+import './admin/financeiro.js';
+
+console.log('[SDR Bundle] sdr-bundle.js v34.0 carregado — ... + admin/Fase-C (config+usuarios+exportar+financeiro)');
