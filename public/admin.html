@@ -3545,11 +3545,20 @@ document.addEventListener('DOMContentLoaded', async function() {
   }
 
   if(result !== 'ok') {
-    localStorage.removeItem(CONFIG_KEY);
-    const setupEl = document.getElementById('screen-setup');
-    const pEl = setupEl ? setupEl.querySelector('p') : null;
-    if(pEl) pEl.textContent='Erro ao conectar ao Firebase. Verifique a configuração e tente novamente.';
-    appScreen('setup'); return;
+    // SDK falhou (WebSocket/long-polling bloqueado) — firebase.initializeApp JÁ rodou dentro de
+    // iniciarFirebase, então firebase.auth() está disponível. Fazemos login anônimo aqui e
+    // continuamos com REST API. Só abortamos se a própria autenticação falhar.
+    console.warn('[SDR] iniciarFirebase SDK retornou:', result, '— tentando auth anônimo + REST');
+    try {
+      if (!firebase.auth().currentUser) {
+        await firebase.auth().signInAnonymously();
+      }
+      console.log('[SDR] Login anônimo OK uid:', firebase.auth().currentUser.uid);
+    } catch(e) {
+      console.error('[SDR] Auth anônimo falhou:', e);
+      localStorage.removeItem(CONFIG_KEY);
+      appScreen('setup'); return;
+    }
   }
 
   try {
