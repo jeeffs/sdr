@@ -3503,7 +3503,7 @@ const FIREBASE_CONFIG_PRESET = {
 };
 
 (async()=>{
-  appScreen('loading');
+  // #screen-loading já visível por CSS (display:flex) — appScreen definida no bundle que carrega depois
   // Use saved config or preset config
   // Migração: se config salvo é do projeto antigo, descarta e usa o novo
   const saved=localStorage.getItem(CONFIG_KEY);
