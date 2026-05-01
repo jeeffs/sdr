@@ -1,9 +1,10 @@
-// Service Worker — Solução de Rua PWA v30
-// Estratégia: cache-first para assets estáticos, network-first para app shell
+// Service Worker — Solução de Rua PWA v35
+// Estratégia: cache-first para assets locais, network-first para app shell
 // Firebase RTDB usa WebSocket (não interceptável pelo SW) — offline tratado pelo keepSynced
+// CDN assets (Leaflet, xlsx, FA, etc.) NÃO são interceptados — o browser/HTTP cache cuida deles
 
-const CACHE_NAME  = 'sdr-v31';
-const CACHE_SHELL = 'sdr-shell-v30';
+const CACHE_NAME  = 'sdr-v35';
+const CACHE_SHELL = 'sdr-shell-v35';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
 const SHELL_ASSETS = [
@@ -21,21 +22,12 @@ const APP_ASSETS = [
     '/sdr-bundle.js'
 ];
 
-// CDN assets pré-cacheados no install para uso offline imediato
-const CDN_ASSETS = [
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/webfonts/fa-solid-900.woff2',
-    'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/webfonts/fa-regular-400.woff2',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-    'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css',
-    'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js'
-];
+// CDN assets NÃO são pré-cacheados pelo SW — o browser HTTP cache e os headers
+// de Cache-Control do CDN cuidam disso de forma mais confiável.
+// Motivo: fetch sem modo cors explícito retorna respostas opacas (status 0)
+// que não podem ser usadas para scripts e stylesheets com SRI.
 
-// CDN assets — cache-first (não mudam sem versão na URL)
+// Origens CDN — usadas APENAS para identificar e deixar passar (não interceptar)
 const CDN_ORIGINS = [
     'cdnjs.cloudflare.com',
     'unpkg.com',
@@ -60,16 +52,15 @@ async function cacheIndividual(cacheName, urls) {
     console.log(`[SDR SW] ${cacheName}: ${ok} ok, ${nok} falha(s)`);
 }
 
-// ── Install: pré-cacheia shell imediatamente ──────────────────────────────────
+// ── Install: pré-cacheia shell e app assets imediatamente ────────────────────
 self.addEventListener('install', event => {
-    console.log('[SDR SW] install — v30');
+    console.log('[SDR SW] install — v35');
     event.waitUntil(
         Promise.all([
             cacheIndividual(CACHE_SHELL, SHELL_ASSETS),
-            cacheIndividual(CACHE_NAME,  APP_ASSETS),
-            cacheIndividual(CACHE_NAME,  CDN_ASSETS)
+            cacheIndividual(CACHE_NAME,  APP_ASSETS)
         ]).then(() => {
-            console.log('[SDR SW] pré-cache concluído — shell + app + CDN');
+            console.log('[SDR SW] pré-cache concluído — shell + app (CDN via browser cache)');
             return self.skipWaiting();
         })
     );
@@ -104,10 +95,12 @@ self.addEventListener('fetch', event => {
         return;
     }
 
-    // CDN assets: cache-first (Font Awesome, Leaflet, xlsx, etc.)
+    // CDN assets (Font Awesome, Leaflet, xlsx, etc.): NÃO interceptar
+    // O browser HTTP cache e os headers Cache-Control do CDN cuidam disso.
+    // Interceptar causava respostas opacas (fetch sem cors explícito → status 0)
+    // que quebravam scripts e fontes, especialmente no Edge.
     if (CDN_ORIGINS.some(o => url.includes(o))) {
-        event.respondWith(cacheFirst(event.request, CACHE_NAME));
-        return;
+        return; // passa direto para a rede
     }
 
     // App assets (sdr-module.js, sdr-bundle.js): cache-first — atualizados pelo versão do SW

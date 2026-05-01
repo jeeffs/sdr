@@ -2830,15 +2830,6 @@ const _isMasterUid = uid => {
   return u?.role === 'master';
 };
 
-// ── Expor helpers globalmente para o bundle ──
-window._isAdmin            = _isAdmin;
-window._isV3Import         = _isV3Import;
-window._isFiscal           = _isFiscal;
-window._isObservador       = _isObservador;
-window._isMasterUid        = _isMasterUid;
-window._safeNivel          = _safeNivel;
-window._isImportadaConcluida = _isImportadaConcluida;
-
 // ════════════════════════════════════════════════════
 // ④ FIREBASE SETUP
 // ════════════════════════════════════════════════════
@@ -2963,7 +2954,39 @@ let _editFbKey = null;
 
     // → window.calcEditTotal() em sdr-bundle (admin/Fase-E/os-view.js)
 
-    // → window.salvarEdicaoOS() em sdr-bundle (admin/Fase-F/os-view.js)
+async function salvarEdicaoOS() {
+  try {
+    if (!_editFbKey) return;
+    const servicos = [];
+    for (let i = 1; i <= 5; i++) {
+      const tipo = (document.getElementById(`edit-s-tipo-${i}`)?.value || '').trim();
+      if (!tipo) continue;
+      const qtd  = parseInt(document.getElementById(`edit-s-qtd-${i}`)?.value) || 0;
+      const val  = parseFloat(document.getElementById(`edit-s-val-${i}`)?.value) || 0;
+      servicos.push({ tipo, qtd, valor: val, total: qtd * val });
+    }
+    if (!servicos.length) { toast('Adicione pelo menos 1 serviço.', 'error'); return; }
+    const total = servicos.reduce((s, x) => s + x.total, 0);
+    const updates = {
+      data:       document.getElementById('edit-data').value,
+      hora:       document.getElementById('edit-hora').value,
+      codigo_os:  document.getElementById('edit-codigo').value.trim(),
+      profile:    document.getElementById('edit-profile').value,
+      tipo:       document.getElementById('edit-tipo').value,
+      cto_ceo:    document.getElementById('edit-cto').value.trim(),
+      cidade:     document.getElementById('edit-cidade').value.trim(),
+      referencia: document.getElementById('edit-referencia').value.trim(),
+      servicos, total,
+    };
+    await _dbUpdate(`os/${_editFbKey}`, updates);
+    await carregarDados();
+    fecharModal('modal-edit-os');
+    toast('OS atualizada com sucesso!', 'success');
+  } catch(e) {
+    console.error('[salvarEdicaoOS]', e);
+    toast('Erro ao atualizar OS. Tente novamente.', 'error');
+  }
+}
 
 // ════════════════════════════════════════════════════
 // ⑪ DASHBOARD
@@ -3031,6 +3054,7 @@ let _pinCallbackPagina = null;
 // ATENÇÃO à diferença de formato:
 // - OS manual:    sv.valor = preço unitário,  sv.total = qtd × preço
 // - OS importada: sv.valor = qtd × preço (já é o total!), sv.total ausente
+let _precosHistoricoMes = null;
 // Extrai o PREÇO UNITÁRIO de um serviço, tratando a diferença manual vs importado
 
 
@@ -3440,7 +3464,7 @@ document.querySelectorAll('.modal-overlay').forEach(m=>{
 // ════════════════════════════════════════════════════
 // ⑰ HELPERS
 // ════════════════════════════════════════════════════
-    // → window.appScreen() em sdr-bundle (admin/Fase-E/ui-core.js)
+    // → window.screen() em sdr-bundle (admin/Fase-E/ui-core.js)
 // ── SIDEBAR TOGGLE ──────────────────────────────────
     // → window.atualizarDados() em sdr-bundle (admin/Fase-E/ui-core.js)
 
@@ -3478,6 +3502,88 @@ const FIREBASE_CONFIG_PRESET = {
   messagingSenderId: "887171396568",
   appId: "1:887171396568:web:2a54f4332f25f1300db8ad"
 };
+
+(async()=>{
+  screen('loading');
+  // Use saved config or preset config
+  // Migração: se config salvo é do projeto antigo, descarta e usa o novo
+  const saved=localStorage.getItem(CONFIG_KEY);
+  if(saved){
+    try{
+      const parsed=JSON.parse(saved);
+      if(parsed.projectId && parsed.projectId!=='solucaoderua'){
+        localStorage.removeItem(CONFIG_KEY);
+      } else {
+        FIREBASE_CONFIG=parsed;
+      }
+    }catch{localStorage.removeItem(CONFIG_KEY);}
+  }
+  if(!FIREBASE_CONFIG){
+    FIREBASE_CONFIG=FIREBASE_CONFIG_PRESET;
+    localStorage.setItem(CONFIG_KEY,JSON.stringify(FIREBASE_CONFIG));
+  }
+  const result = await iniciarFirebase(FIREBASE_CONFIG);
+
+  if(result === 'permission') {
+    // Firebase rules are blocking — show instructions
+    document.querySelector('#screen-loading .spinner').style.display='none';
+    document.getElementById('loading-msg').innerHTML =
+      '<div style="background:#fff;border:2px solid #f97316;border-radius:12px;padding:24px;max-width:460px;text-align:left;box-shadow:0 4px 20px rgba(0,0,0,.1)">' +
+      '<div style="font-size:1.1rem;font-weight:700;color:#ea580c;margin-bottom:12px">⚠️ Configuração necessária</div>' +
+      '<div style="font-size:.87rem;color:#374151;line-height:1.7">O Firebase está bloqueando o acesso.<br>Siga os passos abaixo <b>uma única vez</b>:</div>' +
+      '<ol style="font-size:.84rem;color:#374151;line-height:2;margin:14px 0 14px 18px;padding:0">' +
+      '<li>Abra <a href="https://console.firebase.google.com" target="_blank" style="color:#2563eb;font-weight:600">console.firebase.google.com</a></li>' +
+      '<li>Selecione o projeto <b>solucaoderua</b></li>' +
+      '<li>Menu esquerdo: <b>Build → Realtime Database</b></li>' +
+      '<li>Clique na aba <b>Regras</b></li>' +
+      '<li>Substitua todo o conteúdo por:<br>' +
+      '<code style="display:block;background:#f1f5f9;padding:8px;border-radius:6px;font-size:.8rem;margin-top:4px">{ "rules": { ".read": "auth != null", ".write": "auth != null" } }</code></li>' +
+      '<li>Clique em <b>Publicar</b></li>' +
+      '</ol>' +
+      '<button onclick="location.reload()" style="background:#2563eb;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:.9rem;cursor:pointer;font-weight:600;width:100%">🔄 Tentar novamente</button>' +
+      '</div>';
+    return;
+  }
+
+  if(result !== 'ok') {
+    localStorage.removeItem(CONFIG_KEY);
+    const setupEl = document.getElementById('screen-setup');
+    const pEl = setupEl ? setupEl.querySelector('p') : null;
+    if(pEl) pEl.textContent='Erro ao conectar ao Firebase. Verifique a configuração e tente novamente.';
+    screen('setup'); return;
+  }
+
+  try {
+    await garantirUsuarios();
+    await garantirPrecos();
+    await _carregarConfig();
+
+    // Impersonate via URL: ?loginComo=uid (master entra como outro usuário)
+    const _urlParams = new URLSearchParams(window.location.search);
+    const _loginComoUid = _urlParams.get('loginComo');
+    if (_loginComoUid && usersCache[_loginComoUid] && usersCache[_loginComoUid].ativo !== false) {
+      // Limpa o parâmetro da URL sem reload (não fica exposto na barra)
+      history.replaceState({}, '', window.location.pathname);
+      const _lcu = usersCache[_loginComoUid];
+      await loginSuccess({ id: _loginComoUid, name: _lcu.name, role: _lcu.role, nivel: _lcu.nivel || 'V1' });
+      return;
+    }
+
+    // Auto-login: se há sessão ativa (reload/F5), restaura sem pedir senha
+    const _sessaoUid = sessionStorage.getItem('srua_sessao_uid');
+    if (_sessaoUid && usersCache[_sessaoUid] && usersCache[_sessaoUid].ativo !== false) {
+      const _su = usersCache[_sessaoUid];
+      await loginSuccess({ id: _sessaoUid, name: _su.name, role: _su.role, nivel: _su.nivel || 'V1' });
+    } else {
+      screen('login');
+    }
+  } catch(e) {
+    console.error('Erro na inicialização:', e);
+    document.querySelector('#screen-loading .spinner').style.display='none';
+    document.getElementById('loading-msg').textContent = 'Erro inesperado: ' + (e.message || e);
+    document.getElementById('loading-msg').style.cssText = 'color:#dc2626;font-size:.85rem;padding:12px;background:#fef2f2;border-radius:8px;border:1px solid #fca5a5;margin-top:12px';
+  }
+})();
 
 // ═══════════════════════════════════════════════════════════════
 // SEGURANÇA — Documentos, EPI, Inventário, Veículo
@@ -3616,9 +3722,27 @@ const SIMPLES_FAIXAS = [
 // faturamentos armazenados: { "2025-01": 1500, "2025-02": 2000, ... }
 let _impFaturamentos = {};
 
-    // → window._impCarregar() em sdr-bundle (admin/Fase-F/impostos.js)
+async function _impCarregar() {
+  try {
+    const snap = await db.ref('impostos_mensais/faturamentos').once('value');
+    _impFaturamentos = snap.val() || {};
+  } catch(e) { _impFaturamentos = {}; }
+}
 
-    // → window.salvarFaturamentos() em sdr-bundle (admin/Fase-F/impostos.js)
+async function salvarFaturamentos() {
+  // Coleta valores da tabela
+  document.querySelectorAll('#imp-tbody input[data-ym]').forEach(inp => {
+    const ym = inp.dataset.ym;
+    const val = parseFloat(inp.value.replace(',','.')) || 0;
+    if (val > 0) _impFaturamentos[ym] = val;
+    else delete _impFaturamentos[ym];
+  });
+  try {
+    await db.ref('impostos_mensais/faturamentos').set(_impFaturamentos);
+    toast('Faturamentos salvos!', 'success');
+  } catch(e) { toast('Erro ao salvar: ' + e.message, 'error'); }
+  renderImpostos();
+}
 
     // → window.renderImpostos() em sdr-bundle (admin/Fase-E/impostos.js)
 
@@ -3626,16 +3750,206 @@ let _impFaturamentos = {};
     // → window.impAtualizarLinha() em sdr-bundle (admin/Fase-E/impostos.js)
 
 // Chamada quando abre a página
-    // → window.initImpostos() em sdr-bundle (admin/Fase-F/impostos.js)
+async function initImpostos() {
+  await _impCarregar();
+  renderImpostos();
+}
 
 // 7. Admin: lista de contratos assinados (para renderExportarDocsPage)
-    // → window._renderContratosAssinados() em sdr-bundle (admin/Fase-F/exportar-docs.js)
+async function _renderContratosAssinados() {
+  const el = document.getElementById('exp-contratos-assinados');
+  if (!el) return;
+  el.innerHTML = '<div style="font-size:.84rem;color:var(--muted)"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>';
+  try {
+    const snap = await db.ref('contratos').once('value');
+    const todos = snap.val() || {};
+    const contratos = Object.entries(todos)
+      .map(([uid, c]) => ({ uid, ...(c.prestacaoServicos||{}) }))
+      .filter(c => c.status)
+      .sort((a,b) => {
+        // Assinados primeiro, depois pendentes
+        if (a.status === 'assinado' && b.status !== 'assinado') return -1;
+        if (a.status !== 'assinado' && b.status === 'assinado') return 1;
+        return (b.assinadoEm||b.geradoEm||'').localeCompare(a.assinadoEm||a.geradoEm||'');
+      });
+    if (!contratos.length) {
+      el.innerHTML = '<p style="color:var(--muted);font-size:.84rem">Nenhum contrato encontrado.</p>'; return;
+    }
+    const thS = 'padding:8px 10px;font-size:.77rem;font-weight:700;white-space:nowrap';
+    const tdS = 'padding:7px 10px;font-size:.82rem;border-bottom:1px solid #e5e7eb';
+    el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+      <thead style="background:#1f4e79;color:#fff"><tr>
+        <th style="${thS}">Prestador</th>
+        <th style="${thS}">Status</th>
+        <th style="${thS}">Data</th>
+        <th style="${thS};text-align:center">Contrato</th>
+      </tr></thead>
+      <tbody>${contratos.map((c,i) => {
+        const u = usersCache[c.uid];
+        const nome = u?.name || c.uid;
+        const assinado = c.status === 'assinado';
+        const dt = assinado
+          ? (c.assinadoEm ? new Date(c.assinadoEm).toLocaleDateString('pt-BR') : '—')
+          : (c.geradoEm ? new Date(c.geradoEm).toLocaleDateString('pt-BR') : '—');
+        const statusBadge = assinado
+          ? '<span style="font-size:.7rem;background:#dcfce7;color:#15803d;padding:2px 7px;border-radius:8px;font-weight:700">Assinado</span>'
+          : '<span style="font-size:.7rem;background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:8px;font-weight:700">Pendente</span>';
+        return `<tr style="background:${assinado ? (i%2===0?'#f0fdf4':'#fff') : (i%2===0?'#fffbeb':'#fff')}">
+          <td style="${tdS};font-weight:600">${nome}</td>
+          <td style="${tdS}">${statusBadge}</td>
+          <td style="${tdS}">${dt}</td>
+          <td style="${tdS};text-align:center">
+            <button onclick="gerarContratoServicos('${c.uid}','${c.hash||''}')"
+              style="background:#1f4e79;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:.72rem;cursor:pointer">
+              <i class="fas fa-file-contract"></i> Ver
+            </button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
+  } catch(e) {
+    el.innerHTML = '<p style="color:#dc2626;font-size:.84rem">Erro ao carregar contratos.</p>';
+  }
+}
 
 // ════════════════════════════════════════════════════
 // EXPORTAR DOCUMENTOS (Fiscal V0)
     // → window.renderExportarDocsPage() em sdr-bundle (admin/Fase-E/exportar-docs.js)
 
-    // → window.gerarPdfExportDocs() em sdr-bundle (admin/Fase-F/exportar-docs.js)
+async function gerarPdfExportDocs() {
+  const empresa = document.getElementById('exp-docs-empresa').value.trim();
+  if (!empresa) { toast('Informe o nome da empresa solicitante.','error'); return; }
+
+  const tecsSelecionados = [...document.querySelectorAll('.exp-doc-tec:checked')].map(c => c.value);
+  if (tecsSelecionados.length === 0) { toast('Selecione pelo menos um técnico.','error'); return; }
+
+  const tiposSelecionados = [...document.querySelectorAll('.exp-doc-tipo:checked')].map(c => c.value);
+  if (tiposSelecionados.length === 0) { toast('Selecione pelo menos um tipo de documento.','error'); return; }
+
+  toast('Gerando PDF...','success');
+
+  // Coleta dados de todos os técnicos selecionados
+  const dadosTecs = [];
+  for (const uid of tecsSelecionados) {
+    const u = usersCache[uid] || {};
+    let docs = {};
+    try { const s = await db.ref(`seguranca/${uid}/documentos`).once('value'); docs = s.val() || {}; } catch(_){}
+    const docsIncluidos = [];
+    for (const tipo of tiposSelecionados) {
+      const d = docs[tipo];
+      const info = SEG_DOC_TIPOS[tipo];
+      const st = d?.validade ? _segStatusDoc(d.validade) : null;
+      docsIncluidos.push({
+        tipo, nome: info.nome, descricao: info.descricao,
+        temDoc: !!d, validade: d?.validade || null,
+        status: st ? st.texto : 'Não enviado',
+        statusCor: st ? st.cor : '#94a3b8',
+        arquivo: d?.arquivo || null,
+        nomeArquivo: d?.nomeArquivo || null
+      });
+    }
+    dadosTecs.push({uid, nome: u.name||uid, nivel: u.nivel||'V1', empresa: u.empresa || {}, docs: docsIncluidos});
+  }
+
+  const hoje = new Date();
+  const dataFormatada = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
+
+  // Gera HTML para impressão como PDF
+  let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      @page{size:A4;margin:20mm 15mm}
+      body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#1e293b;line-height:1.5}
+      .capa{text-align:center;padding-top:80px;page-break-after:always}
+      .capa h1{font-size:22pt;color:#1e40af;margin-bottom:8px}
+      .capa h2{font-size:14pt;color:#475569;font-weight:400;margin-bottom:40px}
+      .capa .info{font-size:11pt;color:#64748b;margin-top:30px}
+      .capa .info strong{color:#1e293b}
+      .tec-header{background:#1e40af;color:#fff;padding:12px 18px;border-radius:8px 8px 0 0;font-size:13pt;font-weight:700;page-break-before:always}
+      .tec-header:first-of-type{page-break-before:auto}
+      .tec-info{background:#f1f5f9;padding:12px 18px;border:1px solid #e2e8f0;margin-bottom:16px;font-size:10pt}
+      table{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:10pt}
+      th{background:#f1f5f9;text-align:left;padding:8px 10px;border:1px solid #e2e8f0;font-weight:700}
+      td{padding:8px 10px;border:1px solid #e2e8f0}
+      .status-ok{color:#059669;font-weight:600}
+      .status-warn{color:#d97706;font-weight:600}
+      .status-bad{color:#dc2626;font-weight:600}
+      .status-na{color:#94a3b8}
+      .doc-img{max-width:100%;max-height:700px;margin:10px 0;border:1px solid #e2e8f0;border-radius:4px}
+      .footer{text-align:center;font-size:8pt;color:#94a3b8;margin-top:40px;border-top:1px solid #e2e8f0;padding-top:8px}
+      @media print{.no-print{display:none}}
+    </style></head><body>`;
+
+  // -- Capa --
+  html += `<div class="capa">
+    <h1>Documentos de Segurança</h1>
+    <h2>Prestadores de Serviços</h2>
+    <div style="width:80px;height:4px;background:#1e40af;margin:30px auto"></div>
+    <div class="info" style="margin-top:50px">
+      <p><strong>Empresa Solicitante:</strong> ${empresa}</p>
+      <p><strong>Data de Emissão:</strong> ${dataFormatada}</p>
+      <p><strong>Quantidade de Prestadores:</strong> ${dadosTecs.length}</p>
+      <p><strong>Documentos Incluídos:</strong> ${tiposSelecionados.map(t=>SEG_DOC_TIPOS[t].nome).join(', ')}</p>
+    </div>
+    <div style="margin-top:60px;font-size:10pt;color:#94a3b8">
+      <p>Emitido por: ${currentUser?.name || 'Gestão'} — J. A. Logística & Transportes</p>
+    </div>
+  </div>`;
+
+  // -- Índice --
+  html += `<div style="page-break-after:always">
+    <h2 style="color:#1e40af;border-bottom:2px solid #1e40af;padding-bottom:6px;margin-bottom:16px">Índice de Prestadores</h2>
+    <table><thead><tr><th>#</th><th>Prestador</th><th>CNPJ / Razão Social</th><th>Documentos</th></tr></thead><tbody>`;
+  dadosTecs.forEach((t,i) => {
+    const docsOk = t.docs.filter(d=>d.temDoc).length;
+    html += `<tr><td>${i+1}</td><td><strong>${t.nome}</strong></td><td>${t.empresa.razaoSocial||'—'}<br><small>${t.empresa.cnpj||''}</small></td><td>${docsOk}/${t.docs.length}</td></tr>`;
+  });
+  html += '</tbody></table></div>';
+
+  // -- Detalhe de cada técnico --
+  dadosTecs.forEach((tec, idx) => {
+    html += `<div class="tec-header">${idx+1}. ${tec.nome}</div>`;
+    html += `<div class="tec-info">`;
+    if (tec.empresa.razaoSocial) html += `<strong>Razão Social:</strong> ${tec.empresa.razaoSocial}<br>`;
+    if (tec.empresa.cnpj) html += `<strong>CNPJ:</strong> ${tec.empresa.cnpj}<br>`;
+    if (tec.empresa.endereco) html += `<strong>Endereço:</strong> ${tec.empresa.endereco}<br>`;
+    if (tec.empresa.telefone) html += `<strong>Telefone:</strong> ${tec.empresa.telefone}`;
+    html += `</div>`;
+
+    html += `<table><thead><tr><th>Documento</th><th>Status</th><th>Validade</th><th>Arquivo</th></tr></thead><tbody>`;
+    tec.docs.forEach(d => {
+      const stClass = d.statusCor==='#059669'?'status-ok':d.statusCor==='#d97706'?'status-warn':d.statusCor==='#dc2626'?'status-bad':'status-na';
+      const valFormatada = d.validade ? new Date(d.validade+'T00:00:00').toLocaleDateString('pt-BR') : '—';
+      html += `<tr><td><strong>${d.nome}</strong></td><td class="${stClass}">${d.status}</td><td>${valFormatada}</td><td>${d.temDoc?'✔ Anexado':'✖ Não enviado'}</td></tr>`;
+    });
+    html += '</tbody></table>';
+
+    // Inclui imagens dos documentos (apenas JPG/PNG)
+    tec.docs.forEach(d => {
+      if (d.arquivo && d.arquivo.startsWith('data:image')) {
+        html += `<div style="margin-bottom:16px"><p style="font-weight:700;font-size:10pt;color:#475569;margin-bottom:6px">${d.nome} — ${tec.nome}</p><img class="doc-img" src="${d.arquivo}"></div>`;
+      } else if (d.arquivo && d.arquivo.startsWith('data:application/pdf')) {
+        html += `<div style="margin-bottom:16px;padding:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px"><p style="font-weight:700;font-size:10pt;color:#475569"><i>📄 ${d.nome}</i> — Arquivo PDF: ${d.nomeArquivo||'documento.pdf'}</p><p style="font-size:9pt;color:#94a3b8">Arquivo PDF não pode ser visualizado inline. Documento disponível no sistema.</p></div>`;
+      }
+    });
+  });
+
+  // -- Rodapé --
+  html += `<div class="footer">
+    <p>Documento gerado automaticamente pelo sistema Solução de Rua — J. A. Logística & Transportes</p>
+    <p>${dataFormatada} — Este documento tem caráter informativo e não substitui os originais.</p>
+  </div>`;
+
+  html += `<div class="no-print" style="text-align:center;margin:30px 0">
+    <button onclick="window.print()" style="background:#1e40af;color:#fff;border:none;border-radius:8px;padding:12px 28px;font-size:.9rem;font-weight:700;cursor:pointer">
+      <i class="fas fa-print" style="margin-right:6px"></i> Imprimir / Salvar como PDF
+    </button>
+  </div></body></html>`;
+
+  // Abre em nova aba para impressão
+  const w = window.open('', '_blank');
+  if (w) { w.document.write(html); w.document.close(); }
+  else toast('Pop-up bloqueado. Permita pop-ups para gerar o PDF.','error');
+}
 </script>
 <!-- SDR Bundle: modulos ES compilados pelo Vite — carrega ANTES do legado -->
 <script src="sdr-bundle.js"></script>
@@ -3680,92 +3994,6 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('offline', _atualizarBanner);
   _atualizarBanner(); // verifica estado inicial (útil em reload offline)
 })();
-
-// ════════════════════════════════════════════════════
-// ⑱ INIT — executado após sdr-bundle.js carregar
-// ════════════════════════════════════════════════════
-(async()=>{
-  appScreen('loading');
-  // Use saved config or preset config
-  // Migração: se config salvo é do projeto antigo, descarta e usa o novo
-  const saved=localStorage.getItem(CONFIG_KEY);
-  if(saved){
-    try{
-      const parsed=JSON.parse(saved);
-      if(parsed.projectId && parsed.projectId!=='solucaoderua'){
-        localStorage.removeItem(CONFIG_KEY);
-      } else {
-        FIREBASE_CONFIG=parsed;
-      }
-    }catch{localStorage.removeItem(CONFIG_KEY);}
-  }
-  if(!FIREBASE_CONFIG){
-    FIREBASE_CONFIG=FIREBASE_CONFIG_PRESET;
-    localStorage.setItem(CONFIG_KEY,JSON.stringify(FIREBASE_CONFIG));
-  }
-  const result = await iniciarFirebase(FIREBASE_CONFIG);
-
-  if(result === 'permission') {
-    // Firebase rules are blocking — show instructions
-    document.querySelector('#screen-loading .spinner').style.display='none';
-    document.getElementById('loading-msg').innerHTML =
-      '<div style="background:#fff;border:2px solid #f97316;border-radius:12px;padding:24px;max-width:460px;text-align:left;box-shadow:0 4px 20px rgba(0,0,0,.1)">' +
-      '<div style="font-size:1.1rem;font-weight:700;color:#ea580c;margin-bottom:12px">⚠️ Configuração necessária</div>' +
-      '<div style="font-size:.87rem;color:#374151;line-height:1.7">O Firebase está bloqueando o acesso.<br>Siga os passos abaixo <b>uma única vez</b>:</div>' +
-      '<ol style="font-size:.84rem;color:#374151;line-height:2;margin:14px 0 14px 18px;padding:0">' +
-      '<li>Abra <a href="https://console.firebase.google.com" target="_blank" style="color:#2563eb;font-weight:600">console.firebase.google.com</a></li>' +
-      '<li>Selecione o projeto <b>solucaoderua</b></li>' +
-      '<li>Menu esquerdo: <b>Build → Realtime Database</b></li>' +
-      '<li>Clique na aba <b>Regras</b></li>' +
-      '<li>Substitua todo o conteúdo por:<br>' +
-      '<code style="display:block;background:#f1f5f9;padding:8px;border-radius:6px;font-size:.8rem;margin-top:4px">{ "rules": { ".read": "auth != null", ".write": "auth != null" } }</code></li>' +
-      '<li>Clique em <b>Publicar</b></li>' +
-      '</ol>' +
-      '<button onclick="location.reload()" style="background:#2563eb;color:#fff;border:none;padding:10px 24px;border-radius:8px;font-size:.9rem;cursor:pointer;font-weight:600;width:100%">🔄 Tentar novamente</button>' +
-      '</div>';
-    return;
-  }
-
-  if(result !== 'ok') {
-    localStorage.removeItem(CONFIG_KEY);
-    const setupEl = document.getElementById('screen-setup');
-    const pEl = setupEl ? setupEl.querySelector('p') : null;
-    if(pEl) pEl.textContent='Erro ao conectar ao Firebase. Verifique a configuração e tente novamente.';
-    appScreen('setup'); return;
-  }
-
-  try {
-    await garantirUsuarios();
-    await garantirPrecos();
-    await _carregarConfig();
-
-    // Impersonate via URL: ?loginComo=uid (master entra como outro usuário)
-    const _urlParams = new URLSearchParams(window.location.search);
-    const _loginComoUid = _urlParams.get('loginComo');
-    if (_loginComoUid && usersCache[_loginComoUid] && usersCache[_loginComoUid].ativo !== false) {
-      // Limpa o parâmetro da URL sem reload (não fica exposto na barra)
-      history.replaceState({}, '', window.location.pathname);
-      const _lcu = usersCache[_loginComoUid];
-      await loginSuccess({ id: _loginComoUid, name: _lcu.name, role: _lcu.role, nivel: _lcu.nivel || 'V1' });
-      return;
-    }
-
-    // Auto-login: se há sessão ativa (reload/F5), restaura sem pedir senha
-    const _sessaoUid = sessionStorage.getItem('srua_sessao_uid');
-    if (_sessaoUid && usersCache[_sessaoUid] && usersCache[_sessaoUid].ativo !== false) {
-      const _su = usersCache[_sessaoUid];
-      await loginSuccess({ id: _sessaoUid, name: _su.name, role: _su.role, nivel: _su.nivel || 'V1' });
-    } else {
-      appScreen('login');
-    }
-  } catch(e) {
-    console.error('Erro na inicialização:', e);
-    document.querySelector('#screen-loading .spinner').style.display='none';
-    document.getElementById('loading-msg').textContent = 'Erro inesperado: ' + (e.message || e);
-    document.getElementById('loading-msg').style.cssText = 'color:#dc2626;font-size:.85rem;padding:12px;background:#fef2f2;border-radius:8px;border:1px solid #fca5a5;margin-top:12px';
-  }
-})();
-
 </script>
 </body>
 </html>

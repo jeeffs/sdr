@@ -1299,24 +1299,3 @@ async function apagarPlanilhaImportada(userId, mesAno, profile, tipo) {
     toast('Erro ao apagar planilha: ' + e.message, 'error');
   }
 }
-// ── Window bridge ──
-window.previewImport = previewImport;
-window.executarImport = executarImport;
-window.confirmarApagarImportados = confirmarApagarImportados;
-window._parsearNomeArquivo = _parsearNomeArquivo;
-window._detectarNivelPath = _detectarNivelPath;
-window._detectarNivelPorPrecos = _detectarNivelPorPrecos;
-window._detectarMesAnoPath = _detectarMesAnoPath;
-window._matchUser = _matchUser;
-window._carregarValoresPlanilha = _carregarValoresPlanilha;
-window._getValorPlanilha = _getValorPlanilha;
-window._salvarValorPlanilha = _salvarValorPlanilha;
-window._toggleValorPlanilhaEdit = _toggleValorPlanilhaEdit;
-window._salvarVPFromPanel = _salvarVPFromPanel;
-window.renderImportarPage = renderImportarPage;
-window._atualizarRefBadges = _atualizarRefBadges;
-window.apagarImportados = apagarImportados;
-window.confirmarApagarGrupo = confirmarApagarGrupo;
-window.apagarGrupoImportado = apagarGrupoImportado;
-window.confirmarApagarPlanilha = confirmarApagarPlanilha;
-window.apagarPlanilhaImportada = apagarPlanilhaImportada;

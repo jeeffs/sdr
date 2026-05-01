@@ -122,8 +122,8 @@ window.sdrDashRedeRender = window.sdrDashRedeRender || function() {};
 // INICIALIZAÇÃO DO TENANT DEFAULT
 // ════════════════════════════════════════════════════
 
-// Criar tenant padrão se não existir (aguarda db inicializar)
-if (window.db) sdrRef('info').once('value').then(snap => {
+// Criar tenant padrão se não existir
+sdrRef('info').once('value').then(snap => {
   if (!snap.exists()) {
     sdrRef('info').set({
       name: 'Meu Provedor',
@@ -322,6 +322,7 @@ window._sdrHtml_tickets = window._sdrHtml_tickets || function() { return ''; };
 // sdrClientesFiltrar — sobrescrita por src/ui/index.js (bundle)
 window.sdrClientesFiltrar = window.sdrClientesFiltrar || function() {};
 // CSS das paginas SDR
+)();
 
 // ============================================================
 // MK SOLUTIONS — Página de Configuração e Integração

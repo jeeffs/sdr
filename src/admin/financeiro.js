@@ -68,7 +68,7 @@ async function verificarTermosPendentes() {
     '| aguardandoMaster:', aguardandoMaster.length);
   if (paraAssinar.length === 0 && aguardandoMaster.length === 0) return false;
   renderTermosPendentes(paraAssinar, aguardandoMaster);
-  appScreen('termo-pendente');
+  screen('termo-pendente');
   return true;
 }
 
@@ -313,7 +313,7 @@ async function aceitarTermoAbatimento(fbKey) {
     // Re-verifica se ainda há termos pendentes
     const temPendente = await verificarTermosPendentes();
     if (!temPendente) {
-      appScreen('app');
+      screen('app');
       showPage(_isAdmin(currentUser) ? 'dashboard' : 'meu-dash');
     }
   } catch(e) {
@@ -330,7 +330,7 @@ async function verificarAtualizacaoTermos() {
     await carregarDescontosTec(currentUser.id);
     const temPendente = await verificarTermosPendentes();
     if (!temPendente) {
-      appScreen('app');
+      screen('app');
       showPage(_isAdmin(currentUser) ? 'dashboard' : 'meu-dash');
       toast('Acesso liberado!', 'success');
     }
@@ -1335,22 +1335,3 @@ async function adicionarDescontoFin() {
     if (btn) { btn.disabled = false; btn.innerHTML = btnOrigHtml; }
   }
 }
-// ── Window bridge ──
-window.verificarTermosPendentes = verificarTermosPendentes;
-window.finMudarMes = finMudarMes;
-window.adicionarDescontoFin = adicionarDescontoFin;
-window.renderFinanceiro = renderFinanceiro;
-window.carregarDescontos       = carregarDescontos;
-window.carregarDescontosTec    = carregarDescontosTec;
-window.renderTermosPendentes   = renderTermosPendentes;
-window.aceitarTermoAbatimento  = aceitarTermoAbatimento;
-window.verificarAtualizacaoTermos = verificarAtualizacaoTermos;
-window.renderDescontosLista    = renderDescontosLista;
-window.removerDesconto         = removerDesconto;
-window.renderFinanceiro        = renderFinanceiro;
-window.exportarCardTecnico     = exportarCardTecnico;
-window._mesLocalStr = _mesLocalStr;
-window._dateLocalStr = _dateLocalStr;
-window._finParcLabel = _finParcLabel;
-window._renderFinDescontos = _renderFinDescontos;
-window.calcJeffersonV1 = calcJeffersonV1;

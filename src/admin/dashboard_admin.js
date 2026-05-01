@@ -2101,29 +2101,3 @@ function renderDashboardAnual() {
   // ── Conteúdo da tab ──
   _renderDaTabContent(rec);
 }
-// ── Window bridge ──
-window._batchFixServicos = _batchFixServicos;
-window.renderObservadorRegs = renderObservadorRegs;
-window.renderFiscalizacao = renderFiscalizacao;
-window.renderInventarioFiscal = renderInventarioFiscal;
-window.mudarAnoAnual = mudarAnoAnual;
-window.daToggleMetrica = daToggleMetrica;
-window.daShowTab = daShowTab;
-window._calcTecTotal = _calcTecTotal;
-window._fmtTec = _fmtTec;
-window._diagTecTotal = _diagTecTotal;
-window._tecTabela = _tecTabela;
-window._tecDashboard = _tecDashboard;
-window.renderTecnicosPage = renderTecnicosPage;
-window.renderBonusV2 = renderBonusV2;
-window.setBnsMes = setBnsMes;
-window.renderMeuDash = renderMeuDash;
-window.renderMeuDashFiscal = renderMeuDashFiscal;
-window.renderObservadorDash = renderObservadorDash;
-window.validarOS = validarOS;
-window._mostrarModalMateriais = _mostrarModalMateriais;
-window._atualizarContagemMat = _atualizarContagemMat;
-window._executarValidacaoOS = _executarValidacaoOS;
-window._renderDaBarras = _renderDaBarras;
-window._renderDaTabContent = _renderDaTabContent;
-window.renderDashboardAnual = renderDashboardAnual;

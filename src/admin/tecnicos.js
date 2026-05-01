@@ -258,7 +258,7 @@ window.loginSuccess = async function(user) {
   // Verifica se precisa preencher cadastro de empresa (V0, V1, V2)
   if (window._precisaCadastroEmpresa(user)) {
     window._preencherFormEmpresa(user.empresa || null);
-    window.appScreen('cadastro-empresa');
+    window.screen('cadastro-empresa');
     window.limparForm();
     return;
   }
@@ -289,7 +289,7 @@ window.loginSuccess = async function(user) {
   // Se houver, exibe a tela de bloqueio; caso contrário prossegue normalmente
   const bloqueadoPorTermo = user.role !== 'master' && await window.verificarTermosPendentes();
   if (!bloqueadoPorTermo) {
-    window.appScreen('app');
+    window.screen('app');
     const firstPage = window._isAdmin(user) ? 'dashboard' : window._isFiscal(user) ? 'seguranca' : window._isObservador(user) ? 'observador-dash' : 'meu-dash';
     window.showPage(firstPage);
     // Alertas de segurança (não bloqueantes) para técnicos
@@ -331,7 +331,7 @@ window.loginSuccess = async function(user) {
             <span style="font-size:.79rem;color:#64748b">Isso garante a validade jurídica do documento.</span>
           </div>
           <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-            <button onclick="document.getElementById('modal-contrato-govbr').remove();renderContratoPendente('${csg.uid}','${csg.hash}');window.appScreen('contrato-pendente')"
+            <button onclick="document.getElementById('modal-contrato-govbr').remove();renderContratoPendente('${csg.uid}','${csg.hash}');window.screen('contrato-pendente')"
               style="background:#1f4e79;color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:.88rem;font-weight:700;cursor:pointer">
               <i class="fas fa-file-contract"></i> Regularizar Agora
             </button>
@@ -545,10 +545,7 @@ window.cfgMostrarSubTab = function(sub) {
       }
     }
   }
-  // cfg-sub-precos: Gerenciar Profiles & Cidades
-  if (sub === 'precos') {
-    if (typeof window.renderGerenciarProfiles === 'function') window.renderGerenciarProfiles();
-  }
+  // cfg-sub-precos agora contém apenas Gerenciar Profiles & Cidades (sem tabela de preços)
   if (sub === 'documentos') {
     window.renderDocumentosAutenticados();
   }

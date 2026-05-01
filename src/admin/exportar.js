@@ -752,30 +752,3 @@ function exportarTecnicoMes(uid, mesAno) {
 }
 
 function _expReset(...ids) { ids.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; }); }
-// ── Window bridge ──
-window._buildXlsxGeral = _buildXlsxGeral;
-window._gerarArquivosPorGrupo = _gerarArquivosPorGrupo;
-window.atualizarTecsMes = atualizarTecsMes;
-window.atualizarProfileStep = atualizarProfileStep;
-window.selecionarProfile = selecionarProfile;
-window.selecionarTipo = selecionarTipo;
-window.corrigirPrecosDoMes = corrigirPrecosDoMes;
-window.exportarTecnico = exportarTecnico;
-window.getExportRecords = getExportRecords;
-window._fmtXlsxData = _fmtXlsxData;
-window._applyStyle = _applyStyle;
-window._fillXlsxWS = _fillXlsxWS;
-window._buildXlsxTecnico = _buildXlsxTecnico;
-window._calcTotalV3 = _calcTotalV3;
-window._downloadXlsx = _downloadXlsx;
-window._setExpBtn = _setExpBtn;
-window.exportarMesNivel = exportarMesNivel;
-window.enviarRelatorioWhatsApp = enviarRelatorioWhatsApp;
-window.renderBotoesTecnicos = renderBotoesTecnicos;
-window.renderBotaoTecnicoProprio = renderBotaoTecnicoProprio;
-window.renderRelatoriosAssinados = renderRelatoriosAssinados;
-window._verRelatorioAssinado = _verRelatorioAssinado;
-window._aprovarRelatorio = _aprovarRelatorio;
-window._rejeitarRelatorio = _rejeitarRelatorio;
-window.exportarTecnicoMes = exportarTecnicoMes;
-window._expReset = _expReset;

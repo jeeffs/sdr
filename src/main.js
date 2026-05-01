@@ -79,15 +79,6 @@ import './admin/importar.js';
 import './admin/dashboard_admin.js';
 import './admin/contratos.js';
 
-// Admin — Fase E
-import './admin/bootstrap-firebase.js';
-import './admin/os-view.js';
-import './admin/render-dashboard.js';
-import './admin/form-os.js';
-import './admin/ui-core.js';
-import './admin/impostos.js';
-import './admin/exportar-docs.js';
-
 export {
   haversineM,
   SDR_FIBER_STANDARDS,
@@ -108,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v37.0 carregado — Fases A+B+C+D+E+F (56 modulos, admin.html finalizado)');
+console.log('[SDR Bundle] sdr-bundle.js v35.0 carregado — Fases A+B+C+D (49 modulos)');
