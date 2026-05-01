@@ -120,20 +120,8 @@ window.sdrAlertaAck = window.sdrAlertaAck || function() {};
 window.sdrDashRedeRender = window.sdrDashRedeRender || function() {};
 // ════════════════════════════════════════════════════
 // INICIALIZAÇÃO DO TENANT DEFAULT
+// (migrado para sdr-bundle.js — db não disponível aqui ainda)
 // ════════════════════════════════════════════════════
-
-// Criar tenant padrão se não existir
-sdrRef('info').once('value').then(snap => {
-  if (!snap.exists()) {
-    sdrRef('info').set({
-      name: 'Meu Provedor',
-      tier: 'starter',
-      license_status: 'active',
-      created_at: new Date().toISOString()
-    });
-    console.log('[SDR Comercial] Tenant default criado');
-  }
-});
 
 // ── Clientes — MIGRADO para src/clientes/index.js (sdr-bundle.js) ──────────
 // sdrImportClientes, sdrImportExecute, sdrOpenClientePanel, _buildClientePanel
