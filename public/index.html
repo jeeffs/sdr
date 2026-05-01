@@ -1234,6 +1234,66 @@ async function verificarSenha(senha, user) {
 }
 
 // ════════════════════════════════════════════════════════
+// FIREBASE AUTH — Migração por usuário (email/password)
+// Cada técnico recebe uma conta Firebase Auth própria no formato
+// {uid}@solucaoderua.app, criada silenciosamente na primeira vez
+// que o técnico faz login após esta atualização.
+// Enquanto a migração não ocorre, o sistema continua usando
+// autenticação anônima como fallback — sem impacto ao usuário.
+// ════════════════════════════════════════════════════════
+
+function _fbAuthEmail(uid) {
+  return uid.replace(/[^a-zA-Z0-9._\-]/g, '_') + '@solucaoderua.app';
+}
+
+// Cria conta Firebase Auth email/password para o técnico (chamado em background)
+async function _vincularFirebaseAuth(uid, senha) {
+  try {
+    const authInst = firebase.auth();
+    const email = _fbAuthEmail(uid);
+    let fbUser = null;
+    try {
+      const cred = await authInst.createUserWithEmailAndPassword(email, senha);
+      fbUser = cred.user;
+      console.log('[SDR Auth] Conta Firebase Auth criada para:', uid);
+    } catch(e) {
+      if (e.code === 'auth/email-already-in-use') {
+        // Conta já existe — faz login com ela
+        const cred = await authInst.signInWithEmailAndPassword(email, senha);
+        fbUser = cred.user;
+        console.log('[SDR Auth] Login Firebase Auth (conta existente):', uid);
+      } else if (e.code === 'auth/network-request-failed' || e.code === 'auth/too-many-requests') {
+        console.warn('[SDR Auth] Vinculação adiada (rede/limite):', uid, e.code);
+        return false;
+      } else {
+        throw e;
+      }
+    }
+    // Marca o usuário como vinculado no banco
+    await db.ref(`users/${uid}/firebaseAuthLinked`).set(true);
+    if (usersCache[uid]) usersCache[uid].firebaseAuthLinked = true;
+    return true;
+  } catch(e) {
+    console.warn('[SDR Auth] Falha ao vincular Firebase Auth (não-crítico):', uid, e.message);
+    return false;
+  }
+}
+
+// Faz login com Firebase Auth email/password (para técnicos já migrados)
+async function _loginFirebaseAuth(uid, senha) {
+  try {
+    const authInst = firebase.auth();
+    const email = _fbAuthEmail(uid);
+    await authInst.signInWithEmailAndPassword(email, senha);
+    console.log('[SDR Auth] Login Firebase Auth OK:', uid);
+    return true;
+  } catch(e) {
+    console.warn('[SDR Auth] Login Firebase Auth falhou, mantendo sessão anônima:', uid, e.message);
+    return false;
+  }
+}
+
+// ════════════════════════════════════════════════════════
 // WEBAUTHN BIOMETRIC LOGIN
 // ════════════════════════════════════════════════════════
 const _bioDisponivel = () => window.PublicKeyCredential !== undefined;
@@ -1379,6 +1439,8 @@ async function salvarSenhaInicial() {
     usersCache[_pendingFirstLoginUid] = { ...usersCache[_pendingFirstLoginUid], passwordHash: hash, salt, firstLogin: false };
     const uid = _pendingFirstLoginUid;
     _pendingFirstLoginUid = null;
+    // Primeira vez que o técnico define senha: cria conta Firebase Auth em background
+    _vincularFirebaseAuth(uid, p1); // sem await — não bloqueia o login
     loginSuccess(uid);
   } catch(e) {
     console.error(e);
@@ -1426,6 +1488,16 @@ async function doLogin() {
   // Verifica senha com hash
   const ok = await verificarSenha(pass, u);
   if (!ok) { errEl.textContent = 'Senha incorreta.'; return; }
+
+  // Firebase Auth — autenticação por conta individual (em background)
+  // Se já migrado: usa signInWithEmailAndPassword para renovar token Firebase Auth.
+  // Se ainda não migrado: cria conta Firebase Auth silenciosamente.
+  // Em ambos os casos, o login local já está aprovado e prossegue imediatamente.
+  if (u.firebaseAuthLinked) {
+    _loginFirebaseAuth(uid, pass); // sem await — não bloqueia o login
+  } else {
+    _vincularFirebaseAuth(uid, pass); // sem await — cria conta em background
+  }
 
   loginSuccess(uid);
 }
