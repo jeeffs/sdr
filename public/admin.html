@@ -2830,6 +2830,15 @@ const _isMasterUid = uid => {
   return u?.role === 'master';
 };
 
+// ── Expor helpers globalmente para o bundle ──
+window._isAdmin            = _isAdmin;
+window._isV3Import         = _isV3Import;
+window._isFiscal           = _isFiscal;
+window._isObservador       = _isObservador;
+window._isMasterUid        = _isMasterUid;
+window._safeNivel          = _safeNivel;
+window._isImportadaConcluida = _isImportadaConcluida;
+
 // ════════════════════════════════════════════════════
 // ④ FIREBASE SETUP
 // ════════════════════════════════════════════════════
