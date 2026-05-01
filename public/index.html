@@ -1105,31 +1105,105 @@ async function initFirebase() {
     const auth = firebase.auth();
     try { await auth.signInAnonymously(); } catch(_) {}
 
-    // ── Monkey-patch: db.ref().once() → REST API ──────────────────────────────
+    // ── Monkey-patch: db.ref() → REST API completo ────────────────────────────
     // SDK Firebase abre WebSocket no nível TCP mas falha no handshake de app.
-    // Todos os db.ref().once() ficam pendurados. REST funciona perfeitamente.
+    // Leituras (.once) E escritas (.set/.update/.remove/.push) ficam penduradas.
+    // REST HTTPS funciona perfeitamente para todas as operações.
     ;(function _patchDbRest() {
       const _base = 'https://solucaoderua-default-rtdb.firebaseio.com';
       const _origRef = db.ref.bind(db);
+
+      async function _tk() {
+        const u = firebase.auth().currentUser;
+        if (!u) return null;
+        return u.getIdToken();
+      }
+      function _p(path) { return String(path||'').replace(/^\/+/,''); }
+
       db.ref = function(path) {
         const _r = _origRef(path);
-        const _origOnce = _r.once.bind(_r);
+
+        // ── READ: .once() ──
         _r.once = async function(evt) {
           try {
-            const _u = firebase.auth().currentUser;
-            if (!_u) return _origOnce(evt);
-            const _tk = await _u.getIdToken();
-            const _p  = String(path||'').replace(/^\/+/,'');
-            const _res = await fetch(`${_base}/${_p}.json?auth=${_tk}`, {signal:AbortSignal.timeout(10000)});
-            const _val = _res.ok ? await _res.json() : null;
-            return { val:()=>_val, exists:()=>_val!==null, key:_p.split('/').pop()||'',
-                     child:(c)=>({val:()=>(_val||{})[c]??null, exists:()=>(_val||{})[c]!=null}),
-                     forEach:(cb)=>{ if(_val&&typeof _val==='object') Object.entries(_val).forEach(([k,v])=>cb({key:k,val:()=>v,exists:()=>true})); } };
+            const tok = await _tk();
+            if (!tok) return _origRef(path).once(evt);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {signal:AbortSignal.timeout(10000)});
+            const val = res.ok ? await res.json() : null;
+            return { val:()=>val, exists:()=>val!==null, key:_p(path).split('/').pop()||'',
+                     child:(c)=>({val:()=>(val||{})[c]??null, exists:()=>(val||{})[c]!=null}),
+                     forEach:(cb)=>{ if(val&&typeof val==='object') Object.entries(val).forEach(([k,v])=>cb({key:k,val:()=>v,exists:()=>true})); } };
           } catch(e) {
             console.warn('[SDR REST mobile] .once() erro:', path, e.message);
             return { val:()=>null, exists:()=>false, key:'', child:()=>({val:()=>null,exists:()=>false}), forEach:()=>{} };
           }
         };
+
+        // ── WRITE: .set() → PUT ──
+        _r.set = async function(value) {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).set(value);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'PUT', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+          } catch(e) {
+            console.warn('[SDR REST mobile] .set() erro:', path, e.message);
+            throw e;
+          }
+        };
+
+        // ── WRITE: .update() → PATCH ──
+        _r.update = async function(value) {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).update(value);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'PATCH', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+          } catch(e) {
+            console.warn('[SDR REST mobile] .update() erro:', path, e.message);
+            throw e;
+          }
+        };
+
+        // ── WRITE: .remove() → DELETE ──
+        _r.remove = async function() {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).remove();
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'DELETE', signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+          } catch(e) {
+            console.warn('[SDR REST mobile] .remove() erro:', path, e.message);
+            throw e;
+          }
+        };
+
+        // ── WRITE: .push() → POST ──
+        _r.push = async function(value) {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).push(value);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            return { key: data.name };
+          } catch(e) {
+            console.warn('[SDR REST mobile] .push() erro:', path, e.message);
+            throw e;
+          }
+        };
+
         return _r;
       };
     })();
