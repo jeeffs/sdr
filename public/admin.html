@@ -3554,8 +3554,42 @@ const FIREBASE_CONFIG_PRESET = {
   }
 
   try {
-    await garantirUsuarios();
-    await garantirPrecos();
+    // Detectar se RTDB SDK consegue conectar (Edge Tracking Prevention bloqueia WebSocket + long polling)
+    // Se não conectar em 2.5s → usa REST API como fallback
+    const _rtdbConectou = await Promise.race([
+      new Promise(resolve => {
+        const _h = firebase.database().ref('.info/connected').on('value', snap => {
+          if (snap.val() === true) {
+            firebase.database().ref('.info/connected').off('value', _h);
+            resolve(true);
+          }
+        });
+      }),
+      new Promise(resolve => setTimeout(() => resolve(false), 2500))
+    ]);
+
+    if (_rtdbConectou) {
+      await garantirUsuarios();
+      await garantirPrecos();
+    } else {
+      // RTDB bloqueado — usar REST API diretamente (funciona mesmo sem WebSocket)
+      console.warn('[SDR] RTDB SDK não conectou em 2.5s — fallback REST API (Edge Tracking Prevention)');
+      const _tk = await firebase.auth().currentUser.getIdToken();
+      const _restGet = async (path) => {
+        const r = await fetch(
+          `https://solucaoderua-default-rtdb.firebaseio.com/${path}.json?auth=${_tk}`,
+          { signal: AbortSignal.timeout(10000) }
+        );
+        if (!r.ok) throw new Error('REST ' + path + ': ' + r.status);
+        return r.json();
+      };
+      const [_uData, _pData] = await Promise.all([_restGet('users'), _restGet('precos')]);
+      Object.assign(usersCache, _uData || {});
+      if (_pData?.v1) Object.assign(precosV1map, _pData.v1);
+      if (_pData?.v2) Object.assign(precosV2map, _pData.v2);
+      if (_pData?.v3) { Object.assign(precosV3map, _pData.v3); Object.assign(precosV4map, _pData.v3); }
+      console.log('[SDR] REST fallback OK — users:', Object.keys(usersCache).length);
+    }
     await _carregarConfig();
 
     // Impersonate via URL: ?loginComo=uid (master entra como outro usuário)
