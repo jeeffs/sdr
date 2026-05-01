@@ -1080,6 +1080,35 @@ async function initFirebase() {
     const auth = firebase.auth();
     try { await auth.signInAnonymously(); } catch(_) {}
 
+    // ── Monkey-patch: db.ref().once() → REST API ──────────────────────────────
+    // SDK Firebase abre WebSocket no nível TCP mas falha no handshake de app.
+    // Todos os db.ref().once() ficam pendurados. REST funciona perfeitamente.
+    ;(function _patchDbRest() {
+      const _base = 'https://solucaoderua-default-rtdb.firebaseio.com';
+      const _origRef = db.ref.bind(db);
+      db.ref = function(path) {
+        const _r = _origRef(path);
+        const _origOnce = _r.once.bind(_r);
+        _r.once = async function(evt) {
+          try {
+            const _u = firebase.auth().currentUser;
+            if (!_u) return _origOnce(evt);
+            const _tk = await _u.getIdToken();
+            const _p  = String(path||'').replace(/^\/+/,'');
+            const _res = await fetch(`${_base}/${_p}.json?auth=${_tk}`, {signal:AbortSignal.timeout(10000)});
+            const _val = _res.ok ? await _res.json() : null;
+            return { val:()=>_val, exists:()=>_val!==null, key:_p.split('/').pop()||'',
+                     child:(c)=>({val:()=>(_val||{})[c]??null, exists:()=>(_val||{})[c]!=null}),
+                     forEach:(cb)=>{ if(_val&&typeof _val==='object') Object.entries(_val).forEach(([k,v])=>cb({key:k,val:()=>v,exists:()=>true})); } };
+          } catch(e) {
+            console.warn('[SDR REST mobile] .once() erro:', path, e.message);
+            return { val:()=>null, exists:()=>false, key:'', child:()=>({val:()=>null,exists:()=>false}), forEach:()=>{} };
+          }
+        };
+        return _r;
+      };
+    })();
+
     // Carrega users
     const usSnap = await db.ref('users').once('value');
     usersCache = usSnap.val() || {};
