@@ -3,6 +3,13 @@
 // Extraído de admin.html — Fase B
 
 // ── Índice fbKey → record (O(1)) ──
+// Debounce para a busca
+let _filtrarDebounceTimer = null;
+function _filtrarTabelaDebounced() {
+  clearTimeout(_filtrarDebounceTimer);
+  _filtrarDebounceTimer = setTimeout(() => filtrarTabela(), 250);
+}
+
 window._getRecordByKey = function(fbKey) { return window._recordsByKey?.[fbKey] || null; };
 
 
@@ -412,3 +419,4 @@ window.aceitarTermoServicos   = aceitarTermoServicos;
 window._validarOS = _validarOS;
 window._montarObjOS = _montarObjOS;
 window._montarCorpoTermoServicos = _montarCorpoTermoServicos;
+window._filtrarTabelaDebounced = _filtrarTabelaDebounced;
