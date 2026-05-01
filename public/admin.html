@@ -3519,11 +3519,11 @@ document.addEventListener('DOMContentLoaded', async function() {
     FIREBASE_CONFIG=FIREBASE_CONFIG_PRESET;
     localStorage.setItem(CONFIG_KEY,JSON.stringify(FIREBASE_CONFIG));
   }
-  // Timeout de 8s: SDK RTDB pode ficar pendurado indefinidamente tentando WebSocket.
-  // Se não responder em 8s, tratamos como 'error' e usamos REST API (que funciona).
+  // Timeout de 3s: SDK RTDB pode ficar pendurado tentando WebSocket.
+  // Se não responder em 3s, tratamos como 'error' e usamos REST API (que funciona).
   const result = await Promise.race([
     iniciarFirebase(FIREBASE_CONFIG),
-    new Promise(resolve => setTimeout(() => resolve('error'), 8000))
+    new Promise(resolve => setTimeout(() => resolve('error'), 3000))
   ]);
 
   if(result === 'permission') {
@@ -4018,6 +4018,66 @@ async function gerarPdfExportDocs() {
 </script>
 <!-- SDR Bundle: modulos ES compilados pelo Vite — carrega ANTES do legado -->
 <script src="sdr-bundle.js"></script>
+<script>
+// ── Patch Firebase Auth Admin ─────────────────────────────────────────────
+// Mesmo padrão do mobile: email={uid}@solucaoderua.app, senha=sha256('sdr:uid:senha')
+// Aplicado após o bundle para não quebrar nenhuma função existente.
+;(function _patchAdminFirebaseAuth() {
+  function _adminFbEmail(uid) {
+    return uid.replace(/[^a-zA-Z0-9._\-]/g, '_') + '@solucaoderua.app';
+  }
+  async function _adminFbSenha(uid, senha) {
+    return await window.sha256('sdr:' + uid + ':' + senha);
+  }
+
+  // Senha temporária capturada no entrar() para uso no loginSuccess()
+  let _pendingPwd = null;
+
+  // Wrap window.entrar: captura a senha antes de validar
+  const _entrarOrig = window.entrar;
+  window.entrar = async function() {
+    _pendingPwd = document.getElementById('pwd-input')?.value || null;
+    await _entrarOrig();
+    // Se login falhou, currentUser não foi definido — limpa a senha pendente
+    if (!window.currentUser) _pendingPwd = null;
+  };
+
+  // Wrap window.loginSuccess: faz Firebase Auth com email/senha após login bem-sucedido
+  const _loginSuccessOrig = window.loginSuccess;
+  window.loginSuccess = async function(user) {
+    if (user && user.id && _pendingPwd) {
+      const pwd = _pendingPwd;
+      _pendingPwd = null;
+      // Firebase Auth em background — não bloqueia a entrada no admin
+      (async () => {
+        try {
+          const email   = _adminFbEmail(user.id);
+          const fbSenha = await _adminFbSenha(user.id, pwd);
+          await firebase.auth().signInWithEmailAndPassword(email, fbSenha)
+            .catch(async e => {
+              // Conta ainda não existe — cria na primeira vez
+              if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
+                await firebase.auth().createUserWithEmailAndPassword(email, fbSenha).catch(() => {});
+              }
+            });
+          console.log('[SDR Admin] Firebase Auth OK:', user.id);
+        } catch(e) {
+          console.warn('[SDR Admin] Firebase Auth falhou (não-crítico):', e.message);
+        }
+      })();
+    }
+    return _loginSuccessOrig(user);
+  };
+
+  // Wrap window.logout: encerra sessão Firebase Auth ao sair
+  const _logoutOrig = window.logout;
+  window.logout = function() {
+    firebase.auth().signOut().catch(() => {});
+    if (_logoutOrig) _logoutOrig();
+  };
+})();
+// ─────────────────────────────────────────────────────────────────────────────
+</script>
 <script src="sdr-module.js"></script>
 
 <!-- ── Banner Offline ──────────────────────────────────────────────── -->
