@@ -1246,21 +1246,27 @@ function _fbAuthEmail(uid) {
   return uid.replace(/[^a-zA-Z0-9._\-]/g, '_') + '@solucaoderua.app';
 }
 
+// Deriva "senha Firebase" a partir da senha local do técnico.
+// Firebase Auth exige mínimo 6 chars; o app local permite 4.
+// Solução: sha256('sdr:' + uid + ':' + senha) → sempre 64 hex chars.
+// A senha real NUNCA é enviada ao Firebase — apenas o hash derivado.
+async function _fbAuthSenha(uid, senha) {
+  return await sha256('sdr:' + uid + ':' + senha);
+}
+
 // Cria conta Firebase Auth email/password para o técnico (chamado em background)
 async function _vincularFirebaseAuth(uid, senha) {
   try {
     const authInst = firebase.auth();
     const email = _fbAuthEmail(uid);
-    let fbUser = null;
+    const fbSenha = await _fbAuthSenha(uid, senha);
     try {
-      const cred = await authInst.createUserWithEmailAndPassword(email, senha);
-      fbUser = cred.user;
+      const cred = await authInst.createUserWithEmailAndPassword(email, fbSenha);
       console.log('[SDR Auth] Conta Firebase Auth criada para:', uid);
     } catch(e) {
       if (e.code === 'auth/email-already-in-use') {
         // Conta já existe — faz login com ela
-        const cred = await authInst.signInWithEmailAndPassword(email, senha);
-        fbUser = cred.user;
+        await authInst.signInWithEmailAndPassword(email, fbSenha);
         console.log('[SDR Auth] Login Firebase Auth (conta existente):', uid);
       } else if (e.code === 'auth/network-request-failed' || e.code === 'auth/too-many-requests') {
         console.warn('[SDR Auth] Vinculação adiada (rede/limite):', uid, e.code);
@@ -1284,7 +1290,8 @@ async function _loginFirebaseAuth(uid, senha) {
   try {
     const authInst = firebase.auth();
     const email = _fbAuthEmail(uid);
-    await authInst.signInWithEmailAndPassword(email, senha);
+    const fbSenha = await _fbAuthSenha(uid, senha);
+    await authInst.signInWithEmailAndPassword(email, fbSenha);
     console.log('[SDR Auth] Login Firebase Auth OK:', uid);
     return true;
   } catch(e) {
