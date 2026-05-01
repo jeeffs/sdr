@@ -1233,19 +1233,8 @@ async function initFirebase() {
       if (!profilesCidades.MATRIZ) profilesCidades.MATRIZ = [...MATRIZ_CIDADES];
     }
 
-    // Carrega OS
-    const osSnap = await db.ref('os').once('value');
-    const osRaw = osSnap.val() || {};
-    allRecords = Object.entries(osRaw).map(([k,v]) => {
-      // Normaliza nomes de serviço legados (/ → -) para compatibilidade
-      if (v.servicos) v.servicos.forEach(sv => { if (sv.tipo) sv.tipo = sv.tipo.replace(/\//g,'-'); });
-      if (v.tipo) v.tipo = v.tipo.replace(/\//g,'-');
-      return {...v, _key:k};
-    });
-
-    // Carrega descontos
-    const descSnap = await db.ref('descontos').once('value');
-    descontosCache = descSnap.val() || {};
+    // OS e descontos são carregados em carregarOsDoUsuario(uid) após o login
+    // para evitar download de toda a coleção /os (muito grande → timeout 10s)
 
     // Popula login
     populateLogin();
@@ -1661,12 +1650,25 @@ async function doLogin() {
     return;
   }
 
-  // Verifica senha com hash
-  const ok = await verificarSenha(pass, u);
-  if (!ok) { errEl.textContent = 'Senha incorreta.'; return; }
+  // ── Wave 4: Firebase Auth como login primário ──
+  // signInWithEmailAndPassword é o guardião principal.
+  // Se falhar (rede, conta desatualizada), cai no hash local como fallback
+  // e recria a conta Firebase Auth em background.
+  const fbOk = await _loginFirebaseAuth(uid, pass);
+  if (!fbOk) {
+    // Fallback: verifica hash armazenado no banco (já em memória — sem rede)
+    if (!u.passwordHash && !u.senha) {
+      errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
+      return;
+    }
+    const hashOk = await verificarSenha(pass, u);
+    if (!hashOk) { errEl.textContent = 'Senha incorreta.'; return; }
+    // Hash local ok — recria conta Firebase Auth em background
+    _vincularFirebaseAuth(uid, pass);
+  }
 
   // Verifica se precisa upgrade obrigatório de senha (mínimo 6 chars)
-  if (_verificarUpgradeSenha(uid, pass)) {
+  if (_verificarUpgradeSenha(uid)) {
     _pendingUpgradeUid = uid;
     _pendingUpgradeSenhaAtual = pass;
     document.getElementById('us-pwd1').value = '';
@@ -1677,17 +1679,36 @@ async function doLogin() {
     return;
   }
 
-  // Firebase Auth — autenticação por conta individual (em background)
-  // Se já migrado: usa signInWithEmailAndPassword para renovar token Firebase Auth.
-  // Se ainda não migrado: cria conta Firebase Auth silenciosamente.
-  // Em ambos os casos, o login local já está aprovado e prossegue imediatamente.
-  if (u.firebaseAuthLinked) {
-    _loginFirebaseAuth(uid, pass); // sem await — não bloqueia o login
-  } else {
-    _vincularFirebaseAuth(uid, pass); // sem await — cria conta em background
-  }
-
   loginSuccess(uid);
+}
+
+// Carrega OS filtradas por userId via REST query (requer .indexOn:["userId"] nas rules)
+// e a coleção descontos. Chamado imediatamente antes de renderDashboard() em cada fluxo.
+async function carregarOsDoUsuario(uid) {
+  try {
+    const fbUser = firebase.auth().currentUser;
+    const token = fbUser ? await fbUser.getIdToken() : null;
+    const base = 'https://solucaoderua-default-rtdb.firebaseio.com';
+    const qs = 'orderBy="userId"&equalTo=' + encodeURIComponent('"' + uid + '"') + (token ? '&auth=' + token : '');
+    const resp = await fetch(base + '/os.json?' + qs, { signal: AbortSignal.timeout(15000) });
+    const osRaw = resp.ok ? (await resp.json() || {}) : {};
+    allRecords = Object.entries(osRaw).map(([k, v]) => {
+      if (v.servicos) v.servicos.forEach(sv => { if (sv.tipo) sv.tipo = sv.tipo.replace(/\//g, '-'); });
+      if (v.tipo) v.tipo = v.tipo.replace(/\//g, '-');
+      return { ...v, _key: k };
+    });
+  } catch (e) {
+    console.warn('[SDR] carregarOsDoUsuario erro:', e.message);
+    allRecords = [];
+  }
+  // Descontos: coleção pequena, sem filtro necessário
+  try {
+    const descSnap = await db.ref('descontos').once('value');
+    descontosCache = descSnap.val() || {};
+  } catch (e) {
+    console.warn('[SDR] carregarDescontos erro:', e.message);
+    descontosCache = {};
+  }
 }
 
 async function loginSuccess(uid) {
@@ -1708,6 +1729,7 @@ async function loginSuccess(uid) {
   try {
     if (_impersonating) {
       // Master impersonando: vai direto para o app sem bloqueios
+      await carregarOsDoUsuario(uid);
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById('app').style.display = 'flex';
       _aplicarVisibilidadeAbas(u);
@@ -1801,6 +1823,7 @@ async function loginSuccess(uid) {
     }
 
     // Tudo OK, mostra app
+    await carregarOsDoUsuario(uid);
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('app').style.display = 'flex';
 
@@ -3346,6 +3369,7 @@ async function salvarEmpresa() {
     }
 
     // Mostra app
+    await carregarOsDoUsuario(currentUser.id);
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('app').style.display = 'flex';
     renderDashboard();
@@ -4241,6 +4265,7 @@ async function _continuarParaApp(uid) {
   }
 
   // Tudo OK, mostra app
+  await carregarOsDoUsuario(uid);
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('app').style.display = 'flex';
   _aplicarVisibilidadeAbas(u);
