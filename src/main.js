@@ -1,8 +1,6 @@
 /**
  * SDR Solucoes de Rua - Entry Point
  * Vite + ES Modules — migração incremental do sdr-module.js
- *
- * Fase 29: Cord Drawing + Slots + Rastreabilidade + CordEdit
  */
 
 import { haversineM }            from './utils/haversine.js';
@@ -52,12 +50,34 @@ import './olt/html.js';
 import './map/heatmap.js';
 import './olt/inline.js';
 import './olt/lightpath.js';
-
-// Cord Drawing + Slots + Rastreabilidade + CordEdit — fase 29
 import './olt/cord.js';
-
-// Mapa core: sdrMapInit + sdrMapReloadData — fase 30
 import './map/core.js';
+import './core/bootstrap.js';
+
+// Admin — Fase A
+import './admin/constants.js';
+import './admin/firebase-helpers.js';
+import './admin/finance.js';
+import './admin/ui-helpers.js';
+import './admin/auth.js';
+import './admin/seguranca.js';
+
+// Admin — Fase B
+import './admin/tecnicos.js';
+import './admin/os.js';
+import './admin/assinatura.js';
+
+// Admin — Fase C
+import './admin/config.js';
+import './admin/usuarios.js';
+import './admin/exportar.js';
+import './admin/financeiro.js';
+
+// Admin — Fase D
+import './admin/seguranca_page.js';
+import './admin/importar.js';
+import './admin/dashboard_admin.js';
+import './admin/contratos.js';
 
 export {
   haversineM,
@@ -79,26 +99,4 @@ export {
   sdrAuditLog
 };
 
-// Bootstrap: injetar pages HTML + CSS + patch showPage — fase 33
-import './core/bootstrap.js';
-
-// Admin: constants, helpers, auth, seguranca — Fase A
-import './admin/constants.js';
-import './admin/firebase-helpers.js';
-import './admin/finance.js';
-import './admin/ui-helpers.js';
-import './admin/auth.js';
-import './admin/seguranca.js';
-
-// Admin: navegacao, OS, assinatura — Fase B
-import './admin/tecnicos.js';
-import './admin/os.js';
-import './admin/assinatura.js';
-
-// Admin: config, usuarios, exportar, financeiro — Fase C
-import './admin/config.js';
-import './admin/usuarios.js';
-import './admin/exportar.js';
-import './admin/financeiro.js';
-
-console.log('[SDR Bundle] sdr-bundle.js v34.0 carregado — ... + admin/Fase-C (config+usuarios+exportar+financeiro)');
+console.log('[SDR Bundle] sdr-bundle.js v35.0 carregado — Fases A+B+C+D (49 modulos)');
