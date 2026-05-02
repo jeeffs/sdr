@@ -3541,8 +3541,9 @@ async function _buildXlsxGeral(recs) {
       for (let i=0; i<5; i++) {
         const s = r.servicos?.[i];
         const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
+        // Importado: valor histórico (já é total); manual: preço V3 × qtd = total do serviço
         const valorV3 = s?.tipo
-          ? (r.importado ? (Number(s.valor)||0) : (precosV3map[s.tipo] || 0))
+          ? (r.importado ? (Number(s.valor)||0) : (Number(s.qtd)||0) * (precosV3map[s.tipo] || 0))
           : '';
         cells.push(s?.tipo||'', qtd, qtd!==''&&s?.tipo ? valorV3 : '');
       }
