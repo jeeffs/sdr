@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v46.0 carregado — fix: re-auth multi-email, hash estatico Firebase Auth');
+console.log('[SDR Bundle] sdr-bundle.js v47.0 carregado — fix: validacao via REST API, bypass WebSocket bloqueado');

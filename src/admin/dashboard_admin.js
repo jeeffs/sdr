@@ -1766,7 +1766,24 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
       validadoEm: agora
     };
     if (materiaisConferidos) updates.materiaisConferidos = true;
-    await _dbUpdate(`os/${fbKey}`, updates);
+    // Usar REST API diretamente — evita problema de WebSocket bloqueado no SDK
+    const _fbUserFinal = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+    if (_fbUserFinal && (_fbUserFinal.email || '').endsWith('@solucaoderua.app')) {
+      const _tk = await _fbUserFinal.getIdToken(true);
+      const _dbUrl = ((typeof firebase !== 'undefined' && firebase.app && firebase.app().options.databaseURL) || 'https://solucaoderua-default-rtdb.firebaseio.com').replace(/\/$/, '');
+      const _res = await fetch(`${_dbUrl}/os/${fbKey}.json?auth=${_tk}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (!_res.ok) {
+        const _errData = await _res.json().catch(() => ({}));
+        throw new Error(_errData.error || 'PERMISSION_DENIED');
+      }
+    } else {
+      // Fallback: SDK nativo (caso Firebase Auth nao disponivel via REST)
+      await _dbUpdate(`os/${fbKey}`, updates);
+    }
     rec.validacaoFiscal = 'validada';
     rec.validadoPor = fiscalNome;
     rec.validadoEm = agora;
@@ -1778,7 +1795,7 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
     const _permErr = (e.code === 'PERMISSION_DENIED') || (typeof e.message === 'string' && e.message.includes('PERMISSION_DENIED'));
     toast(_permErr
       ? 'Sem permissao no banco. Faca logout e entre novamente.'
-      : 'Erro ao validar OS. Tente novamente.',
+      : 'Erro ao validar OS: ' + (e.message || e.code || 'desconhecido'),
       'error');
   }
 }
