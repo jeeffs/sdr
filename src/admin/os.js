@@ -403,6 +403,68 @@ function renderTabela(records) {
   }
 }
 
+// ── Formulário de OS: buildServiceRows, preencherPreco, calcTotal, gerarCodigoOS ──
+
+function getActivePriceMap() {
+  const nivel = currentUser?.nivel || 'V1';
+  if (nivel === 'V3' || nivel === 'V4') return window.precosV3map || {};
+  return window.precosV1map || {};
+}
+
+function buildServiceRows() {
+  const c = document.getElementById('servicos-rows');
+  if (!c) return;
+  c.innerHTML = '';
+  const svcs = window.SERVICOS || [];
+  for (let i = 1; i <= 5; i++) {
+    const opts = svcs.map(s => `<option>${s}</option>`).join('');
+    c.innerHTML += `<div class="service-row">
+      <select id="s-tipo-${i}" onchange="preencherPreco(${i})">
+        <option value="">-- ${i}º Serviço --</option>${opts}
+      </select>
+      <input type="number" id="s-qtd-${i}" placeholder="Qtde" min="0" step="1"
+        oninput="this.value=Math.floor(Math.abs(this.value))||'';calcTotal()">
+      <div style="position:relative">
+        <input type="number" id="s-val-${i}" placeholder="Sem preço" min="0" step="0.01"
+          style="background:#f0fdf4;padding-right:26px;width:100%" readonly
+          title="Valor da Tabela de Preços">
+        <i class="fas fa-lock" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.68rem;pointer-events:none"></i>
+      </div>
+    </div>`;
+  }
+}
+
+function preencherPreco(i) {
+  const tipoEl = document.getElementById(`s-tipo-${i}`);
+  const vi = document.getElementById(`s-val-${i}`);
+  if (!tipoEl || !vi) return;
+  const tipo = tipoEl.value;
+  const pm = getActivePriceMap();
+  vi.value = (tipo && pm && pm[tipo] !== undefined) ? pm[tipo] : '';
+  calcTotal();
+}
+
+function calcTotal() {
+  let t = 0;
+  for (let i = 1; i <= 5; i++) {
+    t += (parseInt(document.getElementById(`s-qtd-${i}`)?.value) || 0)
+       * (parseFloat(document.getElementById(`s-val-${i}`)?.value) || 0);
+  }
+  const el = document.getElementById('total-preview');
+  if (el) el.innerHTML = typeof window.fmtMoeda === 'function' ? window.fmtMoeda(t) : `R$ ${t.toFixed(2)}`;
+}
+
+async function gerarCodigoOS() {
+  const icon = document.getElementById('icon-os');
+  if (icon) icon.classList.add('fa-spinner', 'fa-spin');
+  const ano = new Date().getFullYear();
+  const doAno = (allRecords || []).filter(r => r.data && r.data.startsWith(String(ano)));
+  const seq = String(doAno.length + 1).padStart(4, '0');
+  const fCodigo = document.getElementById('f-codigo');
+  if (fCodigo) fCodigo.value = `OS-${ano}-${seq}`;
+  if (icon) setTimeout(() => icon.classList.remove('fa-spinner', 'fa-spin'), 400);
+}
+
 // ── Expor funções como globals para o admin.html (tree-shaking fix) ──
 window.carregarDados = carregarDados;
 window._validarOS = _validarOS;
@@ -416,3 +478,8 @@ window.deletarOS = deletarOS;
 window.filteredRecords = filteredRecords;
 window.filtrarTabela = filtrarTabela;
 window.renderTabela = renderTabela;
+window.buildServiceRows = buildServiceRows;
+window.preencherPreco = preencherPreco;
+window.calcTotal = calcTotal;
+window.gerarCodigoOS = gerarCodigoOS;
+window.getActivePriceMap = getActivePriceMap;

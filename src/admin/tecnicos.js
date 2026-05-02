@@ -219,6 +219,135 @@ window.salvarCadastroAdmin = async function() {
   }
 }
 
+// ── Logout ──
+window.logout = function() {
+  clearTimeout(window._sessionTimer);
+  if (typeof window._removeActivityListeners === 'function') window._removeActivityListeners();
+  if (typeof window._revokeAllBlobs === 'function') window._revokeAllBlobs();
+  window.currentUser = null;
+  window.allRecords = [];
+  window.selectedUserId = null;
+  window.precosDesbloqueado = false;
+  sessionStorage.removeItem('srua_sessao_uid');
+  try { if (window.auth) window.auth.signOut(); } catch(_e) { console.warn('[logout]', _e.message); }
+  window.screen('login');
+  document.querySelectorAll('.user-card').forEach(c => c.classList.remove('selected'));
+  const pwdBlock = document.getElementById('pwd-block');
+  const btnEntrar = document.getElementById('btn-entrar');
+  const pwdInput = document.getElementById('pwd-input');
+  if (pwdBlock) pwdBlock.style.display = 'none';
+  if (btnEntrar) btnEntrar.style.display = 'none';
+  if (pwdInput) pwdInput.value = '';
+};
+
+// ── Sidebar Toggle ──
+window.toggleSidebar = function() {
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  const collapsed = sb.classList.toggle('collapsed');
+  try { localStorage.setItem('sb-collapsed', collapsed ? '1' : '0'); } catch(_e) { console.warn('[toggleSidebar]', _e.message); }
+};
+
+// ── Toggle mostrar/ocultar valores monetários ──
+window.toggleValores = function() {
+  const oculto = document.body.classList.toggle('hide-money');
+  const btn = document.getElementById('btn-olho');
+  const ico = document.getElementById('icon-olho');
+  if (btn) btn.classList.toggle('aberto', !oculto);
+  if (ico) ico.className = oculto ? 'fas fa-eye-slash' : 'fas fa-eye';
+};
+
+// ── Inicializar sidebar (estado colapsado) ──
+window.initSidebar = function() {
+  const sb = document.getElementById('sidebar');
+  if (!sb) return;
+  const saved = localStorage.getItem('sb-collapsed');
+  const doCollapse = saved === null ? true : saved === '1';
+  if (doCollapse) sb.classList.add('collapsed');
+  else sb.classList.remove('collapsed');
+};
+
+// ── Atualizar dados (recarrega a página preservando sessão) ──
+window.atualizarDados = function() {
+  const btn = document.getElementById('btn-atualizar');
+  if (!btn || btn.classList.contains('refreshing')) return;
+  btn.classList.add('refreshing');
+  btn.disabled = true;
+  location.reload();
+};
+
+// ── Navegação entre telas (screen-loading, screen-login, screen-app, etc.) ──
+// Exposta como window.screen (sobrescreve API nativa) E window.appScreen
+function appScreen(name) {
+  ['loading','setup','login','first-login','app','termo-pendente','cadastro-empresa','contrato-pendente'].forEach(s => {
+    const el = document.getElementById(`screen-${s}`);
+    if (el) el.style.display = 'none';
+  });
+  const target = document.getElementById(`screen-${name}`);
+  if (target) target.style.display = 'flex';
+  if (name === 'login' && typeof window.initLoginScreen === 'function') window.initLoginScreen();
+  if (name === 'app'   && typeof window.initSidebar    === 'function') window.initSidebar();
+}
+window.appScreen = appScreen;
+window.screen    = appScreen; // bundle usa window.screen('app')
+
+// ── Verifica se técnico/fiscal precisa preencher cadastro de empresa ──
+window._precisaCadastroEmpresa = function(user) {
+  if (window._isAdmin(user) || window._isObservador(user)) return false;
+  if (user.empresa && user.empresa.dispensado) return false;
+  return !user.empresa || !user.empresa.razaoSocial;
+};
+
+// ── Pré-preenche formulário de cadastro de empresa ──
+window._preencherFormEmpresa = function(empresa) {
+  if (!empresa) return;
+  const campos = {
+    'cad-razao':empresa.razaoSocial||'','cad-fantasia':empresa.nomeFantasia||'',
+    'cad-cnpj':empresa.cnpj||'','cad-cnae':empresa.cnae||'',
+    'cad-ie':empresa.inscricaoEstadual||'','cad-im':empresa.inscricaoMunicipal||'',
+    'cad-rua':empresa.rua||'','cad-num':empresa.numero||'',
+    'cad-compl':empresa.complemento||'','cad-bairro':empresa.bairro||'',
+    'cad-cep':empresa.cep||'','cad-cidade':empresa.cidade||'','cad-estado':empresa.estado||'',
+    'cad-tel':empresa.telefone||'','cad-cel':empresa.celular||'',
+    'cad-email':empresa.email||'','cad-email-fin':empresa.emailFinanceiro||'','cad-site':empresa.site||'',
+    'cad-resp-nome':empresa.responsavel?.nome||empresa.respNome||'',
+    'cad-resp-cpf':empresa.responsavel?.cpf||empresa.respCpf||'',
+    'cad-resp-rg':empresa.responsavel?.rg||empresa.respRg||'',
+    'cad-resp-nac':empresa.responsavel?.nacionalidade||empresa.respNacionalidade||'',
+    'cad-resp-ec':empresa.responsavel?.ec||empresa.respEc||'',
+    'cad-resp-cargo':empresa.responsavel?.cargo||empresa.respCargo||'',
+    'cad-banco':empresa.banco||'','cad-agencia':empresa.agencia||'',
+    'cad-conta':empresa.conta||'','cad-tipo-conta':empresa.tipoConta||'','cad-titular':empresa.titular||'',
+    'cad-pix-tipo':empresa.pixTipo||'','cad-pix':empresa.pix||'',
+    'cad-pix-favorecido':empresa.pixFavorecido||'','cad-pix-banco':empresa.pixBanco||'',
+    'cad-foro':empresa.foro||'','cad-dia-pgto':empresa.diaPgto||'',
+    'cad-dia-choice':empresa.diaChoice||'','cad-contrato-resp':empresa.contratoResp||'',
+    'cad-contrato-versao':empresa.contratoVersao||''
+  };
+  Object.entries(campos).forEach(([id, val]) => { const el = document.getElementById(id); if (el) el.value = val; });
+};
+
+// ── Limpar formulário de lançar OS ──
+window.limparForm = function() {
+  const f = document.getElementById('form-os');
+  if (f) f.reset();
+  if (typeof window.buildServiceRows === 'function') window.buildServiceRows();
+  if (typeof window.atualizarCidadesPorProfile === 'function') window.atualizarCidadesPorProfile();
+  const tp = document.getElementById('total-preview'); if (tp) tp.textContent = 'R$ 0,00';
+  const gcc = document.getElementById('grp-cidade-custom'); if (gcc) gcc.style.display = 'none';
+  const dmsF = document.getElementById('f-gps-dms'); if (dmsF) dmsF.value = '';
+  const gs = document.getElementById('gps-status');
+  if (gs) gs.innerHTML = '<i class="fas fa-info-circle"></i> Clique em "Capturar localização" para preencher via GPS.';
+  const bg = document.getElementById('btn-gps');
+  if (bg) { bg.disabled = false; bg.innerHTML = '<i class="fas fa-map-marker-alt"></i> Capturar localização'; }
+  const now = new Date();
+  const df = document.getElementById('f-data');
+  if (df && typeof window._dateLocalStr === 'function') df.value = window._dateLocalStr(now);
+  const hf = document.getElementById('f-hora');
+  if (hf) hf.value = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  if (typeof window.gerarCodigoOS === 'function') window.gerarCodigoOS();
+};
+
 window.loginSuccess = async function(user) {
   window.currentUser = user;
   window._setupActivityListeners(); // Fase5: instala listeners com cleanup

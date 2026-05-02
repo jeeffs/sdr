@@ -1,5 +1,5 @@
 // src/admin/ui-helpers.js
-// Blob URL Manager e Activity Listeners
+// Funções utilitárias de UI: toast, formatação, navegação de modais, blobs
 // Extraído de admin.html Fase A
 
 // ── Blob URLs ──
@@ -33,3 +33,40 @@ window._removeActivityListeners = function() {
   });
   _activityListenersList.length = 0;
 };
+
+// ── Toast (notificação temporária) ──
+function toast(msg, type = '') {
+  const wrap = document.getElementById('toast-wrap');
+  if (!wrap) { console.warn('[toast]', type, msg); return; }
+  const el = document.createElement('div');
+  el.className = 'toast ' + type;
+  const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+  el.innerHTML = `<i class="fas fa-${icon}"></i> ${msg}`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+window.toast = toast;
+
+// ── Formatação monetária e de data ──
+function fmtMoeda(v) {
+  return '<span class="money-val">R$ ' + (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</span>';
+}
+function fmtData(d) {
+  if (!d) return '—';
+  const [y, m, di] = d.split('-');
+  return `${di}/${m}/${y}`;
+}
+window.fmtMoeda = fmtMoeda;
+window.fmtData  = fmtData;
+
+// ── Abrir / fechar modal ──
+function fecharModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+function abrirModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+window.fecharModal = fecharModal;
+window.abrirModal  = abrirModal;

@@ -3,8 +3,8 @@
 // Firebase RTDB usa WebSocket (não interceptável pelo SW) — offline tratado pelo keepSynced
 // CDN assets (Leaflet, xlsx, FA, etc.) NÃO são interceptados — o browser/HTTP cache cuida deles
 
-const CACHE_NAME  = 'sdr-v38';
-const CACHE_SHELL = 'sdr-shell-v38';
+const CACHE_NAME  = 'sdr-v40';
+const CACHE_SHELL = 'sdr-shell-v40';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
 const SHELL_ASSETS = [
@@ -54,7 +54,7 @@ async function cacheIndividual(cacheName, urls) {
 
 // ── Install: pré-cacheia shell e app assets imediatamente ────────────────────
 self.addEventListener('install', event => {
-    console.log('[SDR SW] install — v37');
+    console.log('[SDR SW] install — v40');
     event.waitUntil(
         Promise.all([
             cacheIndividual(CACHE_SHELL, SHELL_ASSETS),

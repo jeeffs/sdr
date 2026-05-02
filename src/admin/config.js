@@ -417,6 +417,31 @@ async function confirmarPin() {
   }
 }
 
+// ── Helpers de profile/cidade (usados em _carregarConfig e em eventos de formulário) ──
+function atualizarProfileSelect() {
+  const sel = document.getElementById('f-profile');
+  if (!sel) return;
+  const current = sel.value || 'FILIAL';
+  const profiles = Object.keys(profilesCidades);
+  sel.innerHTML = profiles.map(p => `<option value="${p}"${p === current ? ' selected' : ''}>${p}</option>`).join('');
+  atualizarCidadesPorProfile();
+}
+
+function atualizarCidadesPorProfile() {
+  const profile = document.getElementById('f-profile')?.value || 'FILIAL';
+  const cidades = profilesCidades[profile] || FILIAL_CIDADES;
+  const sel = document.getElementById('f-cidade');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">-- Selecione --</option>'
+    + cidades.map(c => `<option value="${c}">${c}</option>`).join('')
+    + '<option value="_outro">Outra cidade...</option>';
+  if (cidades.includes(current)) sel.value = current;
+  else sel.value = '';
+  const grp = document.getElementById('grp-cidade-custom');
+  if (grp) grp.style.display = 'none';
+}
+
 // ── Expor funções como globals para o admin.html (tree-shaking fix) ──
 window.salvarConfig = salvarConfig;
 window._carregarConfig = _carregarConfig;
@@ -439,3 +464,5 @@ window.onPinInput = onPinInput;
 window.abrirPinPrecos = abrirPinPrecos;
 window.abrirAlterarPinPrecos = abrirAlterarPinPrecos;
 window.confirmarPin = confirmarPin;
+window.atualizarProfileSelect = atualizarProfileSelect;
+window.atualizarCidadesPorProfile = atualizarCidadesPorProfile;
