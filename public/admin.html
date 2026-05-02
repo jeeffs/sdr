@@ -4119,10 +4119,34 @@ async function gerarPdfExportDocs() {
     return _loginSuccessOrig(user);
   };
 
-  // ── loginBiometrico: sem wrapper — deixar o bundle chamar WebAuthn diretamente ─
-  // Qualquer wrap async antes de navigator.credentials.get() consome o user activation
-  // context e causa NotAllowedError. O loginSuccess wrapper acima detecta login biométrico
-  // pela ausência de _pendingPwd + existência de credencial, fazendo reauth Firebase depois.
+  // ── loginBiometrico: wrapper pós-execução para detectar credencial obsoleta ──
+  // O wrapper NÃO faz nenhum await antes de chamar o original — preservando o
+  // user activation context necessário para navigator.credentials.get().
+  // Após a execução, se o login falhou E havia credencial salva, significa que
+  // a passkey foi deletada do dispositivo (ex: Edge settings) → limpa localStorage
+  // e guia o usuário a re-cadastrar via senha.
+  const _loginBiometricoOrig = window.loginBiometrico;
+  window.loginBiometrico = async function() {
+    const lastUid = localStorage.getItem('srua_lastUid');
+    const hadCred = lastUid && !!localStorage.getItem('srua_cred_' + lastUid);
+    await _loginBiometricoOrig();
+    // Se tinha credencial mas login não ocorreu → passkey obsoleta no dispositivo
+    if (hadCred && !window.currentUser) {
+      if (lastUid) {
+        localStorage.removeItem('srua_cred_' + lastUid);
+        localStorage.removeItem('sdr_admin_bio_fhash_' + lastUid);
+      }
+      // Atualiza mensagem de erro para orientar o usuário
+      const err = document.getElementById('login-err');
+      if (err && err.style.display !== 'none') {
+        err.textContent = 'Biometria não reconhecida — credencial removida. Entre com senha para recadastrar.';
+      }
+      // Esconde botão de biometria pois a credencial foi limpa
+      const bioBtn = document.getElementById('btn-biometrico');
+      if (bioBtn) bioBtn.style.display = 'none';
+      console.warn('[SDR Admin] Credencial biométrica obsoleta detectada e removida para:', lastUid);
+    }
+  };
 
   // Wrap window.logout: encerra sessão Firebase Auth ao sair
   const _logoutOrig = window.logout;
