@@ -37,9 +37,19 @@ function _fillXlsxWS(ws, recs, priceMap) {
   const nCols  = _XLS_HDRS.length;
   const numIdx = new Set([6,7,9,10,12,13,15,16,18,19,20]);
   const qtdIdx = new Set([6,9,12,15,18]);
-  const _calcR = (r) => priceMap
-    ? (r.servicos||[]).reduce((s,sv)=>s+(Number(sv.qtd)||0)*(priceMap[sv.tipo]||0),0)
-    : (r.total||0);
+  // OS importadas: valores históricos fixos (sv.valor = total do serviço, r.total = total da OS)
+  // OS manuais:    sv.valor = preço unitário → recalcular com priceMap se disponível
+  const _svTotal = (r, sv) => r.importado
+    ? (Number(sv.valor)||0)                                    // importada: sv.valor JÁ é o total histórico
+    : (sv.total !== undefined                                  // manual: sv.total preferido
+        ? sv.total
+        : (Number(sv.qtd)||0) * (Number(sv.valor)||0));       // manual legada sem sv.total
+
+  const _calcR = (r) => r.importado
+    ? (r.total || (r.servicos||[]).reduce((s,sv)=>s+(Number(sv.valor)||0),0))
+    : priceMap
+        ? (r.servicos||[]).reduce((s,sv)=>s+(Number(sv.qtd)||0)*(priceMap[sv.tipo]||Number(sv.valor)||0),0)
+        : (r.total || (r.servicos||[]).reduce((s,sv)=>s+_svTotal(r,sv),0));
 
   // Ordena por data ascendente (menor → maior), como veio na importação
   const sorted = [...recs].sort((a, b) => (a.data||'').localeCompare(b.data||''));
@@ -73,13 +83,16 @@ function _fillXlsxWS(ws, recs, priceMap) {
     for (let i=0; i<5; i++) {
       const s = r.servicos?.[i];
       const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
-      // VALOR N = total do serviço (não preço unitário)
-      // Com priceMap (V1/V2/V3): qtd × preço_tabela
-      // Sem priceMap: sv.total (OS manual) ou sv.valor (OS importada — já é o total histórico)
+      // VALOR N = total do serviço
+      // Importada: sv.valor é o total histórico gravado na importação
+      // Manual com priceMap: qtd × preço_tabela (ou sv.valor se tipo não está no map)
+      // Manual sem priceMap: sv.total ou qtd × sv.valor
       const valor = s?.tipo && qtd!==''
-        ? (priceMap
-            ? (priceMap[s.tipo]||0) * (Number(s.qtd)||0)
-            : (s.total !== undefined ? s.total : (Number(s.valor)||0)))
+        ? (r.importado
+            ? (Number(s.valor)||0)
+            : priceMap
+                ? (priceMap[s.tipo]||0) * (Number(s.qtd)||0)
+                : _svTotal(r, s))
         : '';
       cells.push(s?.tipo||'', qtd, valor);
     }
@@ -107,6 +120,8 @@ async function _buildXlsxTecnico(recs, priceMap=null) {
 }
 
 function _calcTotalV3(r) {
+  // OS importadas: usar total histórico gravado — nunca recalcular
+  if (r.importado) return r.total || (r.servicos||[]).reduce((s,sv)=>s+(Number(sv.valor)||0),0);
   return (r.servicos||[]).reduce((s, sv) => {
     if (sv.valorV3 !== undefined) return s + sv.valorV3;
     const preco = precosV3map[sv.tipo] || 0;
@@ -168,8 +183,11 @@ async function _buildXlsxGeral(recs) {
       for (let i=0; i<5; i++) {
         const s = r.servicos?.[i];
         const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
-        // VALOR N = total do serviço: qtd × preço_V3
-        const valorV3 = s?.tipo && qtd!=='' ? (precosV3map[s.tipo]||0) * (Number(s.qtd)||0) : '';
+        // VALOR N = total do serviço
+        // Importada: sv.valor é o total histórico | Manual: qtd × preço_V3
+        const valorV3 = s?.tipo && qtd!==''
+          ? (r.importado ? (Number(s.valor)||0) : (precosV3map[s.tipo]||0) * (Number(s.qtd)||0))
+          : '';
         cells.push(s?.tipo||'', qtd, valorV3);
       }
       const totalV3 = _calcTotalV3(r);
