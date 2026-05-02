@@ -1741,14 +1741,16 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
       const _uid = currentUser.id || '';
       const _storedHash = _uid && localStorage.getItem('sdr_admin_bio_fhash_' + _uid);
       if (_fbAuth && _storedHash) {
-        const _email = _uid.replace(/[^a-zA-Z0-9._-]/g, '_') + '@solucaoderua.app';
-        try {
-          const _cred = await _fbAuth.signInWithEmailAndPassword(_email, _storedHash);
-          _fbUser = _cred && _cred.user ? _cred.user : null;
-          console.log('[validarOS] re-auth Firebase OK:', _uid);
-        } catch(_e2) {
-          console.warn('[validarOS] re-auth falhou:', _e2.code);
+        // Tenta re-auth: primeiro email principal, depois variante .v2@
+        const _emailBase = _uid.replace(/[^a-zA-Z0-9._-]/g, '_');
+        for (const _em of [_emailBase + '@solucaoderua.app', _emailBase + '.v2@solucaoderua.app']) {
+          try {
+            const _cred = await _fbAuth.signInWithEmailAndPassword(_em, _storedHash);
+            if (_cred && _cred.user) { _fbUser = _cred.user; break; }
+          } catch(_e2) { /* tenta proximo */ }
         }
+        if (_fbUser) console.log('[validarOS] re-auth Firebase OK:', _uid, _fbUser.email);
+        else console.warn('[validarOS] re-auth falhou para:', _uid);
       }
       // Apos tentativa de re-auth, verificar novamente
       const _fbUser2 = _fbAuth ? _fbAuth.currentUser : null;

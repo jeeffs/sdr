@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v45.0 carregado — fix: PDF blob URL, seguranca_page sem iframe');
+console.log('[SDR Bundle] sdr-bundle.js v46.0 carregado — fix: re-auth multi-email, hash estatico Firebase Auth');

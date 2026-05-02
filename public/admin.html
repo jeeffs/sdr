@@ -4427,17 +4427,18 @@ const MAX_SERVICOS_POR_OS = 5; // número máximo de serviços por OS (slots s-t
 <script src="sdr-bundle.js"></script>
 <script>
 // ── Patch Firebase Auth Admin ─────────────────────────────────────────────
-// Mesmo padrão do mobile: email={uid}@solucaoderua.app, senha=sha256('sdr:uid:senha')
-// Aplicado após o bundle para não quebrar nenhuma função existente.
+// Hash ESTATICO por UID — nao depende da senha do app, nunca fica desatualizado.
+// Migração: se conta existe com hash antigo, usa email variante (.v2@) para criar nova conta.
 ;(function _patchAdminFirebaseAuth() {
   function _adminFbEmail(uid) {
     return uid.replace(/[^a-zA-Z0-9._\-]/g, '_') + '@solucaoderua.app';
   }
-  async function _adminFbSenha(uid, senha) {
-    return await window.sha256('sdr:' + uid + ':' + senha);
+  // Hash estático: não muda com troca de senha do app
+  async function _adminFbSenha(uid) {
+    return await window.sha256('sdr-auth-v2:' + uid);
   }
 
-  // ── Senha mínima 6 chars + captura para Firebase Auth ───────────────────
+  // ── Senha mínima 6 chars ─────────────────────────────────────────────────
   const _criarSenhaOrig = window.criarSenha;
   window.criarSenha = async function() {
     const p1  = document.getElementById('new-pwd')?.value || '';
@@ -4446,81 +4447,60 @@ const MAX_SERVICOS_POR_OS = 5; // número máximo de serviços por OS (slots s-t
       if (err) { err.textContent = 'A senha deve ter pelo menos 6 caracteres.'; err.style.display = 'block'; }
       return;
     }
-    _pendingPwd = p1; // captura nova senha para Firebase Auth no loginSuccess
     return _criarSenhaOrig();
   };
 
-  // Senha temporária capturada no entrar() para uso no loginSuccess()
-  let _pendingPwd = null;
-
-  // Wrap window.entrar: captura a senha antes de validar
-  const _entrarOrig = window.entrar;
-  window.entrar = async function() {
-    _pendingPwd = document.getElementById('pwd-input')?.value || null;
-    await _entrarOrig();
-    // Se login falhou, currentUser não foi definido — limpa a senha pendente
-    if (!window.currentUser) _pendingPwd = null;
-  };
-
   // ── Helper: faz Firebase Auth e grava mapeamento ─────────────────────────
-  async function _realizarFirebaseAuth(uid, pwd) {
+  // Hash estático → idempotente: pode ser chamado em qualquer login sem efeitos colaterais.
+  // Migração de conta com hash antigo: tenta email variante (.v2@) se conta principal travada.
+  async function _realizarFirebaseAuth(uid) {
     const email   = _adminFbEmail(uid);
-    const fbSenha = await _adminFbSenha(uid, pwd);
+    const fbSenha = await _adminFbSenha(uid);
+    const _RETRY_CODES = ['auth/user-not-found','auth/invalid-login-credentials','auth/invalid-credential','auth/wrong-password'];
     let fbUser = null;
     try {
       const cred = await firebase.auth().signInWithEmailAndPassword(email, fbSenha);
       fbUser = cred && cred.user ? cred.user : null;
     } catch(e) {
-      // Conta ainda não existe — cria na primeira vez
-      if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
-        const cred2 = await firebase.auth().createUserWithEmailAndPassword(email, fbSenha).catch(() => null);
-        fbUser = cred2 && cred2.user ? cred2.user : null;
+      if (_RETRY_CODES.includes(e.code)) {
+        // Tenta criar conta nova (usuario nunca autenticado) ou email variante (conta antiga com hash diferente)
+        try {
+          const cred2 = await firebase.auth().createUserWithEmailAndPassword(email, fbSenha);
+          fbUser = cred2 && cred2.user ? cred2.user : null;
+        } catch(e2) {
+          if (e2.code === 'auth/email-already-in-use') {
+            // Conta existe com hash antigo (senha antiga) — usa email variante .v2@
+            const emailV2 = uid.replace(/[^a-zA-Z0-9._\-]/g, '_') + '.v2@solucaoderua.app';
+            try {
+              const cred3 = await firebase.auth().signInWithEmailAndPassword(emailV2, fbSenha);
+              fbUser = cred3 && cred3.user ? cred3.user : null;
+            } catch(e3) {
+              if (_RETRY_CODES.includes(e3.code)) {
+                const cred4 = await firebase.auth().createUserWithEmailAndPassword(emailV2, fbSenha).catch(() => null);
+                fbUser = cred4 && cred4.user ? cred4.user : null;
+              }
+            }
+          }
+        }
       }
     }
     if (fbUser) {
-      // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
       firebase.database().ref(`authUidToAppUid/${fbUser.uid}`).set(uid).catch(() => {});
-      // Guarda hash no localStorage (persiste entre logout/login para reauth biométrica)
       localStorage.setItem('sdr_admin_bio_fhash_' + uid, fbSenha);
+      console.log('[SDR Admin] Firebase Auth OK:', uid, fbUser.email);
     }
     return fbUser;
   }
 
-  // Wrap window.loginSuccess: faz Firebase Auth com email/senha após login bem-sucedido
-  // Detecção de login biométrico: _pendingPwd é null E usuário tem credencial biométrica salva
+  // loginSuccess: sempre tenta Firebase Auth (hash estático = idempotente, sem custo)
   const _loginSuccessOrig = window.loginSuccess;
   window.loginSuccess = async function(user) {
-    if (user && user.id && _pendingPwd) {
-      // Login por senha: faz Firebase Auth em background
-      const pwd = _pendingPwd;
-      _pendingPwd = null;
+    if (user && user.id) {
       (async () => {
         try {
-          await _realizarFirebaseAuth(user.id, pwd);
-          console.log('[SDR Admin] Firebase Auth OK:', user.id);
+          await _realizarFirebaseAuth(user.id);
         } catch(e) {
-          console.warn('[SDR Admin] Firebase Auth falhou (não-crítico):', e.message);
-        }
-      })();
-    } else if (user && user.id && !_pendingPwd && localStorage.getItem('srua_cred_' + user.id)) {
-      // Login biométrico: _pendingPwd nulo + existe credencial biométrica salva para este usuário
-      const uid = user.id;
-      (async () => {
-        try {
-          const storedHash = localStorage.getItem('sdr_admin_bio_fhash_' + uid);
-          if (storedHash) {
-            const cred = await firebase.auth().signInWithEmailAndPassword(_adminFbEmail(uid), storedHash).catch(() => null);
-            if (cred && cred.user) {
-              firebase.database().ref(`authUidToAppUid/${cred.user.uid}`).set(uid).catch(() => {});
-              console.log('[SDR Admin] Firebase Auth biométrica OK:', uid);
-            } else {
-              console.warn('[SDR Admin] Firebase Auth biométrica falhou — hash expirado ou inválido');
-            }
-          } else {
-            console.warn('[SDR Admin] Firebase Auth biométrica: sem hash salvo para', uid);
-          }
-        } catch(e) {
-          console.warn('[SDR Admin] Firebase Auth biométrica falhou (não-crítico):', e.message);
+          console.warn('[SDR Admin] Firebase Auth falhou (nao-critico):', e.message);
         }
       })();
     }
