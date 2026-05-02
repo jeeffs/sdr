@@ -112,6 +112,41 @@ window.USERS_INIT = [
   ...Array.from({length:10},(_,i)=>({id:`tecnico${i+1}`,name:`Prestador ${i+1}`,role:'user',nivel:'V1'}))
 ];
 
+// ── Helpers de nível — usados pelo bundle (window.xxx para acesso via tecnicos.js) ──
+window._NIVEL_NOMES = { V0:'Gestão', V1:'Prestador', V2:'PRESTADOR', V3:'Admin', V4:'Observador' };
+window._safeNivel = function(n) { return window._NIVEL_NOMES[n] || 'Prestador'; };
+
+// ── Helpers de role — definidos como var para hoist no IIFE flat do Rollup ──
+// Idênticos ao window.xxx de admin.html, duplicados para que módulos do bundle
+// possam chamá-los sem prefixo window. (ex: _isAdmin(currentUser))
+// eslint-disable-next-line no-var
+var _isAdmin      = function(u) { return u?.role === 'master'; };
+// eslint-disable-next-line no-var
+var _isFiscal     = function(u) { return (u?.nivel || 'V1') === 'V0'; };
+// eslint-disable-next-line no-var
+var _isObservador = function(u) { return (u?.nivel || 'V1') === 'V4'; };
+// eslint-disable-next-line no-var
+var _isV3Import   = function(u) { return (u?.name||'').toLowerCase() === 'jefferson' && u?.role !== 'master'; };
+window._isAdmin      = _isAdmin;
+window._isFiscal     = _isFiscal;
+window._isObservador = _isObservador;
+window._isV3Import   = _isV3Import;
+
+// ── Helpers de OS importada — usados por os.js e dashboard_admin.js sem window. ──
+// eslint-disable-next-line no-var
+var _isImportada = function(r) { return r?.importado === true; };
+// eslint-disable-next-line no-var
+var _isImportadaConcluida = function(r) {
+  if (!r?.importado) return false;
+  if (r.validacaoFiscal === 'importada') return true;
+  // Retrocompat: importações antigas sem campo — se mês anterior ao vigente, é concluída
+  const _h = new Date();
+  const _mv = `${_h.getFullYear()}-${String(_h.getMonth()+1).padStart(2,'0')}`;
+  return (r.data||'').slice(0,7) < _mv;
+};
+window._isImportada           = _isImportada;
+window._isImportadaConcluida  = _isImportadaConcluida;
+
 window._normServico = function(tipo) {
   if (!tipo) return tipo;
   const t = tipo.replace(/\xa0/g,' ').replace(/\s+/g,' ').trim().toUpperCase();

@@ -54,7 +54,8 @@ async function _carregarConfig() {
     profilesCidades = { FILIAL: [...FILIAL_CIDADES], MATRIZ: [...MATRIZ_CIDADES] };
     await _dbSet('config/profiles', { FILIAL: FILIAL_CIDADES, MATRIZ: MATRIZ_CIDADES });
   }
-  atualizarProfileSelect();
+  if (typeof atualizarProfileSelect === 'function') atualizarProfileSelect();
+  else if (typeof window.atualizarProfileSelect === 'function') window.atualizarProfileSelect();
 }
 
 async function garantirPrecos() {
