@@ -4037,6 +4037,10 @@ async function gerarPdfExportDocs() {
   else toast('Pop-up bloqueado. Permita pop-ups para gerar o PDF.','error');
 }
 </script>
+<!-- Constantes globais usadas pelo bundle (os.js) -->
+<script>
+const MAX_SERVICOS_POR_OS = 5; // número máximo de serviços por OS (slots s-tipo-1..5)
+</script>
 <!-- SDR Bundle: modulos ES compilados pelo Vite — carrega ANTES do legado -->
 <script src="sdr-bundle.js"></script>
 <script>
