@@ -465,6 +465,155 @@ async function gerarCodigoOS() {
   if (icon) setTimeout(() => icon.classList.remove('fa-spinner', 'fa-spin'), 400);
 }
 
+// ── Filtros e dropdowns da tabela de OS ──
+
+function _atualizarDropdownTecnicos() {
+  const imp = document.getElementById('filter-importado')?.value || '';
+  const base = imp === ''    ? allRecords
+             : imp === 'imp' ? allRecords.filter(r =>  r.importado)
+             :                 allRecords.filter(r => !r.importado);
+  const comOS = new Set(base.map(r => r.userId).filter(Boolean));
+  const todosUsers = Object.entries(usersCache)
+    .filter(([, u]) => u.ativo !== false && !u.firstLogin && u.name)
+    .sort((a, b) => (a[1].name || '').localeCompare(b[1].name || '', 'pt-BR'));
+  ['filter-tec', 'exp-tec'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    const prev = el.value;
+    const first = el.options[0].outerHTML;
+    el.innerHTML = first + todosUsers.map(([uid, u]) =>
+      comOS.has(uid)
+        ? `<option value="${uid}">${u.name}</option>`
+        : `<option value="${uid}" disabled style="color:#cbd5e1">${u.name} (sem OS)</option>`
+    ).join('');
+    if (prev && comOS.has(prev)) el.value = prev;
+    else if (prev) el.value = '';
+  });
+}
+
+function _atualizarDropdownCidades(activeRecords) {
+  ['filter-cidade','exp-cidade'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    const prev = el.value;
+    const first = el.options[0].outerHTML;
+    const todasCidades = [
+      ...new Set([
+        ...(profilesCidades.FILIAL || []),
+        ...(profilesCidades.MATRIZ || []),
+        ...allRecords.filter(r => r.cidade).map(r => r.cidade)
+      ])
+    ].sort();
+    if (!_isAdmin(currentUser)) {
+      const comOS = new Set((activeRecords||[]).filter(r => r.cidade).map(r => r.cidade));
+      el.innerHTML = first + todasCidades.map(c =>
+        comOS.has(c)
+          ? `<option value="${c}">${c}</option>`
+          : `<option value="${c}" disabled style="color:#cbd5e1">${c} (sem OS)</option>`
+      ).join('');
+    } else {
+      const comOS = new Set(allRecords.filter(r => r.cidade).map(r => r.cidade));
+      el.innerHTML = first + todasCidades.map(c =>
+        comOS.has(c)
+          ? `<option value="${c}">${c}</option>`
+          : `<option value="${c}" disabled style="color:#cbd5e1">${c} (sem OS)</option>`
+      ).join('');
+    }
+    if (prev) el.value = prev;
+  });
+}
+
+function popularFiltros() {
+  _atualizarDropdownCidades(filteredRecords());
+  if (_isAdmin(currentUser)) _atualizarDropdownTecnicos();
+}
+
+// ── Descontos ──
+
+async function carregarDescontos() {
+  try {
+    const snap = await db.ref('config/descontos').once('value');
+    descontosCache = {};
+    const raw = snap.val() || {};
+    for (const [k, v] of Object.entries(raw)) descontosCache[k] = { ...v, fbKey: k };
+  } catch(e) {
+    console.error('[carregarDescontos]', e);
+    descontosCache = {};
+  }
+}
+
+async function carregarDescontosTec(uid) {
+  try {
+    const [snapD, snapA] = await Promise.all([
+      db.ref('config/descontos').once('value'),
+      db.ref('config/assinatura_master').once('value')
+    ]);
+    descontosCache = {};
+    const raw = snapD.val() || {};
+    for (const [k, v] of Object.entries(raw)) {
+      if (v.uid === uid) descontosCache[k] = { ...v, fbKey: k };
+    }
+    assinaturaMaster = snapA.val() || null;
+  } catch(e) {
+    console.error('[carregarDescontosTec]', e);
+    descontosCache = {};
+    assinaturaMaster = null;
+  }
+}
+
+// ── Botões de exportação por técnico ──
+
+function renderBotoesTecnicos() {
+  if (!_isAdmin(currentUser)) return;
+  const wrap = document.getElementById('exp-por-tecnico');
+  if (!wrap) return;
+  wrap.style.display = 'block';
+  const anos = [...new Set(allRecords.map(r => (r.data||'').slice(0,4)).filter(a => a.length===4))].sort().reverse();
+  const selAno = document.getElementById('exp-ano');
+  if (selAno) {
+    const atual = selAno.value;
+    selAno.innerHTML = '<option value="">-- Selecione --</option>' +
+      anos.map(a => `<option value="${a}" ${a===atual?'selected':''}>${a}</option>`).join('');
+  }
+  const tecStep   = document.getElementById('exp-tec-step');
+  const nivelStep = document.getElementById('exp-nivel-step');
+  if (tecStep)   tecStep.style.display   = 'none';
+  if (nivelStep) nivelStep.style.display = 'none';
+}
+
+function renderBotaoTecnicoProprio() {
+  const propWrap = document.getElementById('exp-proprio-tec');
+  const botoesEl = document.getElementById('exp-proprio-botoes');
+  const master   = document.getElementById('exp-por-tecnico');
+  if (currentUser.role === 'user') {
+    if (_isFiscal(currentUser)) {
+      if (propWrap) propWrap.style.display = 'none';
+      if (master)   master.style.display   = 'none';
+      return;
+    }
+    if (propWrap) propWrap.style.display = 'block';
+    if (master)   master.style.display   = 'none';
+    if (botoesEl) {
+      const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      const hoje = new Date();
+      const meses = [
+        new Date(hoje.getFullYear(), hoje.getMonth(), 1),
+        new Date(hoje.getFullYear(), hoje.getMonth()-1, 1),
+      ];
+      botoesEl.innerHTML = meses.map((d, i) => {
+        const yy = d.getFullYear();
+        const mm = String(d.getMonth()+1).padStart(2,'0');
+        const label = `${MESES_PT[d.getMonth()]} ${yy}`;
+        const isCur = i === 0;
+        return `<button class="btn ${isCur?'btn-success':'btn-secondary'}"
+          onclick="exportarTecnicoMes(currentUser.id, '${yy}-${mm}')">
+          <i class="fas fa-file-excel"></i> ${label}${isCur?' (atual)':' (anterior)'}
+        </button>`;
+      }).join('');
+    }
+  } else {
+    if (propWrap) propWrap.style.display = 'none';
+  }
+}
+
 // ── Expor funções como globals para o admin.html (tree-shaking fix) ──
 window.carregarDados = carregarDados;
 window._validarOS = _validarOS;
@@ -483,3 +632,10 @@ window.preencherPreco = preencherPreco;
 window.calcTotal = calcTotal;
 window.gerarCodigoOS = gerarCodigoOS;
 window.getActivePriceMap = getActivePriceMap;
+window._atualizarDropdownTecnicos = _atualizarDropdownTecnicos;
+window._atualizarDropdownCidades = _atualizarDropdownCidades;
+window.popularFiltros = popularFiltros;
+window.carregarDescontos = carregarDescontos;
+window.carregarDescontosTec = carregarDescontosTec;
+window.renderBotoesTecnicos = renderBotoesTecnicos;
+window.renderBotaoTecnicoProprio = renderBotaoTecnicoProprio;

@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v40.0 carregado — Fases A+B+C+D — fix: buildServiceRows, preencherPreco, calcTotal, gerarCodigoOS, getActivePriceMap');
+console.log('[SDR Bundle] sdr-bundle.js v41.0 carregado — Fases A+B+C+D — fix: popularFiltros, carregarDescontos, renderBotoesTecnicos, dropdowns');
