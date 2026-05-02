@@ -4030,6 +4030,18 @@ async function gerarPdfExportDocs() {
     return await window.sha256('sdr:' + uid + ':' + senha);
   }
 
+  // ── Senha mínima 6 chars (bundle usa 4 — padronizar com mobile) ──────────
+  const _criarSenhaOrig = window.criarSenha;
+  window.criarSenha = async function() {
+    const p1  = document.getElementById('new-pwd')?.value || '';
+    const err = document.getElementById('first-login-err');
+    if (p1.length < 6) {
+      if (err) { err.textContent = 'A senha deve ter pelo menos 6 caracteres.'; err.style.display = 'block'; }
+      return;
+    }
+    return _criarSenhaOrig();
+  };
+
   // Senha temporária capturada no entrar() para uso no loginSuccess()
   let _pendingPwd = null;
 
@@ -4042,6 +4054,30 @@ async function gerarPdfExportDocs() {
     if (!window.currentUser) _pendingPwd = null;
   };
 
+  // ── Helper: faz Firebase Auth e grava mapeamento ─────────────────────────
+  async function _realizarFirebaseAuth(uid, pwd) {
+    const email   = _adminFbEmail(uid);
+    const fbSenha = await _adminFbSenha(uid, pwd);
+    let fbUser = null;
+    try {
+      const cred = await firebase.auth().signInWithEmailAndPassword(email, fbSenha);
+      fbUser = cred && cred.user ? cred.user : null;
+    } catch(e) {
+      // Conta ainda não existe — cria na primeira vez
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
+        const cred2 = await firebase.auth().createUserWithEmailAndPassword(email, fbSenha).catch(() => null);
+        fbUser = cred2 && cred2.user ? cred2.user : null;
+      }
+    }
+    if (fbUser) {
+      // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
+      firebase.database().ref(`authUidToAppUid/${fbUser.uid}`).set(uid).catch(() => {});
+      // Guarda hash no sessionStorage para reauth biométrica após logout
+      sessionStorage.setItem('sdr_admin_bio_fhash', uid + ':' + fbSenha);
+    }
+    return fbUser;
+  }
+
   // Wrap window.loginSuccess: faz Firebase Auth com email/senha após login bem-sucedido
   const _loginSuccessOrig = window.loginSuccess;
   window.loginSuccess = async function(user) {
@@ -4051,23 +4087,7 @@ async function gerarPdfExportDocs() {
       // Firebase Auth em background — não bloqueia a entrada no admin
       (async () => {
         try {
-          const email   = _adminFbEmail(user.id);
-          const fbSenha = await _adminFbSenha(user.id, pwd);
-          let fbUser = null;
-          try {
-            const cred = await firebase.auth().signInWithEmailAndPassword(email, fbSenha);
-            fbUser = cred && cred.user ? cred.user : null;
-          } catch(e) {
-            // Conta ainda não existe — cria na primeira vez
-            if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials' || e.code === 'auth/invalid-credential') {
-              const cred2 = await firebase.auth().createUserWithEmailAndPassword(email, fbSenha).catch(() => null);
-              fbUser = cred2 && cred2.user ? cred2.user : null;
-            }
-          }
-          // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
-          if (fbUser) {
-            firebase.database().ref(`authUidToAppUid/${fbUser.uid}`).set(user.id).catch(() => {});
-          }
+          await _realizarFirebaseAuth(user.id, pwd);
           console.log('[SDR Admin] Firebase Auth OK:', user.id);
         } catch(e) {
           console.warn('[SDR Admin] Firebase Auth falhou (não-crítico):', e.message);
@@ -4077,10 +4097,33 @@ async function gerarPdfExportDocs() {
     return _loginSuccessOrig(user);
   };
 
+  // ── Wrap loginBiometrico: garante sessão Firebase Auth antes de entrar ────
+  // O bundle chama loginSuccess diretamente sem Firebase Auth — este wrap corrige isso.
+  const _loginBiometricoOrig = window.loginBiometrico;
+  window.loginBiometrico = async function() {
+    // Descobre o uid do último usuário (localStorage igual ao que o bundle usa)
+    const lastUid  = localStorage.getItem('srua_lastUid');
+    const fbUser   = firebase.auth().currentUser;
+    // Se já tem sessão Firebase Auth ativa para este usuário, segue normalmente
+    if (fbUser && lastUid && fbUser.email === _adminFbEmail(lastUid)) {
+      return _loginBiometricoOrig();
+    }
+    // Tenta reautenticar usando hash guardado na sessão
+    if (lastUid) {
+      const stored = sessionStorage.getItem('sdr_admin_bio_fhash');
+      if (stored && stored.startsWith(lastUid + ':')) {
+        const hash = stored.slice(lastUid.length + 1);
+        await firebase.auth().signInWithEmailAndPassword(_adminFbEmail(lastUid), hash).catch(() => {});
+      }
+    }
+    return _loginBiometricoOrig();
+  };
+
   // Wrap window.logout: encerra sessão Firebase Auth ao sair
   const _logoutOrig = window.logout;
   window.logout = function() {
     firebase.auth().signOut().catch(() => {});
+    sessionStorage.removeItem('sdr_admin_bio_fhash');
     if (_logoutOrig) _logoutOrig();
   };
 })();
