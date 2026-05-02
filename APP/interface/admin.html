@@ -10736,10 +10736,18 @@ function _fillXlsxWS(ws, recs, priceMap) {
   const nCols  = _XLS_HDRS.length;
   const numIdx = new Set([6,7,9,10,12,13,15,16,18,19,20]);
   const qtdIdx = new Set([6,9,12,15,18]);
-  const _calcR = (r) => priceMap
-    ? (r.servicos||[]).reduce((s,sv)=>s+(Number(sv.qtd)||0)*(priceMap[sv.tipo]||0),0)
-    : (r.total||0);
-  const totalGeral = recs.reduce((s,r) => s + _calcR(r), 0);
+  // Valor total de um serviço: importado usa valor histórico; manual usa priceMap × qtd
+  const _svTotal = (r, sv) => r.importado
+    ? (Number(sv.valor)||0)
+    : (Number(sv.qtd)||0) * (priceMap ? (priceMap[sv.tipo]||0) : (Number(sv.valor)||0));
+  const _calcR = (r) => r.importado
+    ? (r.total || (r.servicos||[]).reduce((s,sv) => s + (Number(sv.valor)||0), 0))
+    : priceMap
+      ? (r.servicos||[]).reduce((s,sv) => s + (Number(sv.qtd)||0) * (priceMap[sv.tipo]||0), 0)
+      : (r.total||0);
+  // Ordenar por data ascendente
+  const sorted = [...recs].sort((a, b) => (a.data||'').localeCompare(b.data||''));
+  const totalGeral = sorted.reduce((s,r) => s + _calcR(r), 0);
 
   // Linha 1 – Total Geral
   const r1 = ws.addRow(Array(nCols).fill(''));
@@ -10762,15 +10770,13 @@ function _fillXlsxWS(ws, recs, priceMap) {
   for (let c=1; c<=nCols; c++) _applyStyle(r3.getCell(c), _xlsxStyleD());
   ws.views = [{ state:'frozen', ySplit:2 }];
 
-  // Dados
-  recs.forEach(r => {
+  // Dados (ordenados por data ascendente)
+  sorted.forEach(r => {
     const cells = [_fmtXlsxData(r.data), r.profile||'', r.cidade||'', r.referencia||'', r.cto_ceo||''];
     for (let i=0; i<5; i++) {
       const s = r.servicos?.[i];
       const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
-      const valor = priceMap
-        ? (s?.tipo ? (priceMap[s.tipo]||0) : '')
-        : (s?.valor!==undefined&&s?.valor!==''?Number(s.valor)||0:'');
+      const valor = s?.tipo ? _svTotal(r, s) : '';
       cells.push(s?.tipo||'', qtd, qtd!==''&&s?.tipo ? valor : '');
     }
     const tot = _calcR(r);
@@ -10798,7 +10804,9 @@ async function _buildXlsxTecnico(recs, priceMap=null) {
 }
 
 // Recalcula o total de uma OS usando a tabela de preços V3
+// Para OS importadas, preserva o valor histórico no momento da importação
 function _calcTotalV3(r) {
+  if (r.importado) return r.total || (r.servicos||[]).reduce((s,sv) => s + (Number(sv.valor)||0), 0);
   return (r.servicos||[]).reduce((s, sv) => {
     if (sv.valorV3 !== undefined) return s + sv.valorV3;
     const preco = precosV3map[sv.tipo] || 0;
@@ -10853,12 +10861,17 @@ async function _buildXlsxGeral(recs) {
   });
 
   Object.entries(grupos).forEach(([tec, grp]) => {
-    grp.forEach(r => {
+    // Ordenar registros do técnico por data ascendente
+    const grpSorted = [...grp].sort((a, b) => (a.data||'').localeCompare(b.data||''));
+    grpSorted.forEach(r => {
       const cells = [tec, _fmtXlsxData(r.data), r.profile||'', r.cidade||'', r.referencia||'', r.cto_ceo||''];
       for (let i=0; i<5; i++) {
         const s = r.servicos?.[i];
         const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
-        const valorV3 = s?.tipo ? (precosV3map[s.tipo] || 0) : '';
+        // Importado: usa valor histórico; manual: usa preço V3 × qtd
+        const valorV3 = s?.tipo
+          ? (r.importado ? (Number(s.valor)||0) : (precosV3map[s.tipo] || 0))
+          : '';
         cells.push(s?.tipo||'', qtd, qtd!==''&&s?.tipo ? valorV3 : '');
       }
       const totalV3 = _calcTotalV3(r);
@@ -11090,8 +11103,7 @@ async function exportarMesNivel(nivel) {
     const a = document.createElement('a');
     a.href = _createBlobUrl(blob);
     a.download = `${nome}_${profile}_${tipo}_${mesNome}${ano}_${nivel}.xlsx`;
-    a.click();
-    _revokeBlobUrl(a.href);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
     toast(`✔ ${nome} | ${profile} ${tipo} | ${mesNome}/${ano} | ${nivel} gerado!`, 'success');
   } catch(e) { toast('Erro: ' + e.message, 'error'); }
 }

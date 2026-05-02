@@ -403,10 +403,11 @@ async function exportarMesNivel(nivel) {
     const buf  = await _buildXlsxTecnico(recs, pm);
     const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
     const a = document.createElement('a');
-    a.href = _createBlobUrl(blob);
+    const _url = _createBlobUrl(blob);
+    a.href = _url;
     a.download = `${nome}_${profile}_${tipo}_${mesNome}${ano}_${nivel}.xlsx`;
-    a.click();
-    _revokeBlobUrl(a.href);
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    // URL gerenciada por _createBlobUrl/_revokeAllBlobs — não revogar antes do download terminar
     toast(`✔ ${nome} | ${profile} ${tipo} | ${mesNome}/${ano} | ${nivel} gerado!`, 'success');
   } catch(e) { toast('Erro: ' + e.message, 'error'); }
 }

@@ -3418,10 +3418,81 @@ const _xlsxStyleQ = () => ({
 // Aplica estilo via cell.style (forma correta no ExcelJS — garante que numFmt não seja perdido)
 
 // Preenche uma worksheet existente com os dados de técnico
+function _fillXlsxWS(ws, recs, priceMap) {
+  ws.columns = _XLS_COL_PX.map(px => ({ width: Math.round(px / 7) }));
+  const nCols  = _XLS_HDRS.length;
+  const numIdx = new Set([6,7,9,10,12,13,15,16,18,19,20]);
+  const qtdIdx = new Set([6,9,12,15,18]);
+  // Valor total de um serviço: importado usa valor histórico; manual usa priceMap × qtd
+  const _svTotal = (r, sv) => r.importado
+    ? (Number(sv.valor)||0)
+    : (Number(sv.qtd)||0) * (priceMap ? (priceMap[sv.tipo]||0) : (Number(sv.valor)||0));
+  const _calcR = (r) => r.importado
+    ? (r.total || (r.servicos||[]).reduce((s,sv) => s + (Number(sv.valor)||0), 0))
+    : priceMap
+      ? (r.servicos||[]).reduce((s,sv) => s + (Number(sv.qtd)||0) * (priceMap[sv.tipo]||0), 0)
+      : (r.total||0);
+  // Ordenar por data ascendente
+  const sorted = [...recs].sort((a, b) => (a.data||'').localeCompare(b.data||''));
+  const totalGeral = sorted.reduce((s,r) => s + _calcR(r), 0);
+  const r1 = ws.addRow(Array(nCols).fill(''));
+  r1.height = 20;
+  for (let c=1; c<=nCols-3; c++) _applyStyle(r1.getCell(c), { font:{name:'Calibri',size:10} });
+  r1.getCell(nCols-2).value = 'TOTAL GERAL:';
+  _applyStyle(r1.getCell(nCols-2), _xlsxStyleGrayLabel());
+  ws.mergeCells(1, nCols-2, 1, nCols-1);
+  r1.getCell(nCols).value = totalGeral;
+  _applyStyle(r1.getCell(nCols), _xlsxStyleOrangeM());
+  const r2 = ws.addRow(_XLS_HDRS);
+  r2.height = 22;
+  for (let c=1; c<=nCols; c++) _applyStyle(r2.getCell(c), _xlsxStyleH('center'));
+  const r3 = ws.addRow(Array(nCols).fill(''));
+  r3.height = 5;
+  for (let c=1; c<=nCols; c++) _applyStyle(r3.getCell(c), _xlsxStyleD());
+  ws.views = [{ state:'frozen', ySplit:2 }];
+  sorted.forEach(r => {
+    const cells = [_fmtXlsxData(r.data), r.profile||'', r.cidade||'', r.referencia||'', r.cto_ceo||''];
+    for (let i=0; i<5; i++) {
+      const s = r.servicos?.[i];
+      const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
+      const valor = s?.tipo ? _svTotal(r, s) : '';
+      cells.push(s?.tipo||'', qtd, qtd!==''&&s?.tipo ? valor : '');
+    }
+    const tot = _calcR(r);
+    cells.push(tot > 0 ? tot : '');
+    const row = ws.addRow(cells);
+    cells.forEach((_, ci) => {
+      const cell = row.getCell(ci+1);
+      if (ci === nCols-1 && cells[ci] !== '') {
+        _applyStyle(cell, _xlsxStyleTotalCol());
+      } else if (numIdx.has(ci) && cells[ci] !== '') {
+        _applyStyle(cell, qtdIdx.has(ci) ? _xlsxStyleQ() : _xlsxStyleM());
+      } else {
+        _applyStyle(cell, _xlsxStyleD());
+      }
+    });
+  });
+}
 
 // Planilha simples (compatibilidade com exportações existentes)
+async function _buildXlsxTecnico(recs, priceMap=null) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'ServicoDeRua';
+  _fillXlsxWS(wb.addWorksheet('base'), recs, priceMap);
+  return wb.xlsx.writeBuffer();
+}
 
 // Recalcula o total de uma OS usando a tabela de preços V3
+// Para OS importadas, preserva o valor histórico no momento da importação
+function _calcTotalV3(r) {
+  if (r.importado) return r.total || (r.servicos||[]).reduce((s,sv) => s + (Number(sv.valor)||0), 0);
+  return (r.servicos||[]).reduce((s, sv) => {
+    if (sv.valorV3 !== undefined) return s + sv.valorV3;
+    const preco = precosV3map[sv.tipo] || 0;
+    const qtd   = Number(sv.qtd) || 0;
+    return s + preco * qtd;
+  }, 0);
+}
 
 
 // ── Planilha Geral: todos os técnicos de uma categoria em UM único arquivo ──
@@ -3433,9 +3504,246 @@ const _XLS_COL_PX_GERAL = [85,72,58,120,200,75, 180,55,78, 180,55,78, 180,55,78,
 
 // _buildGeralSpreadsheetML removido — substituído por _buildXlsxGeral (ExcelJS)
 
+async function _buildXlsxGeral(recs) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'ServicoDeRua';
+  const ws = wb.addWorksheet('base');
+  ws.columns = _XLS_COL_PX_GERAL.map(px => ({ width: Math.round(px / 7) }));
+  const nCols   = _XLS_HDRS_GERAL.length;
+  const numIdx  = new Set([7,8,10,11,13,14,16,17,19,20,21]);
+  const qtdIdx  = new Set([7,10,13,16,19]);
+  const totalGeral = recs.reduce((s,r) => s + _calcTotalV3(r), 0);
+  const r1 = ws.addRow(Array(nCols).fill(''));
+  r1.height = 20;
+  for (let c=1; c<=nCols-3; c++) _applyStyle(r1.getCell(c), { font:{name:'Calibri',size:10} });
+  r1.getCell(nCols-2).value = 'TOTAL GERAL:';
+  _applyStyle(r1.getCell(nCols-2), _xlsxStyleGrayLabel());
+  ws.mergeCells(1, nCols-2, 1, nCols-1);
+  r1.getCell(nCols).value = totalGeral;
+  _applyStyle(r1.getCell(nCols), _xlsxStyleOrangeM());
+  const r2 = ws.addRow(_XLS_HDRS_GERAL);
+  r2.height = 22;
+  for (let c=1; c<=nCols; c++) _applyStyle(r2.getCell(c), _xlsxStyleH('center'));
+  const r3 = ws.addRow(Array(nCols).fill(''));
+  r3.height = 5;
+  for (let c=1; c<=nCols; c++) _applyStyle(r3.getCell(c), _xlsxStyleD());
+  ws.views = [{ state:'frozen', ySplit:2 }];
+  const grupos = {};
+  recs.forEach(r => {
+    const k = r.userName||'—';
+    if (!grupos[k]) grupos[k] = [];
+    grupos[k].push(r);
+  });
+  Object.entries(grupos).forEach(([tec, grp]) => {
+    const grpSorted = [...grp].sort((a, b) => (a.data||'').localeCompare(b.data||''));
+    grpSorted.forEach(r => {
+      const cells = [tec, _fmtXlsxData(r.data), r.profile||'', r.cidade||'', r.referencia||'', r.cto_ceo||''];
+      for (let i=0; i<5; i++) {
+        const s = r.servicos?.[i];
+        const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
+        const valorV3 = s?.tipo
+          ? (r.importado ? (Number(s.valor)||0) : (precosV3map[s.tipo] || 0))
+          : '';
+        cells.push(s?.tipo||'', qtd, qtd!==''&&s?.tipo ? valorV3 : '');
+      }
+      const totalV3 = _calcTotalV3(r);
+      cells.push(totalV3 > 0 ? totalV3 : '');
+      const row = ws.addRow(cells);
+      cells.forEach((_, ci) => {
+        const cell = row.getCell(ci+1);
+        if (ci === nCols-1 && cells[ci] !== '') {
+          _applyStyle(cell, _xlsxStyleTotalCol());
+        } else if (numIdx.has(ci) && cells[ci] !== '') {
+          _applyStyle(cell, qtdIdx.has(ci) ? _xlsxStyleQ() : _xlsxStyleM());
+        } else {
+          _applyStyle(cell, _xlsxStyleD());
+        }
+      });
+    });
+  });
+  return wb.xlsx.writeBuffer();
+}
+
+async function _downloadXlsx(buffer, filename) {
+  const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = _createBlobUrl(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+async function _gerarArquivosPorGrupo(records, onDone) {
+  const grupos = {};
+  records.forEach(r => {
+    const chave = `${r.userName||'Prestador'}||${r.profile||''}||${r.tipo||''}`;
+    if (!grupos[chave]) grupos[chave] = {userName:r.userName||'Prestador', profile:r.profile||'', tipo:r.tipo||'', recs:[]};
+    grupos[chave].recs.push(r);
+  });
+  const lista = Object.values(grupos);
+  if (!lista.length) { toast('Nenhum registro encontrado!','error'); return; }
+  for (let i=0; i<lista.length; i++) {
+    const g = lista[i];
+    try {
+      const buf = await _buildXlsxTecnico(g.recs);
+      await _downloadXlsx(buf, `${g.userName} ${g.profile} ${g.tipo}.xlsx`);
+      await new Promise(res => setTimeout(res, 600));
+    } catch(e) { toast('Erro ao gerar planilha: ' + e.message, 'error'); }
+  }
+  if (onDone) onDone(lista.length);
+}
+
+function exportarTecnico(uid) {
+  const de = document.getElementById('exp-de').value;
+  const ate = document.getElementById('exp-ate').value;
+  const cidade = document.getElementById('exp-cidade').value;
+  const recs = allRecords.filter(r => {
+    if (r.userId !== uid) return false;
+    if (de && r.data < de) return false;
+    if (ate && r.data > ate) return false;
+    if (cidade && r.cidade !== cidade) return false;
+    return true;
+  });
+  if (!recs.length) { toast('Nenhum registro para este técnico!','error'); return; }
+  const nome = recs[0].userName;
+  toast(`Gerando planilha(s) de ${nome}...`,'success');
+  _gerarArquivosPorGrupo(recs, n => toast(`${n} arquivo(s) de ${nome} gerado(s)!`,'success'));
+}
 
 // ── Fluxo: Mês/Ano → Técnico → Profile → Tipo → Nível ───────────────────────
+function _expReset(...ids) { ids.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; }); }
 
+function atualizarTecsMes() {
+  const mes = document.getElementById('exp-mes').value;
+  const ano = document.getElementById('exp-ano').value;
+  _expReset('exp-tec-step','exp-profile-step','exp-tipo-step','exp-nivel-step');
+  if (!mes || !ano) return;
+  const prefixo = `${ano}-${mes}`;
+  const tecs = Object.entries(usersCache)
+    .filter(([,u]) => !_isAdmin(u) && u.name)
+    .sort(([a],[b]) => (parseInt(a.replace(/\D/g,''))||0) - (parseInt(b.replace(/\D/g,''))||0));
+  const sel = document.getElementById('exp-tec-sel');
+  const temQualquer = allRecords.some(r => (r.data||'').startsWith(prefixo));
+  sel.innerHTML = '<option value="">-- Selecione o técnico --</option>' +
+    `<option value="__todos__" ${temQualquer?'':'disabled'}>★ Todos os Prestadores</option>` +
+    tecs.map(([uid, u]) => {
+      const tem = allRecords.some(r => r.userId === uid && (r.data||'').startsWith(prefixo));
+      return `<option value="${uid}" ${tem?'':'disabled style="color:#aaa"'}>${u.name}${tem?'':' (sem registros)'}</option>`;
+    }).join('');
+  document.getElementById('exp-tec-step').style.display = 'block';
+}
+
+function _setExpBtn(id, ativo, onclick) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  b.style.opacity = ativo ? '1' : '.25';
+  b.style.cursor  = ativo ? 'pointer' : 'not-allowed';
+  b.onclick = ativo ? onclick : null;
+}
+
+function atualizarProfileStep() {
+  _expReset('exp-profile-step','exp-tipo-step','exp-nivel-step');
+  const uid = document.getElementById('exp-tec-sel').value;
+  if (!uid) return;
+  const mes = document.getElementById('exp-mes').value;
+  const ano = document.getElementById('exp-ano').value;
+  const prefixo = `${ano}-${mes}`;
+  const _n = s => (s||'').normalize('NFC').trim().toUpperCase();
+  const masterUids = new Set(Object.entries(usersCache).filter(([,u])=>_isAdmin(u)||_isFiscal(u)||_isObservador(u)).map(([id])=>id));
+  const _recBase = r => uid==='__todos__' ? !masterUids.has(r.userId||'') : r.userId===uid;
+  const temMatriz = allRecords.some(r => _recBase(r) && (r.data||'').startsWith(prefixo) && _n(r.profile)==='MATRIZ');
+  const temFilial = allRecords.some(r => _recBase(r) && (r.data||'').startsWith(prefixo) && _n(r.profile)==='FILIAL');
+  _setExpBtn('btn-exp-matriz', temMatriz, () => selecionarProfile('MATRIZ'));
+  _setExpBtn('btn-exp-filial', temFilial, () => selecionarProfile('FILIAL'));
+  delete document.getElementById('exp-profile-step').dataset.sel;
+  document.getElementById('exp-profile-step').style.display = 'block';
+}
+
+function selecionarProfile(profile) {
+  const uid = document.getElementById('exp-tec-sel').value;
+  const mes = document.getElementById('exp-mes').value;
+  const ano = document.getElementById('exp-ano').value;
+  const prefixo = `${ano}-${mes}`;
+  const _n = s => (s||'').normalize('NFC').trim().toUpperCase();
+  document.getElementById('btn-exp-matriz').style.opacity = profile==='MATRIZ' ? '1' : '.25';
+  document.getElementById('btn-exp-filial').style.opacity = profile==='FILIAL' ? '1' : '.25';
+  document.getElementById('exp-profile-step').dataset.sel = profile;
+  const masterUidsP = new Set(Object.entries(usersCache).filter(([,u])=>_isAdmin(u)||_isFiscal(u)||_isObservador(u)).map(([id])=>id));
+  const _recBaseP = r => uid==='__todos__' ? !masterUidsP.has(r.userId||'') : r.userId===uid;
+  const temProjeto = allRecords.some(r => _recBaseP(r) && (r.data||'').startsWith(prefixo) && _n(r.profile)===profile && _n(r.tipo)==='PROJETO');
+  const temManut   = allRecords.some(r => _recBaseP(r) && (r.data||'').startsWith(prefixo) && _n(r.profile)===profile && _n(r.tipo)==='MANUTENÇÃO');
+  _setExpBtn('btn-exp-projeto', temProjeto, () => selecionarTipo('PROJETO'));
+  _setExpBtn('btn-exp-manut',   temManut,   () => selecionarTipo('MANUTENÇÃO'));
+  delete document.getElementById('exp-tipo-step').dataset.sel;
+  _expReset('exp-nivel-step');
+  document.getElementById('exp-tipo-step').style.display = 'block';
+}
+
+function selecionarTipo(tipo) {
+  document.getElementById('btn-exp-projeto').style.opacity = tipo==='PROJETO'    ? '1' : '.25';
+  document.getElementById('btn-exp-manut').style.opacity   = tipo==='MANUTENÇÃO' ? '1' : '.25';
+  document.getElementById('exp-tipo-step').dataset.sel = tipo;
+  _setExpBtn('btn-exp-v1', true, () => exportarMesNivel('V1'));
+  _setExpBtn('btn-exp-v2', true, () => exportarMesNivel('V2'));
+  _setExpBtn('btn-exp-v3', _isAdmin(currentUser), () => exportarMesNivel('V3'));
+  document.getElementById('exp-nivel-step').style.display = 'block';
+}
+
+async function exportarMesNivel(nivel) {
+  if (nivel === 'V3' && !_isAdmin(currentUser)) {
+    toast('Acesso negado — planilhas Admin são exclusivas do master.', 'error'); return;
+  }
+  const mes     = document.getElementById('exp-mes').value;
+  const ano     = document.getElementById('exp-ano').value;
+  const uid     = document.getElementById('exp-tec-sel').value;
+  const profile = document.getElementById('exp-profile-step').dataset.sel;
+  const tipo    = document.getElementById('exp-tipo-step').dataset.sel;
+  const cidade  = document.getElementById('exp-cidade').value;
+  if (!mes || !ano || !uid || !profile || !tipo) { toast('Preencha todos os campos!', 'error'); return; }
+  const prefixo = `${ano}-${mes}`;
+  const _n = s => (s||'').normalize('NFC').trim().toUpperCase();
+  const MESES = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const mesNome = MESES[parseInt(mes)] || mes;
+  if (uid === '__todos__') {
+    const masterUidsE = new Set(Object.entries(usersCache).filter(([,u])=>_isAdmin(u)||_isFiscal(u)||_isObservador(u)).map(([id])=>id));
+    const recs = allRecords.filter(r => {
+      if (masterUidsE.has(r.userId||'')) return false;
+      if (!(r.data||'').startsWith(prefixo)) return false;
+      if (_n(r.profile) !== _n(profile)) return false;
+      if (_n(r.tipo) !== _n(tipo)) return false;
+      if (cidade && r.cidade !== cidade) return false;
+      return true;
+    });
+    if (!recs.length) { toast(`Nenhum registro para ${profile} ${tipo} em ${mes}/${ano}!`, 'error'); return; }
+    toast(`Gerando todos os prestadores — ${profile} ${tipo} — ${mesNome}/${ano} — ${nivel}...`, 'success');
+    try {
+      const buf = await _buildXlsxGeral(recs);
+      await _downloadXlsx(buf, `GERAL ${profile} ${tipo}.xlsx`);
+      toast(`✔ GERAL ${profile} ${tipo} | ${mesNome}/${ano} gerado!`, 'success');
+    } catch(e) { toast('Erro: ' + e.message, 'error'); }
+    return;
+  }
+  const pm = nivel==='V3' ? precosV3map : nivel==='V2' ? precosV2map : precosV1map;
+  const recs = allRecords.filter(r => {
+    if (r.userId !== uid) return false;
+    if (!(r.data||'').startsWith(prefixo)) return false;
+    if (_n(r.profile) !== _n(profile)) return false;
+    if (_n(r.tipo) !== _n(tipo)) return false;
+    if (cidade && r.cidade !== cidade) return false;
+    return true;
+  });
+  if (!recs.length) { toast(`Nenhum registro para ${profile} ${tipo} em ${mes}/${ano}!`, 'error'); return; }
+  const nome = usersCache[uid]?.name || uid;
+  toast(`Gerando ${nome} — ${profile} ${tipo} — ${mesNome}/${ano} — ${nivel}...`, 'success');
+  try {
+    const buf  = await _buildXlsxTecnico(recs, pm);
+    const blob = new Blob([buf], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const a = document.createElement('a');
+    a.href = _createBlobUrl(blob);
+    a.download = `${nome}_${profile}_${tipo}_${mesNome}${ano}_${nivel}.xlsx`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast(`✔ ${nome} | ${profile} ${tipo} | ${mesNome}/${ano} | ${nivel} gerado!`, 'success');
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
 
 // Envia relatório via WhatsApp: gera o mesmo relatório e abre WhatsApp
 
