@@ -4,7 +4,7 @@
     // ── Regra raiz: leitura requer auth ──────────────────────────────────────
     // Write restrito a contas @solucaoderua.app — bloqueia auth anônima
     ".read":  "auth != null",
-    ".write": "auth != null && auth.token.email != null && auth.token.email.matches('.*@solucaoderua\\.app$')",
+    ".write": "auth != null && auth.token.email != null && auth.token.email.endsWith('@solucaoderua.app')",
 
     // ── Mapeamento Firebase UID → App UID ────────────────────────────────────
     // Cada técnico só pode gravar seu próprio mapeamento (auth.uid === $fbUid)
@@ -12,7 +12,7 @@
     "authUidToAppUid": {
       ".read": "auth != null",
       "$fbUid": {
-        ".write": "auth != null && auth.uid === $fbUid && auth.token.email != null && auth.token.email.matches('.*@solucaoderua\\.app$')"
+        ".write": "auth != null && auth.uid === $fbUid && auth.token.email != null && auth.token.email.endsWith('@solucaoderua.app')"
       }
     },
 
@@ -21,7 +21,7 @@
     "audit_log": {
       ".read": "auth != null",
       "$entry": {
-        ".write": "auth != null && auth.token.email != null && auth.token.email.matches('.*@solucaoderua\\.app$') && !data.exists()"
+        ".write": "auth != null && auth.token.email != null && auth.token.email.endsWith('@solucaoderua.app') && !data.exists()"
       }
     },
 
