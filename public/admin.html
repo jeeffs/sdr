@@ -4437,7 +4437,7 @@ const MAX_SERVICOS_POR_OS = 5; // número máximo de serviços por OS (slots s-t
     return await window.sha256('sdr:' + uid + ':' + senha);
   }
 
-  // ── Senha mínima 6 chars (bundle usa 4 — padronizar com mobile) ──────────
+  // ── Senha mínima 6 chars + captura para Firebase Auth ───────────────────
   const _criarSenhaOrig = window.criarSenha;
   window.criarSenha = async function() {
     const p1  = document.getElementById('new-pwd')?.value || '';
@@ -4446,6 +4446,7 @@ const MAX_SERVICOS_POR_OS = 5; // número máximo de serviços por OS (slots s-t
       if (err) { err.textContent = 'A senha deve ter pelo menos 6 caracteres.'; err.style.display = 'block'; }
       return;
     }
+    _pendingPwd = p1; // captura nova senha para Firebase Auth no loginSuccess
     return _criarSenhaOrig();
   };
 

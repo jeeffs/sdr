@@ -1753,7 +1753,7 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
       // Apos tentativa de re-auth, verificar novamente
       const _fbUser2 = _fbAuth ? _fbAuth.currentUser : null;
       if (!_fbUser2 || _fbUser2.isAnonymous || !(_fbUser2.email || '').endsWith('@solucaoderua.app')) {
-        toast('Sessao Firebase expirada. Faca logout e login por senha para habilitar a validacao.', 'error');
+        toast('Sessao Firebase inativa. Faca logout e entre novamente para habilitar a validacao.', 'error');
         console.error('[validarOS] Firebase Auth nao ativo para usuario:', currentUser.id);
         return;
       }
@@ -1775,7 +1775,7 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
     console.error('[validarOS]', e);
     const _permErr = (e.code === 'PERMISSION_DENIED') || (typeof e.message === 'string' && e.message.includes('PERMISSION_DENIED'));
     toast(_permErr
-      ? 'Sem permissao no Firebase. Faca logout e login por senha uma vez para ativar.'
+      ? 'Sem permissao no banco. Faca logout e entre novamente.'
       : 'Erro ao validar OS. Tente novamente.',
       'error');
   }
