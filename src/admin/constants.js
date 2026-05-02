@@ -131,6 +131,13 @@ window._isAdmin      = _isAdmin;
 window._isFiscal     = _isFiscal;
 window._isObservador = _isObservador;
 window._isV3Import   = _isV3Import;
+// _isMasterUid: usa usersCache global (definido em admin.html via var)
+// eslint-disable-next-line no-var
+var _isMasterUid = function(uid) {
+  var uc = window.usersCache || (typeof usersCache !== 'undefined' ? usersCache : {});
+  return (uc[uid] || {}).role === 'master';
+};
+window._isMasterUid = _isMasterUid;
 
 // ── Helpers de OS importada — usados por os.js e dashboard_admin.js sem window. ──
 // eslint-disable-next-line no-var

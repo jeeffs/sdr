@@ -84,7 +84,9 @@ function _sdrBootstrap() {
       mainEl.appendChild(d);
     }
   });
-  if (typeof PAGES !== 'undefined' && PAGES.master) {
+  // Usa window.PAGES (exposto por tecnicos.js) — robusto contra renaming do Vite
+  var _P = window.PAGES || (typeof PAGES !== 'undefined' ? PAGES : null);
+  if (_P && _P.master) {
     var _sdrMenuItems = [
       {id:'dash-rede', icon:'fa-chart-bar',     label:'Dashboard Rede'},
       {id:'mapa',      icon:'fa-network-wired', label:'Mapa de Rede'},
@@ -96,27 +98,28 @@ function _sdrBootstrap() {
       {id:'mk-config', icon:'fa-plug',          label:'Integração MK'}
     ];
     _sdrMenuItems.forEach(function(item) {
-      if (!PAGES.master.find(function(p){ return p.id === item.id; })) {
-        PAGES.master.push(item);
+      if (!_P.master.find(function(p){ return p.id === item.id; })) {
+        _P.master.push(item);
       }
     });
     // Adicionar Mapa de Rede para todos os perfis (user, fiscal, observador)
     var _mapaItem = {id:'mapa', icon:'fa-network-wired', label:'Mapa de Rede'};
     ['user','fiscal','observador'].forEach(function(perfil) {
-      if (PAGES[perfil] && !PAGES[perfil].find(function(p){ return p.id === 'mapa'; })) {
-        PAGES[perfil].push(_mapaItem);
+      if (_P[perfil] && !_P[perfil].find(function(p){ return p.id === 'mapa'; })) {
+        _P[perfil].push(_mapaItem);
       }
     });
   }
-  if (typeof PAGE_TITLES !== 'undefined') {
-    PAGE_TITLES['mapa']      = 'Mapa de Rede \u2014 Infraestrutura FTTH';
-    PAGE_TITLES['dash-rede'] = 'Dashboard de Rede';
-    PAGE_TITLES['clientes']  = 'Clientes FTTH';
-    PAGE_TITLES['olts']      = 'OLTs \u2014 Rede \u00d3ptica';
-    PAGE_TITLES['onus']      = 'ONUs \u2014 Terminais de Cliente';
-    PAGE_TITLES['alertas']   = 'Alertas de Rede';
-    PAGE_TITLES['tickets']   = 'Chamados de Suporte';
-    PAGE_TITLES['mk-config'] = 'Integração MK Solutions';
+  var _PT = window.PAGE_TITLES || (typeof PAGE_TITLES !== 'undefined' ? PAGE_TITLES : null);
+  if (_PT) {
+    _PT['mapa']      = 'Mapa de Rede - Infraestrutura FTTH';
+    _PT['dash-rede'] = 'Dashboard de Rede';
+    _PT['clientes']  = 'Clientes FTTH';
+    _PT['olts']      = 'OLTs - Rede Optica';
+    _PT['onus']      = 'ONUs - Terminais de Cliente';
+    _PT['alertas']   = 'Alertas de Rede';
+    _PT['tickets']   = 'Chamados de Suporte';
+    _PT['mk-config'] = 'Integração MK Solutions';
   }
   if (typeof showPage === 'function' && !showPage._sdrPatched) {
     var _origShowPage = showPage;
@@ -144,7 +147,13 @@ function _sdrBootstrap() {
     buildSidebar();
   }
 }
-_sdrBootstrap();
+// Expõe _sdrBootstrap no window para que loginSuccess em tecnicos.js
+// possa garantir que os itens SDR estejam no PAGES antes de buildSidebar.
+window._sdrBootstrap = _sdrBootstrap;
+
+// Adia o bootstrap para depois que o IIFE do bundle completa,
+// garantindo que PAGES (tecnicos.js) e window.showPage já estão definidos.
+setTimeout(_sdrBootstrap, 0);
 
 // Fix: ensure page-mapa responds to .active class like other pages
 (function(){

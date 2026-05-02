@@ -3,7 +3,7 @@
 // Firebase RTDB usa WebSocket (não interceptável pelo SW) — offline tratado pelo keepSynced
 // CDN assets (Leaflet, xlsx, FA, etc.) NÃO são interceptados — o browser/HTTP cache cuida deles
 
-const CACHE_NAME  = 'sdr-v42';
+const CACHE_NAME  = 'sdr-v43';
 const CACHE_SHELL = 'sdr-shell-v42';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso

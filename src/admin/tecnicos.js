@@ -3,6 +3,9 @@
 // Extraído de admin.html — Fase B
 
 // ── Navegação — constantes de páginas ──
+// Expor PAGES e PAGE_TITLES no window para que bootstrap.js possa acessá-los
+// independente de renaming/tree-shaking do Vite no bundle IIFE
+window.PAGES = window.PAGES || null; // inicializado após declaração abaixo
 const PAGES = {
   master: [
     {id:'dashboard',    icon:'fa-chart-bar',   label:'Dashboard'},
@@ -49,6 +52,9 @@ const PAGE_TITLES = {
   os:'OS & Registros', dados:'Dados', 'configuracoes':'Configurações', 'cadastro-admin':'Cadastro da Empresa',
   'meus-docs':'Meus Documentos',
 };
+// Expor no window para acesso cross-módulo sem prefixo (bootstrap.js, etc.)
+window.PAGES = PAGES;
+window.PAGE_TITLES = PAGE_TITLES;
 
 window.renderCadastroAdmin = function() {
   const emp = (window.currentUser && window.currentUser.empresa) || {};
@@ -372,6 +378,8 @@ window.loginSuccess = async function(user) {
     document.body.classList.remove('hide-money');
     if (_olhoBtn) _olhoBtn.style.display = 'none';
   }
+  // Garante que itens SDR (mapa, olts, etc.) estejam no PAGES antes de buildar a sidebar
+  if (typeof window._sdrBootstrap === 'function') window._sdrBootstrap();
   window.buildSidebar();
 
   // Carrega dados da empresa do Firebase (se existirem)

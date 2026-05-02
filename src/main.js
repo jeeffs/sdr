@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v42.0 carregado — Fases A+B+C+D — fix: _safeNivel, _isAdmin/Fiscal/Observador globais, _isImportadaConcluida, atualizarProfileSelect defensivo');
+console.log('[SDR Bundle] sdr-bundle.js v43.0 carregado — Fases A+B+C+D — fix: mapa PAGES/window, _sdrBootstrap em loginSuccess, _isMasterUid, validacao fiscal');
