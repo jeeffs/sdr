@@ -3500,6 +3500,27 @@ const FIREBASE_CONFIG_PRESET = {
   appId: "1:887171396568:web:2a54f4332f25f1300db8ad"
 };
 
+// iniciarFirebase: inicializa o SDK Firebase (App + RTDB + Auth) e testa conectividade.
+// Era definida no bundle (admin/Fase-E/bootstrap-firebase.js) mas foi removida no v37.
+// Retorna: 'ok' (RTDB OK), 'permission' (regras bloqueando), 'error' (timeout/WebSocket falhou).
+// IMPORTANTE: firebase.initializeApp() é chamada imediatamente — mesmo com timeout (result='error')
+// o firebase.auth() e firebase.database() ficam disponíveis para o fallback REST.
+async function iniciarFirebase(config) {
+  try {
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp(config);
+    }
+    window.db   = firebase.database();
+    window.auth = firebase.auth();
+    // Testa leitura real (pode travar se WebSocket for bloqueado — timeout no Promise.race)
+    await window.db.ref('users').limitToFirst(1).once('value');
+    return 'ok';
+  } catch(e) {
+    if (e && e.code === 'PERMISSION_DENIED') return 'permission';
+    return 'error';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async function() {
   // Roda após todos os <script> carregarem (bundle na linha ~3988 já está disponível)
   // Use saved config or preset config
