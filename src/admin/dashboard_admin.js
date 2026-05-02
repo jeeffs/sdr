@@ -1733,6 +1733,31 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
   const agora = new Date().toISOString();
   const fiscalNome = currentUser.name;
   try {
+    // Garantir Firebase Auth ativo antes de escrever no banco
+    const _fbAuth = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth() : null;
+    let _fbUser = _fbAuth ? _fbAuth.currentUser : null;
+    if (!_fbUser || _fbUser.isAnonymous || !(_fbUser.email || '').endsWith('@solucaoderua.app')) {
+      // Tentar re-autenticar com hash salvo (caso login biometrico sem sessao Firebase)
+      const _uid = currentUser.id || '';
+      const _storedHash = _uid && localStorage.getItem('sdr_admin_bio_fhash_' + _uid);
+      if (_fbAuth && _storedHash) {
+        const _email = _uid.replace(/[^a-zA-Z0-9._-]/g, '_') + '@solucaoderua.app';
+        try {
+          const _cred = await _fbAuth.signInWithEmailAndPassword(_email, _storedHash);
+          _fbUser = _cred && _cred.user ? _cred.user : null;
+          console.log('[validarOS] re-auth Firebase OK:', _uid);
+        } catch(_e2) {
+          console.warn('[validarOS] re-auth falhou:', _e2.code);
+        }
+      }
+      // Apos tentativa de re-auth, verificar novamente
+      const _fbUser2 = _fbAuth ? _fbAuth.currentUser : null;
+      if (!_fbUser2 || _fbUser2.isAnonymous || !(_fbUser2.email || '').endsWith('@solucaoderua.app')) {
+        toast('Sessao Firebase expirada. Faca logout e login por senha para habilitar a validacao.', 'error');
+        console.error('[validarOS] Firebase Auth nao ativo para usuario:', currentUser.id);
+        return;
+      }
+    }
     const updates = {
       validacaoFiscal: 'validada',
       validadoPor: fiscalNome,
@@ -1748,7 +1773,11 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
     renderFiscalizacao();
   } catch(e) {
     console.error('[validarOS]', e);
-    toast('Erro ao validar OS. Tente novamente.', 'error');
+    const _permErr = (e.code === 'PERMISSION_DENIED') || (typeof e.message === 'string' && e.message.includes('PERMISSION_DENIED'));
+    toast(_permErr
+      ? 'Sem permissao no Firebase. Faca logout e login por senha uma vez para ativar.'
+      : 'Erro ao validar OS. Tente novamente.',
+      'error');
   }
 }
 

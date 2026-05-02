@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v43.0 carregado — Fases A+B+C+D — fix: mapa PAGES/window, _sdrBootstrap em loginSuccess, _isMasterUid, validacao fiscal');
+console.log('[SDR Bundle] sdr-bundle.js v44.0 carregado — fix: re-auth Firebase fiscal, CSP frame-src storage');
