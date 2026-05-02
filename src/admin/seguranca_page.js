@@ -630,12 +630,31 @@ async function segVerDocPendente(uid, tipo) {
         </div>
         <div style="flex:1;overflow:auto;padding:10px;display:flex;align-items:center;justify-content:center;background:#f1f5f9">
           ${isPdf
-            ? `<iframe src="${pend.arquivo}" style="width:100%;height:75vh;border:none;border-radius:6px"></iframe>`
+            ? `<div style="text-align:center;padding:40px">
+                 <i class="fas fa-file-pdf" style="font-size:4rem;color:#e53e3e;display:block;margin-bottom:14px"></i>
+                 <p style="color:#64748b;font-size:.88rem;margin-bottom:16px">Clique para abrir o PDF</p>
+                 <button id="btn-pdf-pendente" style="background:#e53e3e;color:#fff;border:none;padding:11px 26px;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer">
+                   <i class="fas fa-external-link-alt"></i> Abrir PDF em nova aba
+                 </button>
+               </div>`
             : `<img src="${pend.arquivo}" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.15)">`
           }
         </div>
       </div>`;
     document.body.appendChild(modal);
+    if (isPdf) {
+      const _btn = modal.querySelector('#btn-pdf-pendente');
+      if (_btn) _btn.addEventListener('click', () => {
+        try {
+          const _b64 = pend.arquivo.split(',')[1];
+          const _bytes = new Uint8Array(atob(_b64).split('').map(c => c.charCodeAt(0)));
+          const _blob = new Blob([_bytes], { type: 'application/pdf' });
+          const _url  = URL.createObjectURL(_blob);
+          window.open(_url, '_blank', 'noopener');
+          setTimeout(() => URL.revokeObjectURL(_url), 60000);
+        } catch(_e) { toast('Nao foi possivel abrir o PDF.', 'error'); }
+      });
+    }
   } catch(e) {
     console.error('[segVerDocPendente]', e);
     toast('Erro ao carregar documento.', 'error');
@@ -668,12 +687,31 @@ async function segVerDocAprovado(uid, tipo) {
         </div>
         <div style="flex:1;overflow:auto;padding:10px;display:flex;align-items:center;justify-content:center;background:#f1f5f9">
           ${isPdf
-            ? '<iframe src="'+doc.arquivo+'" style="width:100%;height:75vh;border:none;border-radius:6px"></iframe>'
+            ? `<div style="text-align:center;padding:40px">
+                 <i class="fas fa-file-pdf" style="font-size:4rem;color:#e53e3e;display:block;margin-bottom:14px"></i>
+                 <p style="color:#64748b;font-size:.88rem;margin-bottom:16px">Clique para abrir o PDF</p>
+                 <button id="btn-pdf-aprovado" style="background:#e53e3e;color:#fff;border:none;padding:11px 26px;border-radius:8px;font-size:.9rem;font-weight:700;cursor:pointer">
+                   <i class="fas fa-external-link-alt"></i> Abrir PDF em nova aba
+                 </button>
+               </div>`
             : '<img src="'+doc.arquivo+'" style="max-width:100%;max-height:75vh;object-fit:contain;border-radius:6px;box-shadow:0 2px 8px rgba(0,0,0,.15)">'
           }
         </div>
       </div>`;
     document.body.appendChild(modal);
+    if (isPdf) {
+      const _btn2 = modal.querySelector('#btn-pdf-aprovado');
+      if (_btn2) _btn2.addEventListener('click', () => {
+        try {
+          const _b64 = doc.arquivo.split(',')[1];
+          const _bytes = new Uint8Array(atob(_b64).split('').map(c => c.charCodeAt(0)));
+          const _blob = new Blob([_bytes], { type: 'application/pdf' });
+          const _url  = URL.createObjectURL(_blob);
+          window.open(_url, '_blank', 'noopener');
+          setTimeout(() => URL.revokeObjectURL(_url), 60000);
+        } catch(_e) { toast('Nao foi possivel abrir o PDF.', 'error'); }
+      });
+    }
   } catch(e) {
     console.error('[segVerDocAprovado]', e);
     toast('Erro ao carregar documento.', 'error');

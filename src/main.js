@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v44.0 carregado — fix: re-auth Firebase fiscal, CSP frame-src storage');
+console.log('[SDR Bundle] sdr-bundle.js v45.0 carregado — fix: PDF blob URL, seguranca_page sem iframe');
