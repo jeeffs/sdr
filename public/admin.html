@@ -4124,7 +4124,16 @@ async function gerarPdfExportDocs() {
   window.logout = function() {
     firebase.auth().signOut().catch(() => {});
     sessionStorage.removeItem('sdr_admin_bio_fhash');
-    if (_logoutOrig) _logoutOrig();
+    try {
+      if (_logoutOrig) _logoutOrig();
+    } catch(e) {
+      // O bundle referencia 'btn-entrar' que não existe mais no DOM —
+      // o appScreen("login") já executou antes do crash, então a navegação ocorreu.
+      // Fazemos a limpeza manual do que ficou pendente.
+      const inp = document.getElementById('pwd-input');
+      if (inp) inp.value = '';
+      console.warn('[SDR] logout cleanup (não-crítico):', e.message);
+    }
   };
 })();
 // ─────────────────────────────────────────────────────────────────────────────
