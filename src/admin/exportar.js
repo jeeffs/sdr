@@ -40,7 +40,11 @@ function _fillXlsxWS(ws, recs, priceMap) {
   const _calcR = (r) => priceMap
     ? (r.servicos||[]).reduce((s,sv)=>s+(Number(sv.qtd)||0)*(priceMap[sv.tipo]||0),0)
     : (r.total||0);
-  const totalGeral = recs.reduce((s,r) => s + _calcR(r), 0);
+
+  // Ordena por data ascendente (menor → maior), como veio na importação
+  const sorted = [...recs].sort((a, b) => (a.data||'').localeCompare(b.data||''));
+
+  const totalGeral = sorted.reduce((s,r) => s + _calcR(r), 0);
 
   // Linha 1 – Total Geral
   const r1 = ws.addRow(Array(nCols).fill(''));
@@ -63,16 +67,21 @@ function _fillXlsxWS(ws, recs, priceMap) {
   for (let c=1; c<=nCols; c++) _applyStyle(r3.getCell(c), _xlsxStyleD());
   ws.views = [{ state:'frozen', ySplit:2 }];
 
-  // Dados
-  recs.forEach(r => {
+  // Dados — ordenados por data
+  sorted.forEach(r => {
     const cells = [_fmtXlsxData(r.data), r.profile||'', r.cidade||'', r.referencia||'', r.cto_ceo||''];
     for (let i=0; i<5; i++) {
       const s = r.servicos?.[i];
       const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
-      const valor = priceMap
-        ? (s?.tipo ? (priceMap[s.tipo]||0) : '')
-        : (s?.valor!==undefined&&s?.valor!==''?Number(s.valor)||0:'');
-      cells.push(s?.tipo||'', qtd, qtd!==''&&s?.tipo ? valor : '');
+      // VALOR N = total do serviço (não preço unitário)
+      // Com priceMap (V1/V2/V3): qtd × preço_tabela
+      // Sem priceMap: sv.total (OS manual) ou sv.valor (OS importada — já é o total histórico)
+      const valor = s?.tipo && qtd!==''
+        ? (priceMap
+            ? (priceMap[s.tipo]||0) * (Number(s.qtd)||0)
+            : (s.total !== undefined ? s.total : (Number(s.valor)||0)))
+        : '';
+      cells.push(s?.tipo||'', qtd, valor);
     }
     const tot = _calcR(r);
     cells.push(tot > 0 ? tot : '');
@@ -143,7 +152,7 @@ async function _buildXlsxGeral(recs) {
 
   ws.views = [{ state:'frozen', ySplit:2 }];
 
-  // Agrupar por técnico
+  // Agrupar por técnico, cada grupo ordenado por data ascendente
   const grupos = {};
   recs.forEach(r => {
     const k = r.userName||'—';
@@ -152,13 +161,16 @@ async function _buildXlsxGeral(recs) {
   });
 
   Object.entries(grupos).forEach(([tec, grp]) => {
-    grp.forEach(r => {
+    // Ordena por data ascendente dentro de cada grupo
+    const grpSorted = [...grp].sort((a, b) => (a.data||'').localeCompare(b.data||''));
+    grpSorted.forEach(r => {
       const cells = [tec, _fmtXlsxData(r.data), r.profile||'', r.cidade||'', r.referencia||'', r.cto_ceo||''];
       for (let i=0; i<5; i++) {
         const s = r.servicos?.[i];
         const qtd = s?.qtd!==undefined&&s?.qtd!==''?Number(s.qtd)||0:'';
-        const valorV3 = s?.tipo ? (precosV3map[s.tipo] || 0) : '';
-        cells.push(s?.tipo||'', qtd, qtd!==''&&s?.tipo ? valorV3 : '');
+        // VALOR N = total do serviço: qtd × preço_V3
+        const valorV3 = s?.tipo && qtd!=='' ? (precosV3map[s.tipo]||0) * (Number(s.qtd)||0) : '';
+        cells.push(s?.tipo||'', qtd, valorV3);
       }
       const totalV3 = _calcTotalV3(r);
       cells.push(totalV3 > 0 ? totalV3 : '');
@@ -666,7 +678,8 @@ async function corrigirPrecosDoMes() {
 
     if (!hasError) continue;
 
-    const novoTotal = servicosCorrigidos.reduce((s, sv) => s + (Number(sv.total)||0), 0);
+    // CORRIGIDO: sv.total pode estar ausente em OS manuais antigas → usar qtd × valor
+    const novoTotal = servicosCorrigidos.reduce((s, sv) => s + (Number(sv.qtd)||0) * (Number(sv.valor)||0), 0);
     const detalheItens = itens.map(x =>
       `${x.tipo}: R$ ${x.de.toFixed(2).replace('.',',')} → R$ ${x.para.toFixed(2).replace('.',',')}`
     ).join(' | ');

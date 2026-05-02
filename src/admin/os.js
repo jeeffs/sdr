@@ -349,7 +349,11 @@ function renderTabela(records) {
   const offset = _tabelaPagina * PAGE_SIZE;
 
   body.innerHTML=pageRecords.map((r,idx)=>{
-    const svsDesc=r.servicos?.map(s=>`<div style="font-size:.74rem;white-space:nowrap">${s.tipo} (${s.qtd}x)</div>`).join('')||'';
+    // OS importada: sv.valor = total histórico da planilha | OS manual: sv.total = qtd × preço
+    const svsDesc=r.servicos?.map(s=>{
+      const svTotal = s.total !== undefined ? s.total : s.valor;
+      return `<div style="font-size:.74rem;white-space:nowrap">${s.tipo} (${s.qtd}x) — ${fmtMoeda(svTotal)}</div>`;
+    }).join('')||'';
     const badge=r.profile==='MATRIZ'?`<span class="badge badge-matriz">MATRIZ</span>`:`<span class="badge badge-filial">FILIAL</span>`;
     const gps=r.lat?`<i class="fas fa-map-marker-alt" style="color:var(--success);font-size:.78rem;margin-left:4px" title="${r.lat},${r.lon}"></i>`:'';
     return `<tr>
