@@ -4079,8 +4079,7 @@ async function gerarPdfExportDocs() {
   }
 
   // Wrap window.loginSuccess: faz Firebase Auth com email/senha após login bem-sucedido
-  // Também lida com reauth pós-biometria usando flag _pendingBioUid
-  let _pendingBioUid = null;
+  // Detecção de login biométrico: _pendingPwd é null E usuário tem credencial biométrica salva
   const _loginSuccessOrig = window.loginSuccess;
   window.loginSuccess = async function(user) {
     if (user && user.id && _pendingPwd) {
@@ -4095,10 +4094,9 @@ async function gerarPdfExportDocs() {
           console.warn('[SDR Admin] Firebase Auth falhou (não-crítico):', e.message);
         }
       })();
-    } else if (user && user.id && _pendingBioUid === user.id) {
-      // Login por biometria: reauth Firebase em background usando hash salvo no localStorage
-      const uid = _pendingBioUid;
-      _pendingBioUid = null;
+    } else if (user && user.id && !_pendingPwd && localStorage.getItem('srua_cred_' + user.id)) {
+      // Login biométrico: _pendingPwd nulo + existe credencial biométrica salva para este usuário
+      const uid = user.id;
       (async () => {
         try {
           const storedHash = localStorage.getItem('sdr_admin_bio_fhash_' + uid);
@@ -4121,16 +4119,10 @@ async function gerarPdfExportDocs() {
     return _loginSuccessOrig(user);
   };
 
-  // ── Wrap loginBiometrico: NÃO faz nenhum await antes de chamar o original ─
-  // navigator.credentials.get() (WebAuthn) exige user activation context ativo.
-  // Qualquer await antes dele consome a ativação e causa NotAllowedError.
-  // Solução: setar flag _pendingBioUid e chamar o original IMEDIATAMENTE.
-  // O loginSuccess wrapper cuida do Firebase Auth reauth depois da biometria.
-  const _loginBiometricoOrig = window.loginBiometrico;
-  window.loginBiometrico = function() {
-    _pendingBioUid = localStorage.getItem('srua_lastUid') || null;
-    return _loginBiometricoOrig();
-  };
+  // ── loginBiometrico: sem wrapper — deixar o bundle chamar WebAuthn diretamente ─
+  // Qualquer wrap async antes de navigator.credentials.get() consome o user activation
+  // context e causa NotAllowedError. O loginSuccess wrapper acima detecta login biométrico
+  // pela ausência de _pendingPwd + existência de credencial, fazendo reauth Firebase depois.
 
   // Wrap window.logout: encerra sessão Firebase Auth ao sair
   const _logoutOrig = window.logout;
