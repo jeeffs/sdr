@@ -4072,19 +4072,21 @@ async function gerarPdfExportDocs() {
     if (fbUser) {
       // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
       firebase.database().ref(`authUidToAppUid/${fbUser.uid}`).set(uid).catch(() => {});
-      // Guarda hash no sessionStorage para reauth biométrica após logout
-      sessionStorage.setItem('sdr_admin_bio_fhash', uid + ':' + fbSenha);
+      // Guarda hash no localStorage (persiste entre logout/login para reauth biométrica)
+      localStorage.setItem('sdr_admin_bio_fhash_' + uid, fbSenha);
     }
     return fbUser;
   }
 
   // Wrap window.loginSuccess: faz Firebase Auth com email/senha após login bem-sucedido
+  // Também lida com reauth pós-biometria usando flag _pendingBioUid
+  let _pendingBioUid = null;
   const _loginSuccessOrig = window.loginSuccess;
   window.loginSuccess = async function(user) {
     if (user && user.id && _pendingPwd) {
+      // Login por senha: faz Firebase Auth em background
       const pwd = _pendingPwd;
       _pendingPwd = null;
-      // Firebase Auth em background — não bloqueia a entrada no admin
       (async () => {
         try {
           await _realizarFirebaseAuth(user.id, pwd);
@@ -4093,29 +4095,40 @@ async function gerarPdfExportDocs() {
           console.warn('[SDR Admin] Firebase Auth falhou (não-crítico):', e.message);
         }
       })();
+    } else if (user && user.id && _pendingBioUid === user.id) {
+      // Login por biometria: reauth Firebase em background usando hash salvo no localStorage
+      const uid = _pendingBioUid;
+      _pendingBioUid = null;
+      (async () => {
+        try {
+          const storedHash = localStorage.getItem('sdr_admin_bio_fhash_' + uid);
+          if (storedHash) {
+            const cred = await firebase.auth().signInWithEmailAndPassword(_adminFbEmail(uid), storedHash).catch(() => null);
+            if (cred && cred.user) {
+              firebase.database().ref(`authUidToAppUid/${cred.user.uid}`).set(uid).catch(() => {});
+              console.log('[SDR Admin] Firebase Auth biométrica OK:', uid);
+            } else {
+              console.warn('[SDR Admin] Firebase Auth biométrica falhou — hash expirado ou inválido');
+            }
+          } else {
+            console.warn('[SDR Admin] Firebase Auth biométrica: sem hash salvo para', uid);
+          }
+        } catch(e) {
+          console.warn('[SDR Admin] Firebase Auth biométrica falhou (não-crítico):', e.message);
+        }
+      })();
     }
     return _loginSuccessOrig(user);
   };
 
-  // ── Wrap loginBiometrico: garante sessão Firebase Auth antes de entrar ────
-  // O bundle chama loginSuccess diretamente sem Firebase Auth — este wrap corrige isso.
+  // ── Wrap loginBiometrico: NÃO faz nenhum await antes de chamar o original ─
+  // navigator.credentials.get() (WebAuthn) exige user activation context ativo.
+  // Qualquer await antes dele consome a ativação e causa NotAllowedError.
+  // Solução: setar flag _pendingBioUid e chamar o original IMEDIATAMENTE.
+  // O loginSuccess wrapper cuida do Firebase Auth reauth depois da biometria.
   const _loginBiometricoOrig = window.loginBiometrico;
-  window.loginBiometrico = async function() {
-    // Descobre o uid do último usuário (localStorage igual ao que o bundle usa)
-    const lastUid  = localStorage.getItem('srua_lastUid');
-    const fbUser   = firebase.auth().currentUser;
-    // Se já tem sessão Firebase Auth ativa para este usuário, segue normalmente
-    if (fbUser && lastUid && fbUser.email === _adminFbEmail(lastUid)) {
-      return _loginBiometricoOrig();
-    }
-    // Tenta reautenticar usando hash guardado na sessão
-    if (lastUid) {
-      const stored = sessionStorage.getItem('sdr_admin_bio_fhash');
-      if (stored && stored.startsWith(lastUid + ':')) {
-        const hash = stored.slice(lastUid.length + 1);
-        await firebase.auth().signInWithEmailAndPassword(_adminFbEmail(lastUid), hash).catch(() => {});
-      }
-    }
+  window.loginBiometrico = function() {
+    _pendingBioUid = localStorage.getItem('srua_lastUid') || null;
     return _loginBiometricoOrig();
   };
 
@@ -4123,7 +4136,7 @@ async function gerarPdfExportDocs() {
   const _logoutOrig = window.logout;
   window.logout = function() {
     firebase.auth().signOut().catch(() => {});
-    sessionStorage.removeItem('sdr_admin_bio_fhash');
+    // Não remove localStorage hash — necessário para reauth biométrica após logout
     try {
       if (_logoutOrig) _logoutOrig();
     } catch(e) {
