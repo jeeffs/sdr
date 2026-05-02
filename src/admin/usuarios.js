@@ -1099,3 +1099,36 @@ function abrirRenomearMaster() {
   if (mren2) mren2.classList.add('open');
   setTimeout(() => { inp.select(); inp.focus(); }, 150);
 }
+
+// ── Expor funções como globals para o admin.html (tree-shaking fix) ──
+window.loginComo = loginComo;
+window.renderUsuariosPage = renderUsuariosPage;
+window.toggleFormNovoTecnico = toggleFormNovoTecnico;
+window.criarUsuarioAtivo = criarUsuarioAtivo;
+window.criarUsuarioHistorico = criarUsuarioHistorico;
+window.toggleAtivoUsuario = toggleAtivoUsuario;
+window.resetarSenha = resetarSenha;
+window.salvarNivel = salvarNivel;
+window.salvarProfileObservador = salvarProfileObservador;
+window.verFichaEmpresa = verFichaEmpresa;
+window.abrirEditarFichaAdmin = abrirEditarFichaAdmin;
+window.salvarFichaAdmin = salvarFichaAdmin;
+window.dispensarFichaEmpresa = dispensarFichaEmpresa;
+window.invalidarAssinaturaGovBr = invalidarAssinaturaGovBr;
+window.invalidarAssinaturaGovBrVendaPrazo = invalidarAssinaturaGovBrVendaPrazo;
+window.invalidarTermoGovBr = invalidarTermoGovBr;
+window.resetarFichaEmpresa = resetarFichaEmpresa;
+window.reverterDispensaFicha = reverterDispensaFicha;
+window.importarContrato = importarContrato;
+window.travarPrestador = travarPrestador;
+window.reverterRescisao = reverterRescisao;
+window.verificarRescisaoPendente = verificarRescisaoPendente;
+window.renderTermoRescisao = renderTermoRescisao;
+window.uploadRescisaoAssinada = uploadRescisaoAssinada;
+window.aceitarRescisaoDigital = aceitarRescisaoDigital;
+window.finalizarRescisao = finalizarRescisao;
+window.abrirRenomear = abrirRenomear;
+window.confirmarRenomear = confirmarRenomear;
+window.atualizarAvatarSidebar = atualizarAvatarSidebar;
+window.salvarFotoPerfil = salvarFotoPerfil;
+window.abrirRenomearMaster = abrirRenomearMaster;

@@ -1440,3 +1440,23 @@ async function escolherOpcaoPagamento(fbKey, opcao) {
     toast('Erro ao registrar escolha: ' + (e.message || e), 'error');
   }
 }
+
+// ── Expor funções como globals para o admin.html (tree-shaking fix) ──
+window.renderDocumentosAutenticados = renderDocumentosAutenticados;
+window.visualizarDocAutenticado = visualizarDocAutenticado;
+window._parsePDFSignature = _parsePDFSignature;
+window._validarConteudoTermo = _validarConteudoTermo;
+window.tecUploadTermoAssinado = tecUploadTermoAssinado;
+window.verificarPDFAssinado = verificarPDFAssinado;
+window.confirmarTermoAbatimento = confirmarTermoAbatimento;
+window.reabrirTermoAbatimento = reabrirTermoAbatimento;
+window._gerarContratoFiscal = _gerarContratoFiscal;
+window.gerarContratoServicos = gerarContratoServicos;
+window._ecTexto = _ecTexto;
+window.iniciarFluxoContrato = iniciarFluxoContrato;
+window.verificarContratoPendente = verificarContratoPendente;
+window.renderContratoPendente = renderContratoPendente;
+window.abrirContratoGerado = abrirContratoGerado;
+window.tecUploadContratoAssinado = tecUploadContratoAssinado;
+window.renderMeusDocsPage = renderMeusDocsPage;
+window.escolherOpcaoPagamento = escolherOpcaoPagamento;

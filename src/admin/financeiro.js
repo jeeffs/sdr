@@ -1335,3 +1335,22 @@ async function adicionarDescontoFin() {
     if (btn) { btn.disabled = false; btn.innerHTML = btnOrigHtml; }
   }
 }
+
+// ── Expor funções como globals para o admin.html (tree-shaking fix) ──
+window.carregarDescontos = carregarDescontos;
+window.carregarDescontosTec = carregarDescontosTec;
+window.verificarTermosPendentes = verificarTermosPendentes;
+window.renderTermosPendentes = renderTermosPendentes;
+window.aceitarTermoAbatimento = aceitarTermoAbatimento;
+window.verificarAtualizacaoTermos = verificarAtualizacaoTermos;
+window.renderDescontosLista = renderDescontosLista;
+window.removerDesconto = removerDesconto;
+window._mesLocalStr = _mesLocalStr;
+window._dateLocalStr = _dateLocalStr;
+window.finMudarMes = finMudarMes;
+window._finParcLabel = _finParcLabel;
+window._renderFinDescontos = _renderFinDescontos;
+window.calcJeffersonV1 = calcJeffersonV1;
+window.renderFinanceiro = renderFinanceiro;
+window.exportarCardTecnico = exportarCardTecnico;
+window.adicionarDescontoFin = adicionarDescontoFin;

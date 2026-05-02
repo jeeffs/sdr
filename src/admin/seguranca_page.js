@@ -1722,3 +1722,51 @@ async function verificarLicenciamentos() {
     }
   }
 }
+
+// ── Expor funções como globals para o admin.html (tree-shaking fix) ──
+window._segGetTecnicos = _segGetTecnicos;
+window._segStatusDoc = _segStatusDoc;
+window._segMesAtual = _segMesAtual;
+window._obterAlertasVencimentoTodosTecnicos = _obterAlertasVencimentoTodosTecnicos;
+window._mostrarModalAlertasFiscal = _mostrarModalAlertasFiscal;
+window._renderBannerAlertasFiscalDash = _renderBannerAlertasFiscalDash;
+window.renderSegurancaPage = renderSegurancaPage;
+window.segAbrirUploadDoc = segAbrirUploadDoc;
+window.segDocAnalisar = segDocAnalisar;
+window.segDocValidar = segDocValidar;
+window.segAprovarDocPendente = segAprovarDocPendente;
+window.segVerDocPendente = segVerDocPendente;
+window.segVerDocAprovado = segVerDocAprovado;
+window.segApagarTodosDocs = segApagarTodosDocs;
+window.segRevogarDocumento = segRevogarDocumento;
+window.segRejeitarDocumento = segRejeitarDocumento;
+window.segAbrirInventario = segAbrirInventario;
+window.segSalvarInventario = segSalvarInventario;
+window.segLiberarBloqueio = segLiberarBloqueio;
+window._ocrExtrairDatasDocumento = _ocrExtrairDatasDocumento;
+window._ocrValidarValidade = _ocrValidarValidade;
+window._whatsUrl = _whatsUrl;
+window._getTelefone = _getTelefone;
+window._whatsAlertaVencido = _whatsAlertaVencido;
+window._whatsGrupo = _whatsGrupo;
+window._checkinDocumentosVencidos = _checkinDocumentosVencidos;
+window.verificarBloqueioSeguranca = verificarBloqueioSeguranca;
+window.verificarAlertasSeguranca = verificarAlertasSeguranca;
+window.segAbrirTemplateEpi = segAbrirTemplateEpi;
+window.segAdicionarItemEpi = segAdicionarItemEpi;
+window.segRemoverItemEpi = segRemoverItemEpi;
+window.segGerarFichasEpi = segGerarFichasEpi;
+window.segDispensarItem = segDispensarItem;
+window.segReverterDispensa = segReverterDispensa;
+window.segAbrirFichaEpi = segAbrirFichaEpi;
+window.segAprovarItemEpi = segAprovarItemEpi;
+window.segRejeitarItemEpi = segRejeitarItemEpi;
+window.segVerComprovante = segVerComprovante;
+window.validarCA = validarCA;
+window.calcMesLicenciamento = calcMesLicenciamento;
+window.segAbrirDadosVeiculo = segAbrirDadosVeiculo;
+window.segSalvarDadosVeiculo = segSalvarDadosVeiculo;
+window.consultarDebitosVeiculo = consultarDebitosVeiculo;
+window.segSalvarConsultaManual = segSalvarConsultaManual;
+window.segAbrirHistoricoConsultas = segAbrirHistoricoConsultas;
+window.verificarLicenciamentos = verificarLicenciamentos;

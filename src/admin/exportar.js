@@ -784,3 +784,31 @@ function exportarTecnicoMes(uid, mesAno) {
 }
 
 function _expReset(...ids) { ids.forEach(id => { const el = document.getElementById(id); if(el) el.style.display='none'; }); }
+
+// ── Expor funções como globals para o admin.html (tree-shaking fix) ──
+window.getExportRecords = getExportRecords;
+window._fmtXlsxData = _fmtXlsxData;
+window._applyStyle = _applyStyle;
+window._fillXlsxWS = _fillXlsxWS;
+window._buildXlsxTecnico = _buildXlsxTecnico;
+window._calcTotalV3 = _calcTotalV3;
+window._buildXlsxGeral = _buildXlsxGeral;
+window._downloadXlsx = _downloadXlsx;
+window._gerarArquivosPorGrupo = _gerarArquivosPorGrupo;
+window.exportarTecnico = exportarTecnico;
+window.atualizarTecsMes = atualizarTecsMes;
+window._setExpBtn = _setExpBtn;
+window.atualizarProfileStep = atualizarProfileStep;
+window.selecionarProfile = selecionarProfile;
+window.selecionarTipo = selecionarTipo;
+window.exportarMesNivel = exportarMesNivel;
+window.enviarRelatorioWhatsApp = enviarRelatorioWhatsApp;
+window.renderBotoesTecnicos = renderBotoesTecnicos;
+window.renderBotaoTecnicoProprio = renderBotaoTecnicoProprio;
+window.renderRelatoriosAssinados = renderRelatoriosAssinados;
+window._verRelatorioAssinado = _verRelatorioAssinado;
+window._aprovarRelatorio = _aprovarRelatorio;
+window._rejeitarRelatorio = _rejeitarRelatorio;
+window.corrigirPrecosDoMes = corrigirPrecosDoMes;
+window.exportarTecnicoMes = exportarTecnicoMes;
+window._expReset = _expReset;

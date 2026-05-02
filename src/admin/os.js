@@ -402,3 +402,17 @@ function renderTabela(records) {
     }
   }
 }
+
+// ── Expor funções como globals para o admin.html (tree-shaking fix) ──
+window.carregarDados = carregarDados;
+window._validarOS = _validarOS;
+window._montarObjOS = _montarObjOS;
+window.salvarOS = salvarOS;
+window._montarCorpoTermoServicos = _montarCorpoTermoServicos;
+window.verificarTermoServicos = verificarTermoServicos;
+window.mostrarTermoServicos = mostrarTermoServicos;
+window.aceitarTermoServicos = aceitarTermoServicos;
+window.deletarOS = deletarOS;
+window.filteredRecords = filteredRecords;
+window.filtrarTabela = filtrarTabela;
+window.renderTabela = renderTabela;
