@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v47.0 carregado — fix: validacao via REST API, bypass WebSocket bloqueado');
+console.log('[SDR Bundle] sdr-bundle.js v48.0 carregado — fix: getIdToken sem force-refresh, evita hang em rede restrita');

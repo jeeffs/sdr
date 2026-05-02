@@ -1769,7 +1769,7 @@ async function _executarValidacaoOS(fbKey, rec, materiaisConferidos) {
     // Usar REST API diretamente — evita problema de WebSocket bloqueado no SDK
     const _fbUserFinal = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
     if (_fbUserFinal && (_fbUserFinal.email || '').endsWith('@solucaoderua.app')) {
-      const _tk = await _fbUserFinal.getIdToken(true);
+      const _tk = await _fbUserFinal.getIdToken(); // sem force-refresh — token valido por 1h
       const _dbUrl = ((typeof firebase !== 'undefined' && firebase.app && firebase.app().options.databaseURL) || 'https://solucaoderua-default-rtdb.firebaseio.com').replace(/\/$/, '');
       const _res = await fetch(`${_dbUrl}/os/${fbKey}.json?auth=${_tk}`, {
         method: 'PATCH',
