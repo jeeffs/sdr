@@ -15,6 +15,13 @@
 // Cache local (sincronizado com window.sdrTicketsCache em cada render)
 window.sdrTicketsCache = window.sdrTicketsCache || {};
 
+// Sanitização XSS — escapa HTML antes de interpolar dados do banco
+function _escTk(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 window.sdrTicketsRender = function() {
   Promise.all([
     window.sdrRef('tickets').once('value'),
@@ -101,9 +108,10 @@ function _renderTicketsLista() {
     const sLabel = statusLabels[t.status] || t.status || '-';
     const date = t.created_at ? new Date(t.created_at).toLocaleDateString('pt-BR') : '-';
 
+    const _tDesc = _escTk(t.description || '');
     html += `<tr style="border-bottom:1px solid #f1f5f9;cursor:pointer" onclick="sdrOpenTicketPanel('${id}')">
-      <td style="padding:8px 10px"><b>${t.title || 'Sem título'}</b><br><span style="color:var(--muted);font-size:.78rem">${(t.description||'').substring(0,60)}${(t.description||'').length > 60 ? '...' : ''}</span></td>
-      <td style="padding:8px 10px">${client ? client.name : (t.client_name || '-')}</td>
+      <td style="padding:8px 10px"><b>${_escTk(t.title) || 'Sem título'}</b><br><span style="color:var(--muted);font-size:.78rem">${_tDesc.substring(0,60)}${_tDesc.length > 60 ? '...' : ''}</span></td>
+      <td style="padding:8px 10px">${client ? _escTk(client.name) : _escTk(t.client_name || '-')}</td>
       <td style="padding:8px 10px;text-align:center"><span style="background:${pColor};color:#fff;padding:2px 8px;border-radius:10px;font-size:.75rem">${pLabel}</span></td>
       <td style="padding:8px 10px;text-align:center"><span style="background:${sColor}22;color:${sColor};padding:2px 8px;border-radius:10px;font-size:.75rem;font-weight:600">${sLabel}</span></td>
       <td style="padding:8px 10px;text-align:center;color:var(--muted)">${date}</td>

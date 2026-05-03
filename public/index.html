@@ -1067,6 +1067,7 @@ let currentUser = null;
 let usersCache = {};
 let allRecords = [];
 let _impersonating = false; // master logado como outro usuario — pula bloqueios
+let _sessionBioHash = null; // hash Firebase derivado — armazenado em memória (não sessionStorage)
 let precosV1map = {...PRECOS_V1};
 let precosV2map = {...PRECOS_V2};
 let descontosCache = {};
@@ -1128,7 +1129,10 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).once(evt);
-            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {signal:AbortSignal.timeout(10000)});
+            const res = await fetch(`${_base}/${_p(path)}.json`, {
+              headers:{'Authorization':'Bearer ' + tok},
+              signal:AbortSignal.timeout(10000)
+            });
             const val = res.ok ? await res.json() : null;
             return { val:()=>val, exists:()=>val!==null, key:_p(path).split('/').pop()||'',
                      child:(c)=>({val:()=>(val||{})[c]??null, exists:()=>(val||{})[c]!=null}),
@@ -1144,8 +1148,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).set(value);
-            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
-              method:'PUT', headers:{'Content-Type':'application/json'},
+            const res = await fetch(`${_base}/${_p(path)}.json`, {
+              method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + tok},
               body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1160,8 +1164,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).update(value);
-            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
-              method:'PATCH', headers:{'Content-Type':'application/json'},
+            const res = await fetch(`${_base}/${_p(path)}.json`, {
+              method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + tok},
               body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1176,8 +1180,9 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).remove();
-            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
-              method:'DELETE', signal:AbortSignal.timeout(10000)
+            const res = await fetch(`${_base}/${_p(path)}.json`, {
+              method:'DELETE', headers:{'Authorization':'Bearer ' + tok},
+              signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
           } catch(e) {
@@ -1191,8 +1196,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).push(value);
-            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
-              method:'POST', headers:{'Content-Type':'application/json'},
+            const res = await fetch(`${_base}/${_p(path)}.json`, {
+              method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + tok},
               body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1242,15 +1247,17 @@ async function initFirebase() {
     // Verifica parametros da URL
     const urlParams = new URLSearchParams(window.location.search);
 
-    // Login como outro usuario (master impersonate): ?loginComo=uid
+    // Login como outro usuario (master impersonate): ?loginComo=uid&by=masterUid
     const loginComoUid = urlParams.get('loginComo');
-    if (loginComoUid && usersCache[loginComoUid]) {
+    const loginComBy   = urlParams.get('by');
+    if (loginComoUid && usersCache[loginComoUid] && loginComBy && usersCache[loginComBy]?.role === 'master') {
       // Limpa URL para nao relogar infinitamente
       window.history.replaceState({}, '', window.location.pathname);
       // Impersonate: pula TODOS os bloqueios (empresa, rescisão, termos, segurança)
       _impersonating = true;
       sessionStorage.setItem('sdr_mobile_uid', loginComoUid);
       sessionStorage.setItem('sdr_impersonate', '1');
+      sessionStorage.setItem('sdr_impersonate_by', loginComBy); // quem iniciou o impersonate
       loginSuccess(loginComoUid);
       return;
     }
@@ -1285,7 +1292,11 @@ async function initFirebase() {
     const sessUid = sessionStorage.getItem('sdr_mobile_uid');
     if (sessUid && usersCache[sessUid] && usersCache[sessUid].ativo !== false) {
       // Restaura flag de impersonate se a sessão foi aberta pelo master
-      if (sessionStorage.getItem('sdr_impersonate') === '1') _impersonating = true;
+      // Valida impersonate: exige que o iniciador conste como master no cache
+    const _impBy = sessionStorage.getItem('sdr_impersonate_by');
+    if (sessionStorage.getItem('sdr_impersonate') === '1' && _impBy && usersCache[_impBy]?.role === 'master') {
+      _impersonating = true;
+    }
       const u = usersCache[sessUid];
       const nivel = u.nivel || 'V1';
       if (u.role !== 'master' && (nivel === 'V1' || nivel === 'V2' || nivel === 'V3' || nivel === 'V0')) {
@@ -1492,8 +1503,8 @@ async function loginBiometria() {
     // Garante sessão Firebase Auth ativa para o usuário correto
     const fbUser = firebase.auth().currentUser;
     if (!fbUser || fbUser.email !== _fbAuthEmail(uid)) {
-      // Tenta reautenticar usando hash armazenado na sessão (definido no último login por senha)
-      const stored = sessionStorage.getItem('sdr_bio_fhash');
+      // Tenta reautenticar usando hash em memória (definido no último login por senha)
+      const stored = _sessionBioHash;
       if (stored && stored.startsWith(uid + ':')) {
         const hash = stored.slice(uid.length + 1);
         await firebase.auth().signInWithEmailAndPassword(_fbAuthEmail(uid), hash).catch(() => {});
@@ -1643,11 +1654,32 @@ function populateLogin() {
   atualizarBotaoBiometria();
 }
 
+// ── Rate limiting local para doLogin() ──────────────────────────────────────
+function _mobileRateLimit() {
+  const KEY = 'sdr_mob_rl';
+  const MAX = 5, WINDOW_MS = 5 * 60 * 1000; // 5 tentativas / 5 min
+  try {
+    const raw = localStorage.getItem(KEY);
+    const rec = raw ? JSON.parse(raw) : { count: 0, since: Date.now() };
+    if (Date.now() - rec.since > WINDOW_MS) { rec.count = 0; rec.since = Date.now(); }
+    rec.count++;
+    localStorage.setItem(KEY, JSON.stringify(rec));
+    if (rec.count > MAX) {
+      const resta = Math.ceil((WINDOW_MS - (Date.now() - rec.since)) / 60000);
+      return `Muitas tentativas. Aguarde ${resta} minuto(s).`;
+    }
+  } catch(_) {} // localStorage indisponível — não bloqueia
+  return null;
+}
+
 async function doLogin() {
   const nomeDigitado = (document.getElementById('login-user').value || '').trim();
   const pass = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
   errEl.textContent = '';
+
+  const rlMsg = _mobileRateLimit();
+  if (rlMsg) { errEl.textContent = rlMsg; return; }
 
   if (!nomeDigitado) { errEl.textContent = 'Digite seu nome.'; return; }
 
@@ -1691,8 +1723,8 @@ async function doLogin() {
     _vincularFirebaseAuth(uid, pass);
   }
 
-  // Armazena hash Firebase derivado para reautenticação biométrica na mesma sessão
-  _fbAuthSenha(uid, pass).then(h => sessionStorage.setItem('sdr_bio_fhash', uid + ':' + h));
+  // Armazena hash Firebase derivado em memória (não sessionStorage) para reautenticação biométrica
+  _fbAuthSenha(uid, pass).then(h => { _sessionBioHash = uid + ':' + h; });
 
   // Verifica se precisa upgrade obrigatório de senha (mínimo 6 chars)
   if (_verificarUpgradeSenha(uid)) {
@@ -1716,8 +1748,11 @@ async function carregarOsDoUsuario(uid) {
     const fbUser = firebase.auth().currentUser;
     const token = fbUser ? await fbUser.getIdToken() : null;
     const base = 'https://solucaoderua-default-rtdb.firebaseio.com';
-    const qs = 'orderBy="userId"&equalTo=' + encodeURIComponent('"' + uid + '"') + (token ? '&auth=' + token : '');
-    const resp = await fetch(base + '/os.json?' + qs, { signal: AbortSignal.timeout(15000) });
+    const qs = 'orderBy="userId"&equalTo=' + encodeURIComponent('"' + uid + '"');
+    const resp = await fetch(base + '/os.json?' + qs, {
+      headers: token ? {'Authorization':'Bearer ' + token} : {},
+      signal: AbortSignal.timeout(15000)
+    });
     const osRaw = resp.ok ? (await resp.json() || {}) : {};
     allRecords = Object.entries(osRaw).map(([k, v]) => {
       if (v.servicos) v.servicos.forEach(sv => { if (sv.tipo) sv.tipo = sv.tipo.replace(/\//g, '-'); });
@@ -1728,9 +1763,9 @@ async function carregarOsDoUsuario(uid) {
     console.warn('[SDR] carregarOsDoUsuario erro:', e.message);
     allRecords = [];
   }
-  // Descontos: coleção pequena, sem filtro necessário
+  // Empréstimos/descontos: caminho atual (config/emprestimos — 'descontos' está depreciado)
   try {
-    const descSnap = await db.ref('descontos').once('value');
+    const descSnap = await db.ref('config/emprestimos').once('value');
     descontosCache = descSnap.val() || {};
   } catch (e) {
     console.warn('[SDR] carregarDescontos erro:', e.message);
@@ -1742,6 +1777,13 @@ async function loginSuccess(uid) {
   const u = usersCache[uid];
   currentUser = { id: uid, name: u.name, nivel: u.nivel || 'V1' };
   sessionStorage.setItem('sdr_mobile_uid', uid);
+
+  // Remove campos sensíveis de todos os usuários no cache após login bem-sucedido
+  // Hashes de senha e dados biométricos não são necessários após a autenticação
+  const _SENSITIVE = ['passwordHash','salt','senha','biometria','emp-banco','emp-agencia','emp-conta','emp-pix','emp-resp-cpf','emp-resp-rg'];
+  Object.keys(usersCache).forEach(k => {
+    _SENSITIVE.forEach(f => { delete usersCache[k][f]; });
+  });
 
   // Header
   document.getElementById('hdr-avatar').textContent = (u.name||'T')[0];
@@ -3105,7 +3147,8 @@ function doLogout() {
   clearTimeout(_sessionTimer);
   sessionStorage.removeItem('sdr_mobile_uid');
   sessionStorage.removeItem('sdr_impersonate');
-  sessionStorage.removeItem('sdr_bio_fhash');
+  sessionStorage.removeItem('sdr_impersonate_by');
+  _sessionBioHash = null; // limpa hash Firebase da memória
   _impersonating = false;
   currentUser = null;
   document.getElementById('app').style.display = 'none';

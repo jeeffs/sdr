@@ -21,6 +21,13 @@
  *   window.sdrOnusRender, window.sdrInfraCache, window.sdrLoadInfra
  */
 
+// Sanitização XSS — escapa HTML antes de interpolar dados do banco
+function _escRt(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // ── Realtime listener ────────────────────────────────────────────────
 
 var _sdrRealtimeActive = false;
@@ -213,8 +220,8 @@ window.sdrAlertasRender = function() {
         var dt = a.created_at ? new Date(a.created_at).toLocaleString('pt-BR') : '';
         return '<tr data-alert-id="' + id + '" style="border-bottom:1px solid #f1f5f9">'
           + '<td style="padding:8px 10px"><span style="background:' + sb + ';color:' + sc + ';padding:2px 8px;border-radius:8px;font-size:.72rem;font-weight:700">' + sl + '</span></td>'
-          + '<td style="padding:8px 10px;font-weight:600">' + (a.title || 'Alerta') + '</td>'
-          + '<td style="padding:8px 10px;font-size:.78rem;color:var(--muted)">' + (a.message || '') + '</td>'
+          + '<td style="padding:8px 10px;font-weight:600">' + _escRt(a.title || 'Alerta') + '</td>'
+          + '<td style="padding:8px 10px;font-size:.78rem;color:var(--muted)">' + _escRt(a.message || '') + '</td>'
           + '<td style="padding:8px 10px;font-size:.75rem;color:var(--muted);white-space:nowrap">' + dt + '</td>'
           + '<td style="padding:8px 10px;text-align:right;white-space:nowrap">'
           + (a.is_active

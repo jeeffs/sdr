@@ -99,4 +99,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v48.0 carregado — fix: getIdToken sem force-refresh, evita hang em rede restrita');
+console.log('[SDR Bundle] sdr-bundle.js v49.0 carregado — fix: escapeHtml tickets/alertas, sem XSS em dados do banco');

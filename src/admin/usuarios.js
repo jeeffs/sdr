@@ -8,10 +8,11 @@ function loginComo(uid) {
   const isFiscalUser = (u?.nivel || 'V1') === 'V0';
   const destino = isFiscalUser ? 'painel admin' : 'app mobile';
   if (!confirm(`Abrir o ${destino} como ${u.name || uid}?`)) return;
+  const masterUid = (typeof currentUser !== 'undefined' && currentUser && currentUser.id) ? currentUser.id : '';
   if (isFiscalUser) {
     window.open(`https://solucaoderua.web.app/admin?loginComo=${uid}`, '_blank');
   } else {
-    window.open(`https://solucaoderua.web.app?loginComo=${uid}`, '_blank');
+    window.open(`https://solucaoderua.web.app?loginComo=${uid}&by=${encodeURIComponent(masterUid)}`, '_blank');
   }
 }
 
