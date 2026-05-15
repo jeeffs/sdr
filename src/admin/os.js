@@ -725,7 +725,9 @@ function renderBotaoTecnicoProprio() {
   }
 }
 
-// ── capturarGPS — captura coordenadas via browser e preenche formulário de OS ──
+// ── capturarGPS — watchPosition com refinamento progressivo de acurácia ──
+let _gpsWatchIdAdmin = null;
+
 window.capturarGPS = function capturarGPS() {
   const btn   = document.getElementById('btn-gps');
   const dmsF  = document.getElementById('f-gps-dms');
@@ -738,72 +740,103 @@ window.capturarGPS = function capturarGPS() {
     return;
   }
 
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obtendo posição...'; }
-  if (gs)  gs.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando sinal GPS...';
+  // Cancela watch anterior
+  if (_gpsWatchIdAdmin != null) { navigator.geolocation.clearWatch(_gpsWatchIdAdmin); _gpsWatchIdAdmin = null; }
 
-  navigator.geolocation.getCurrentPosition(
-    async pos => {
-      const lat = pos.coords.latitude;
-      const lon = pos.coords.longitude;
-      if (latF) latF.value = lat;
-      if (lonF) lonF.value = lon;
-      if (dmsF) dmsF.value = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-      if (btn)  { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> GPS capturado'; }
-      if (gs)   gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--primary)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> — buscando endereço...`;
+  const ACC_TARGET = 25;
+  const TIMEOUT_MS = 20000;
+  let bestPos = null;
+  let timerDone = false;
 
-      // Geocodificação reversa via Nominatim
-      try {
-        const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=pt-BR&addressdetails=1`, { headers: { 'Accept-Language': 'pt-BR' } });
-        const data = await res.json();
-        const addr = data.address || {};
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando sinal...'; }
+  if (gs)  gs.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refinando posição...';
 
-        // Preencher referência (rua + número + bairro)
-        const rua    = addr.road || addr.pedestrian || addr.footway || '';
-        const num    = addr.house_number || '';
-        const bairro = addr.suburb || addr.neighbourhood || '';
-        let refText  = rua;
-        if (num) refText += ', ' + num;
-        if (bairro) refText += ' — ' + bairro;
-        if (refText) {
-          const fRef = document.getElementById('f-referencia');
-          if (fRef && !fRef.value) fRef.value = refText.toUpperCase();
-        }
+  const finalizarGPS = async pos => {
+    if (timerDone) return;
+    timerDone = true;
+    if (_gpsWatchIdAdmin != null) { navigator.geolocation.clearWatch(_gpsWatchIdAdmin); _gpsWatchIdAdmin = null; }
 
-        // Tentar selecionar cidade no dropdown
-        const cidadeGPS = (addr.city || addr.town || addr.village || addr.municipality || '').toUpperCase().trim();
-        let cidadeEncontrada = '';
-        if (cidadeGPS) {
-          const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim();
-          const cidadeNorm = norm(cidadeGPS);
-          const selCidade = document.getElementById('f-cidade');
-          if (selCidade) {
-            for (const opt of selCidade.options) {
-              if (opt.value && opt.value !== '_outro') {
-                const ov = norm(opt.value);
-                if (ov === cidadeNorm || cidadeNorm.includes(ov) || ov.includes(cidadeNorm)) {
-                  selCidade.value = opt.value;
-                  cidadeEncontrada = opt.value;
-                  break;
-                }
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    const acc = pos.coords.accuracy;
+    if (latF) latF.value = lat;
+    if (lonF) lonF.value = lon;
+    const accTxt = acc < 10 ? `±${acc.toFixed(0)}m ✓` : acc < 30 ? `±${acc.toFixed(0)}m` : `±${acc.toFixed(0)}m ⚠`;
+    if (dmsF) dmsF.value = `${lat.toFixed(6)}, ${lon.toFixed(6)} (${accTxt})`;
+    if (btn)  { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> GPS capturado'; }
+    if (gs)   gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--primary)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> <span style="font-size:.82em;color:#64748b">(${accTxt})</span> — buscando endereço...`;
+
+    // Geocodificação reversa via Nominatim
+    try {
+      const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=pt-BR&addressdetails=1`, { headers: { 'Accept-Language': 'pt-BR' } });
+      const data = await res.json();
+      const addr = data.address || {};
+
+      const rua    = addr.road || addr.pedestrian || addr.footway || '';
+      const num    = addr.house_number || '';
+      const bairro = addr.suburb || addr.neighbourhood || '';
+      let refText  = rua;
+      if (num) refText += ', ' + num;
+      if (bairro) refText += ' — ' + bairro;
+      if (refText) {
+        const fRef = document.getElementById('f-referencia');
+        if (fRef && !fRef.value) fRef.value = refText.toUpperCase();
+      }
+
+      const cidadeGPS = (addr.city || addr.town || addr.village || addr.municipality || '').toUpperCase().trim();
+      let cidadeEncontrada = '';
+      if (cidadeGPS) {
+        const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim();
+        const cidadeNorm = norm(cidadeGPS);
+        const selCidade = document.getElementById('f-cidade');
+        if (selCidade) {
+          for (const opt of selCidade.options) {
+            if (opt.value && opt.value !== '_outro') {
+              const ov = norm(opt.value);
+              if (ov === cidadeNorm || cidadeNorm.includes(ov) || ov.includes(cidadeNorm)) {
+                selCidade.value = opt.value;
+                cidadeEncontrada = opt.value;
+                break;
               }
             }
           }
         }
-
-        const cidadeLabel = cidadeEncontrada || cidadeGPS || '';
-        if (gs) gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>${cidadeLabel ? ' — ' + cidadeLabel : ''}`;
-      } catch (e) {
-        console.warn('[GPS] Geocodificação falhou:', e.message);
-        if (gs) gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> (endereço indisponível)`;
       }
+
+      const cidadeLabel = cidadeEncontrada || cidadeGPS || '';
+      if (gs) gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> <span style="font-size:.82em;color:#64748b">(${accTxt})</span>${cidadeLabel ? ' — ' + cidadeLabel : ''}`;
+    } catch (e) {
+      console.warn('[GPS] Geocodificação falhou:', e.message);
+      if (gs) gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> <span style="font-size:.82em;color:#64748b">(${accTxt})</span>`;
+    }
+  };
+
+  const timer = setTimeout(() => {
+    if (!timerDone && bestPos) finalizarGPS(bestPos);
+    else if (!timerDone) {
+      timerDone = true;
+      if (_gpsWatchIdAdmin != null) { navigator.geolocation.clearWatch(_gpsWatchIdAdmin); _gpsWatchIdAdmin = null; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente'; }
+      if (gs)  gs.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i> Tempo esgotado — tente em local aberto.';
+    }
+  }, TIMEOUT_MS);
+
+  _gpsWatchIdAdmin = navigator.geolocation.watchPosition(
+    pos => {
+      bestPos = pos;
+      const acc = pos.coords.accuracy;
+      if (gs) gs.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Refinando posição... ±${acc.toFixed(0)}m`;
+      if (acc <= ACC_TARGET) { clearTimeout(timer); finalizarGPS(pos); }
     },
     err => {
+      clearTimeout(timer);
+      if (_gpsWatchIdAdmin != null) { navigator.geolocation.clearWatch(_gpsWatchIdAdmin); _gpsWatchIdAdmin = null; }
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente'; }
-      const msg = err.code === 1 ? 'Permissão negada — habilite o GPS no navegador.' : err.code === 3 ? 'Tempo esgotado — tente em local aberto.' : err.message;
+      const msg = err.code === 1 ? 'Permissão negada.' : err.code === 3 ? 'Tempo esgotado.' : err.message;
       if (gs)  gs.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i> ${msg}`;
       console.warn('[GPS] Erro:', err.message);
     },
-    { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
+    { enableHighAccuracy: true, timeout: TIMEOUT_MS, maximumAge: 0 }
   );
 };
 
