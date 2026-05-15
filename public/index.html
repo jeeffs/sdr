@@ -1777,10 +1777,23 @@ async function doLogin() {
 async function carregarOsDoUsuario(uid) {
   try {
     const fbUser = firebase.auth().currentUser;
-    const token = fbUser ? await fbUser.getIdToken() : null;
-    const base = 'https://solucaoderua-default-rtdb.firebaseio.com';
-    const qs = 'orderBy="userId"&equalTo=' + encodeURIComponent('"' + uid + '"');
+    const token  = fbUser ? await fbUser.getIdToken() : null;
+    const base   = 'https://solucaoderua-default-rtdb.firebaseio.com';
     const authQs = token ? '&auth=' + token : '';
+
+    const u    = usersCache[uid] || {};
+    const isV2 = u.nivel === 'V2';
+
+    let qs;
+    if (isV2) {
+      const hoje    = new Date();
+      const mesAnt  = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+      const startAt = mesAnt.toISOString().slice(0, 10);
+      qs = 'orderBy="data"&startAt=' + encodeURIComponent('"' + startAt + '"');
+    } else {
+      qs = 'orderBy="userId"&equalTo=' + encodeURIComponent('"' + uid + '"');
+    }
+
     const resp = await fetch(base + '/os.json?' + qs + authQs, {
       signal: AbortSignal.timeout(30000)
     });
@@ -1790,11 +1803,15 @@ async function carregarOsDoUsuario(uid) {
       if (v.tipo) v.tipo = v.tipo.replace(/\//g, '-');
       return { ...v, _key: k };
     });
+
+    console.log('[SDR] carregarOsDoUsuario:',
+      isV2 ? 'V2 (equipe, atual+anterior)' : 'V1 (proprio user)',
+      '->', allRecords.length, 'registros');
   } catch (e) {
     console.warn('[SDR] carregarOsDoUsuario erro:', e.message);
     allRecords = [];
   }
-  // Empréstimos/descontos: caminho atual (config/emprestimos — 'descontos' está depreciado)
+
   try {
     const descSnap = await db.ref('config/emprestimos').once('value');
     descontosCache = descSnap.val() || {};
