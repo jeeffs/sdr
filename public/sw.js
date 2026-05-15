@@ -6,7 +6,7 @@
 // v132: supervisor financeiro — flag supervisao:true, cálculo correto V1+gestão, PDF breakdown, aditivo contratual
 
 const CACHE_NAME  = 'sdr-v157';
-const CACHE_SHELL = 'sdr-shell-v131';
+const CACHE_SHELL = 'sdr-shell-v132';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
 const SHELL_ASSETS = [
