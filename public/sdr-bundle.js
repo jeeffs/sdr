@@ -7124,6 +7124,53 @@ var SDR = function(exports) {
         var _a;
         const sf = null == (_a = window.servicosFixos) ? void 0 : _a[uid];
         return sf && !1 !== sf.ativo && Number(sf.valor) || 0;
+    }, window.capturarGPS = function() {
+        const btn = document.getElementById("btn-gps"), dmsF = document.getElementById("f-gps-dms"), gs = document.getElementById("gps-status"), latF = document.getElementById("f-lat"), lonF = document.getElementById("f-lon");
+        navigator.geolocation ? (btn && (btn.disabled = !0, btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obtendo posição...'), 
+        gs && (gs.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando sinal GPS...'), 
+        navigator.geolocation.getCurrentPosition(async pos => {
+            const lat = pos.coords.latitude, lon = pos.coords.longitude;
+            latF && (latF.value = lat), lonF && (lonF.value = lon), dmsF && (dmsF.value = `${lat.toFixed(6)}, ${lon.toFixed(6)}`), 
+            btn && (btn.disabled = !1, btn.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> GPS capturado'), 
+            gs && (gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--primary)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> — buscando endereço...`);
+            try {
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=pt-BR&addressdetails=1`, {
+                    headers: {
+                        "Accept-Language": "pt-BR"
+                    }
+                }), addr = (await res.json()).address || {}, rua = addr.road || addr.pedestrian || addr.footway || "", num = addr.house_number || "", bairro = addr.suburb || addr.neighbourhood || "";
+                let refText = rua;
+                if (num && (refText += ", " + num), bairro && (refText += " — " + bairro), refText) {
+                    const fRef = document.getElementById("f-referencia");
+                    fRef && !fRef.value && (fRef.value = refText.toUpperCase());
+                }
+                const cidadeGPS = (addr.city || addr.town || addr.village || addr.municipality || "").toUpperCase().trim();
+                let cidadeEncontrada = "";
+                if (cidadeGPS) {
+                    const norm = s => (s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().trim(), cidadeNorm = norm(cidadeGPS), selCidade = document.getElementById("f-cidade");
+                    if (selCidade) for (const opt of selCidade.options) if (opt.value && "_outro" !== opt.value) {
+                        const ov = norm(opt.value);
+                        if (ov === cidadeNorm || cidadeNorm.includes(ov) || ov.includes(cidadeNorm)) {
+                            selCidade.value = opt.value, cidadeEncontrada = opt.value;
+                            break;
+                        }
+                    }
+                }
+                const cidadeLabel = cidadeEncontrada || cidadeGPS || "";
+                gs && (gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>${cidadeLabel ? " — " + cidadeLabel : ""}`);
+            } catch (e) {
+                e.message, gs && (gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> (endereço indisponível)`);
+            }
+        }, err => {
+            btn && (btn.disabled = !1, btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente');
+            const msg = 1 === err.code ? "Permissão negada — habilite o GPS no navegador." : 3 === err.code ? "Tempo esgotado — tente em local aberto." : err.message;
+            gs && (gs.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i> ${msg}`), 
+            err.message;
+        }, {
+            enableHighAccuracy: !0,
+            timeout: 2e4,
+            maximumAge: 6e4
+        })) : gs && (gs.innerHTML = '<i class="fas fa-times-circle" style="color:#dc2626"></i> GPS não disponível neste dispositivo.');
     }, window.carregarDados = carregarDados$1, window._validarOS = _validarOS, window._montarObjOS = _montarObjOS, 
     window.salvarOS = async function(e) {
         try {

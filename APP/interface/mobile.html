@@ -5330,8 +5330,10 @@ function capturarGPS() {
             toast(`Cidade "${cidadeGPS}" não encontrada nos profiles cadastrados. Selecione manualmente.`, 'error');
             label.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#fbbf24"></i> ${lat.toFixed(6)}, ${lon.toFixed(6)} — cidade não encontrada`;
           }
+        } else {
+          // Nominatim não retornou cidade — exibe só coordenadas
+          label.innerHTML = `<i class="fas fa-check-circle"></i> ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
         }
-        label.innerHTML = `<i class="fas fa-check-circle"></i> ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
       } catch(e) {
         console.warn('Geocodificação falhou:', e);
         label.innerHTML = `<i class="fas fa-check-circle"></i> ${lat.toFixed(6)}, ${lon.toFixed(6)}`;

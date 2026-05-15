@@ -722,8 +722,8 @@ tbody tr:last-child{border-bottom:none}
                   class="filter-select"
                   onchange="window._setOsLoadMode(this.value)"
                   title="Quanto histórico de OS carregar do servidor">
-            <option value="atual_anterior" selected>Mês atual + anterior</option>
-            <option value="tudo">Histórico completo</option>
+            <option value="atual_anterior">Mês atual + anterior</option>
+            <option value="tudo" selected>Histórico completo</option>
           </select>
           <button class="btn btn-danger btn-sm" id="btn-del-tudo" onclick="confirmarLimparTudo()" style="display:none">
             <i class="fas fa-trash"></i> Limpar Tudo
@@ -3059,6 +3059,14 @@ window.verDetalhe = function(fbKey) {
         </tr>
       </tfoot>
     </table>
+    ${r.lat && r.lon ? `
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 12px;margin-top:10px;font-size:.82rem;display:flex;align-items:center;gap:8px">
+      <i class="fas fa-map-marker-alt" style="color:var(--primary);flex-shrink:0"></i>
+      <span style="font-family:monospace;font-size:.8rem;color:#1e3a5f;font-weight:600">${Number(r.lat).toFixed(6)}, ${Number(r.lon).toFixed(6)}</span>
+      <a href="https://www.google.com/maps?q=${r.lat},${r.lon}" target="_blank" style="margin-left:auto;font-size:.72rem;color:var(--primary);text-decoration:none;white-space:nowrap">
+        <i class="fas fa-external-link-alt"></i> Ver no mapa
+      </a>
+    </div>` : ''}
     ${notaHtml}${fotoHtml}
   `;
   const m = document.getElementById('modal-detail');

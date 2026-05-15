@@ -9,7 +9,7 @@ window._getRecordByKey = function(fbKey) { return window._recordsByKey?.[fbKey] 
 // ── Estado: qual janela de OS carregar ──
 // Default: 'atual_anterior' (mês corrente + mês anterior) — bate com fluxo de fechamento.
 // 'tudo' = histórico completo. 'mes:YYYY-MM' = um mês específico.
-let _osLoadMode = 'atual_anterior';
+let _osLoadMode = 'tudo';
 window._setOsLoadMode = function(mode) {
   _osLoadMode = mode;
   console.log('[SDR Admin] _osLoadMode →', mode);
@@ -724,6 +724,88 @@ function renderBotaoTecnicoProprio() {
     if (propWrap) propWrap.style.display = 'none';
   }
 }
+
+// ── capturarGPS — captura coordenadas via browser e preenche formulário de OS ──
+window.capturarGPS = function capturarGPS() {
+  const btn   = document.getElementById('btn-gps');
+  const dmsF  = document.getElementById('f-gps-dms');
+  const gs    = document.getElementById('gps-status');
+  const latF  = document.getElementById('f-lat');
+  const lonF  = document.getElementById('f-lon');
+
+  if (!navigator.geolocation) {
+    if (gs) gs.innerHTML = '<i class="fas fa-times-circle" style="color:#dc2626"></i> GPS não disponível neste dispositivo.';
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Obtendo posição...'; }
+  if (gs)  gs.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando sinal GPS...';
+
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      if (latF) latF.value = lat;
+      if (lonF) lonF.value = lon;
+      if (dmsF) dmsF.value = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+      if (btn)  { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check-circle" style="color:#16a34a"></i> GPS capturado'; }
+      if (gs)   gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--primary)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> — buscando endereço...`;
+
+      // Geocodificação reversa via Nominatim
+      try {
+        const res  = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=pt-BR&addressdetails=1`, { headers: { 'Accept-Language': 'pt-BR' } });
+        const data = await res.json();
+        const addr = data.address || {};
+
+        // Preencher referência (rua + número + bairro)
+        const rua    = addr.road || addr.pedestrian || addr.footway || '';
+        const num    = addr.house_number || '';
+        const bairro = addr.suburb || addr.neighbourhood || '';
+        let refText  = rua;
+        if (num) refText += ', ' + num;
+        if (bairro) refText += ' — ' + bairro;
+        if (refText) {
+          const fRef = document.getElementById('f-referencia');
+          if (fRef && !fRef.value) fRef.value = refText.toUpperCase();
+        }
+
+        // Tentar selecionar cidade no dropdown
+        const cidadeGPS = (addr.city || addr.town || addr.village || addr.municipality || '').toUpperCase().trim();
+        let cidadeEncontrada = '';
+        if (cidadeGPS) {
+          const norm = s => (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toUpperCase().trim();
+          const cidadeNorm = norm(cidadeGPS);
+          const selCidade = document.getElementById('f-cidade');
+          if (selCidade) {
+            for (const opt of selCidade.options) {
+              if (opt.value && opt.value !== '_outro') {
+                const ov = norm(opt.value);
+                if (ov === cidadeNorm || cidadeNorm.includes(ov) || ov.includes(cidadeNorm)) {
+                  selCidade.value = opt.value;
+                  cidadeEncontrada = opt.value;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        const cidadeLabel = cidadeEncontrada || cidadeGPS || '';
+        if (gs) gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong>${cidadeLabel ? ' — ' + cidadeLabel : ''}`;
+      } catch (e) {
+        console.warn('[GPS] Geocodificação falhou:', e.message);
+        if (gs) gs.innerHTML = `<i class="fas fa-map-marker-alt" style="color:var(--success)"></i> <strong>${lat.toFixed(6)}, ${lon.toFixed(6)}</strong> (endereço indisponível)`;
+      }
+    },
+    err => {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente'; }
+      const msg = err.code === 1 ? 'Permissão negada — habilite o GPS no navegador.' : err.code === 3 ? 'Tempo esgotado — tente em local aberto.' : err.message;
+      if (gs)  gs.innerHTML = `<i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i> ${msg}`;
+      console.warn('[GPS] Erro:', err.message);
+    },
+    { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
+  );
+};
 
 // ── Expor funções como globals para o admin.html (tree-shaking fix) ──
 window.carregarDados = carregarDados;
