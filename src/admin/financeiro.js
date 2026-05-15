@@ -851,11 +851,11 @@ function renderFinanceiro() {
         gtotalLiq  += rowLiq;
         const isHist   = u.ativo === false;
         const avatarBg = isHist ? '#94a3b8' : '#'+Math.abs((u.name||uid).split('').reduce((h,c)=>((h<<5)-h)+c.charCodeAt(0),0)%0xffffff).toString(16).padStart(6,'0').slice(0,6);
-        return { uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount: rTec.length, osPendCount: rTecPend.length };
+        return { uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount: rTec.length, osPendCount: rTecPend.length, sfVal };
       });
 
       // Cards individuais por técnico
-      const cards = tecsData.map(({ uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount, osPendCount }) => {
+      const cards = tecsData.map(({ uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount, osPendCount, sfVal }) => {
         const cardBorder = isHist ? '#cbd5e1' : avatarBg;
         const headerBg  = isHist ? '#64748b' : '#1f4e79';
 

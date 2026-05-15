@@ -6840,7 +6840,7 @@ var SDR = function(exports) {
         var _a;
         return (null == (_a = window._recordsByKey) ? void 0 : _a[fbKey]) || null;
     };
-    let _osLoadMode = "atual_anterior";
+    let _osLoadMode = "tudo";
     async function carregarDados$1() {
         let raw;
         if (_dataVersion++, Object.keys(_pageRenderVersion).forEach(k => delete _pageRenderVersion[k]), 
@@ -7807,8 +7807,8 @@ var SDR = function(exports) {
                     const v = rTecContam.filter(r => _n(r.profile) === f.prof && _n(r.tipo) === f.tipo).reduce((s, r) => s + (r.total || 0), 0), vp = rTecPend.filter(r => _n(r.profile) === f.prof && _n(r.tipo) === f.tipo).reduce((s, r) => s + (r.total || 0), 0);
                     vals[f.key] = v, valsPend[f.key] = vp, totFrentes[f.key] += v, rowTotal += v, rowTotalPend += vp;
                 });
-                const sfVal2 = window.getServicoFixoValor ? window.getServicoFixoValor(uid) : 0;
-                rowTotal += sfVal2;
+                const sfVal = window.getServicoFixoValor ? window.getServicoFixoValor(uid) : 0;
+                rowTotal += sfVal;
                 const rowDesc = _descontoTecMes(uid), rowLiq = rowTotal - rowDesc;
                 gtotal += rowTotal, gtotalDesc += rowDesc, gtotalLiq += rowLiq;
                 const isHist = !1 === u.ativo, avatarBg = isHist ? "#94a3b8" : "#" + Math.abs((u.name || uid).split("").reduce((h, c) => (h << 5) - h + c.charCodeAt(0), 0) % 16777215).toString(16).padStart(6, "0").slice(0, 6);
@@ -7824,9 +7824,10 @@ var SDR = function(exports) {
                     isHist: isHist,
                     avatarBg: avatarBg,
                     osCount: rTec.length,
-                    osPendCount: rTecPend.length
+                    osPendCount: rTecPend.length,
+                    sfVal: sfVal
                 };
-            }).map(({uid: uid, u: u, vals: vals, valsPend: valsPend, rowTotal: rowTotal, rowTotalPend: rowTotalPend, rowDesc: rowDesc, rowLiq: rowLiq, isHist: isHist, avatarBg: avatarBg, osCount: osCount, osPendCount: osPendCount}) => {
+            }).map(({uid: uid, u: u, vals: vals, valsPend: valsPend, rowTotal: rowTotal, rowTotalPend: rowTotalPend, rowDesc: rowDesc, rowLiq: rowLiq, isHist: isHist, avatarBg: avatarBg, osCount: osCount, osPendCount: osPendCount, sfVal: sfVal}) => {
                 var _a, _b;
                 const cardBorder = isHist ? "#cbd5e1" : avatarBg, headerBg = isHist ? "#64748b" : "#1f4e79", frenteItems = FRENTES.map(f => {
                     const v = vals[f.key];
