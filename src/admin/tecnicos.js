@@ -654,6 +654,7 @@ window.showPage = function(name) {
   if (name==='financeiro') {
     _skipIfCached('financeiro', window.renderFinanceiro);
     if (typeof window.finMostrarSubTab === 'function') window.finMostrarSubTab('producao');
+    if (typeof window.renderRelatoriosAssinados === 'function') window.renderRelatoriosAssinados();
   }
   // impostos-mensais: redirecionado para sub-aba de financeiro (ver topo da função)
   if (name==='fiscalizacao') _skipIfCached('fiscalizacao', window.renderFiscalizacao);
