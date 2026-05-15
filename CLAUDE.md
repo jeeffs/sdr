@@ -1,6 +1,6 @@
 # CLAUDE.md — SDR Soluções de Rua
 > Leia este arquivo inteiro antes de qualquer ação. Sem exceções.
-> **Última atualização:** 2026-05-12
+> **Última atualização:** 2026-05-15
 
 ---
 
@@ -50,8 +50,18 @@ cálculo financeiro, relatórios, EPI/segurança e assinatura digital.
 cd "C:\Users\Jeeff\OneDrive\Documentos\ObsidianAI\Claude\SDR"; firebase deploy --only hosting
 ```
 
-**Sempre bumpar o SW cache antes de deploy** — incrementar `CACHE_NAME` em `public/sw.js`.
-Cache atual: `sdr-v148`
+**Sempre bumpar o SW cache antes de deploy** — usar `.\bump-sw.ps1` (bumpa CACHE_NAME + CACHE_SHELL juntos).
+Cache atual: `sdr-v157` / `sdr-shell-v132`
+
+### Sequência de deploy completa
+```powershell
+cd C:\dev\SDR
+.\bump-sw.ps1                                                    # bumpa CACHE_NAME + CACHE_SHELL
+npm run build                                                    # se mexeu em src/admin/*.js
+Copy-Item APP\interface\mobile.html public\index.html -Force    # se mexeu em mobile.html
+git add . ; git commit -m "..." ; git push origin main
+firebase deploy --only hosting
+```
 
 ---
 
@@ -185,6 +195,12 @@ Ver `SUPERVISOR_DESIGN.md` para documentação completa.
 
 ## 🔄 HISTÓRICO RECENTE (ver SPRINT_LOG.md para detalhes)
 
+- `2026-05-15` — GPS best-of-N: watchPosition + bestPos (menor accuracy), ACC_IDEAL=20m, ACC_GOOD=50m, coleta 6s mínimo
+- `2026-05-15` — GPS admin: capturarGPS implementado em src/admin/os.js (era missing)
+- `2026-05-15` — GPS verDetalhe: coordenadas + link Google Maps no modal de detalhe
+- `2026-05-15` — Nominatim BR: fallback quarter/hamlet para bairro (suburb vazio no Brasil)
+- `2026-05-15` — SW corrompido restaurado (PowerShell injection), bump-sw.ps1 criado
+- `2026-05-15` — Fix CACHE_SHELL não bumpado (index.html em SHELL_ASSETS)
 - `2026-05-12` — Fix sistema supervisor mobile (4 bugs): currentUser+supervisao, duplo bônus, allRecords equipe, detalhamento por serviço
 - `2026-05-12` — Badge supervisor corrigido na `renderFinanceiro$1` do admin
 - `2026-05-07` — SW bump sdr-v147, deploy
