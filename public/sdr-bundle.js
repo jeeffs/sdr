@@ -6868,10 +6868,32 @@ var SDR = function(exports) {
         })), allRecords.sort((a, b) => new Date(b.criado_em || b.data || 0) - new Date(a.criado_em || a.data || 0)), 
         _recordsByKey = {}, allRecords.forEach(r => {
             _recordsByKey[r.fbKey] = r;
-        }), allRecords.length, await _carregarTodosPrecos(), buildServiceRows$1(), usersCache = await _dbRead("users", {}), 
-        _isAdmin(currentUser) ? (await Promise.all([ carregarDescontos$2(), carregarServicosFixos() ]), 
+        }), allRecords.length, await _carregarTodosPrecos(), function() {
+            const c = document.getElementById("servicos-rows");
+            if (!c) return;
+            c.innerHTML = "";
+            const svcs = window.SERVICOS || [];
+            for (let i = 1; i <= 5; i++) {
+                const opts = svcs.map(s => `<option>${s}</option>`).join("");
+                c.innerHTML += `<div class="service-row">\n      <select id="s-tipo-${i}" onchange="preencherPreco(${i})">\n        <option value="">-- ${i}º Serviço --</option>${opts}\n      </select>\n      <input type="number" id="s-qtd-${i}" placeholder="Qtde" min="0" step="1"\n        oninput="this.value=Math.floor(Math.abs(this.value))||'';calcTotal()">\n      <div style="position:relative">\n        <input type="number" id="s-val-${i}" placeholder="Sem preço" min="0" step="0.01"\n          style="background:#f0fdf4;padding-right:26px;width:100%" readonly\n          title="Valor da Tabela de Preços">\n        <i class="fas fa-lock" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.68rem;pointer-events:none"></i>\n      </div>\n    </div>`;
+            }
+        }(), usersCache = await _dbRead("users", {}), _isAdmin(currentUser) ? (await Promise.all([ carregarDescontos$2(), carregarServicosFixos() ]), 
         assinaturaMaster = await _dbRead("config/assinatura_master", null)) : await Promise.all([ carregarDescontosTec$1(currentUser.id), carregarServicosFixos() ]), 
-        popularFiltros(), _tabelaPagina = 0, renderTabela(filteredRecords$1()), renderBotoesTecnicos$1();
+        _atualizarDropdownCidades(filteredRecords$1()), _isAdmin(currentUser) && _atualizarDropdownTecnicos(), 
+        _tabelaPagina = 0, renderTabela(filteredRecords$1()), function() {
+            if (!_isAdmin(currentUser)) return;
+            const wrap = document.getElementById("exp-por-tecnico");
+            if (!wrap) return;
+            wrap.style.display = "block";
+            const anos = [ ...new Set(allRecords.map(r => (r.data || "").slice(0, 4)).filter(a => 4 === a.length)) ].sort().reverse(), selAno = document.getElementById("exp-ano");
+            if (selAno) {
+                const atual = selAno.value;
+                selAno.innerHTML = '<option value="">-- Selecione --</option>' + anos.map(a => `<option value="${a}" ${a === atual ? "selected" : ""}>${a}</option>`).join("");
+            }
+            const tecStep = document.getElementById("exp-tec-step"), nivelStep = document.getElementById("exp-nivel-step");
+            tecStep && (tecStep.style.display = "none");
+            nivelStep && (nivelStep.style.display = "none");
+        }();
         const count = filteredRecords$1().length, countEl = document.getElementById("topbar-count");
         countEl && (countEl.textContent = `${count} registro${1 !== count ? "s" : ""}`);
     }
@@ -7008,27 +7030,6 @@ var SDR = function(exports) {
             pagDiv.innerHTML = `\n        <button style="${isFirst ? btnDis : btnS}" onclick="_tabelaPagina=0;filtrarTabela()" ${isFirst ? "disabled" : ""}>«</button>\n        <button style="${isFirst ? btnDis : btnS}" onclick="_tabelaPagina--;filtrarTabela()" ${isFirst ? "disabled" : ""}>‹</button>\n        <span style="margin:0 10px;font-size:.82rem;color:#64748b">\n          Página <b style="color:#1f4e79">${_tabelaPagina + 1}</b> de <b>${totalPages}</b>\n          <span style="color:#94a3b8;margin-left:6px">(${sorted.length} registros)</span>\n        </span>\n        <button style="${isLast ? btnDis : btnS}" onclick="_tabelaPagina++;filtrarTabela()" ${isLast ? "disabled" : ""}>›</button>\n        <button style="${isLast ? btnDis : btnS}" onclick="_tabelaPagina=${totalPages - 1};filtrarTabela()" ${isLast ? "disabled" : ""}>»</button>\n      `;
         }
     }
-    function getActivePriceMap() {
-        const nivel = (null == currentUser ? void 0 : currentUser.nivel) || "V1";
-        return "V3" === nivel || "V4" === nivel ? window.precosV3map || {} : window.precosV1map || {};
-    }
-    function buildServiceRows$1() {
-        const c = document.getElementById("servicos-rows");
-        if (!c) return;
-        c.innerHTML = "";
-        const svcs = window.SERVICOS || [];
-        for (let i = 1; i <= 5; i++) {
-            const opts = svcs.map(s => `<option>${s}</option>`).join("");
-            c.innerHTML += `<div class="service-row">\n      <select id="s-tipo-${i}" onchange="preencherPreco(${i})">\n        <option value="">-- ${i}º Serviço --</option>${opts}\n      </select>\n      <input type="number" id="s-qtd-${i}" placeholder="Qtde" min="0" step="1"\n        oninput="this.value=Math.floor(Math.abs(this.value))||'';calcTotal()">\n      <div style="position:relative">\n        <input type="number" id="s-val-${i}" placeholder="Sem preço" min="0" step="0.01"\n          style="background:#f0fdf4;padding-right:26px;width:100%" readonly\n          title="Valor da Tabela de Preços">\n        <i class="fas fa-lock" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.68rem;pointer-events:none"></i>\n      </div>\n    </div>`;
-        }
-    }
-    function calcTotal() {
-        var _a, _b;
-        let t = 0;
-        for (let i = 1; i <= 5; i++) t += (parseInt(null == (_a = document.getElementById(`s-qtd-${i}`)) ? void 0 : _a.value) || 0) * (parseFloat(null == (_b = document.getElementById(`s-val-${i}`)) ? void 0 : _b.value) || 0);
-        const el = document.getElementById("total-preview");
-        el && (el.innerHTML = "function" == typeof window.fmtMoeda ? window.fmtMoeda(t) : `R$ ${t.toFixed(2)}`);
-    }
     function _atualizarDropdownTecnicos() {
         var _a;
         const imp = (null == (_a = document.getElementById("filter-importado")) ? void 0 : _a.value) || "", base = "" === imp ? allRecords : "imp" === imp ? allRecords.filter(r => r.importado) : allRecords.filter(r => !r.importado), comOS = new Set(base.map(r => r.userId).filter(Boolean)), todosUsers = Object.entries(usersCache).filter(([, u]) => !1 !== u.ativo && !u.firstLogin && u.name).sort((a, b) => (a[1].name || "").localeCompare(b[1].name || "", "pt-BR"));
@@ -7054,9 +7055,6 @@ var SDR = function(exports) {
             }
             prev && (el.value = prev);
         });
-    }
-    function popularFiltros() {
-        _atualizarDropdownCidades(filteredRecords$1()), _isAdmin(currentUser) && _atualizarDropdownTecnicos();
     }
     async function carregarDescontos$2() {
         try {
@@ -7092,19 +7090,6 @@ var SDR = function(exports) {
         } catch (e) {
             console.error("[carregarDescontosTec]", e), descontosCache = {}, assinaturaMaster = null;
         }
-    }
-    function renderBotoesTecnicos$1() {
-        if (!_isAdmin(currentUser)) return;
-        const wrap = document.getElementById("exp-por-tecnico");
-        if (!wrap) return;
-        wrap.style.display = "block";
-        const anos = [ ...new Set(allRecords.map(r => (r.data || "").slice(0, 4)).filter(a => 4 === a.length)) ].sort().reverse(), selAno = document.getElementById("exp-ano");
-        if (selAno) {
-            const atual = selAno.value;
-            selAno.innerHTML = '<option value="">-- Selecione --</option>' + anos.map(a => `<option value="${a}" ${a === atual ? "selected" : ""}>${a}</option>`).join("");
-        }
-        const tecStep = document.getElementById("exp-tec-step"), nivelStep = document.getElementById("exp-nivel-step");
-        tecStep && (tecStep.style.display = "none"), nivelStep && (nivelStep.style.display = "none");
     }
     window._setOsLoadMode = function(mode) {
         return _osLoadMode = mode, carregarDados$1();
@@ -7176,12 +7161,12 @@ var SDR = function(exports) {
             !timerDone && bestPos ? finalizarGPS(bestPos) : timerDone || (timerDone = !0, null != _gpsWatchIdAdmin && (navigator.geolocation.clearWatch(_gpsWatchIdAdmin), 
             _gpsWatchIdAdmin = null), btn && (btn.disabled = !1, btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente'), 
             gs && (gs.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i> Tempo esgotado — tente em local aberto.'));
-        }, 15e3);
+        }, 2e4);
         _gpsWatchIdAdmin = navigator.geolocation.watchPosition(pos => {
-            bestPos = pos;
+            (!bestPos || pos.coords.accuracy < bestPos.coords.accuracy) && (bestPos = pos);
             const acc = pos.coords.accuracy, elapsed = Date.now() - startTs;
             gs && (gs.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Refinando posição... ±${acc.toFixed(0)}m`), 
-            (acc <= 60 || elapsed >= 4e3 && acc <= 150) && (clearTimeout(timer), finalizarGPS(pos));
+            (acc <= 20 || elapsed >= 6e3 && acc <= 50) && (clearTimeout(timer), finalizarGPS(bestPos));
         }, err => {
             clearTimeout(timer), null != _gpsWatchIdAdmin && (navigator.geolocation.clearWatch(_gpsWatchIdAdmin), 
             _gpsWatchIdAdmin = null), btn && (btn.disabled = !1, btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente');
@@ -7190,7 +7175,7 @@ var SDR = function(exports) {
             err.message;
         }, {
             enableHighAccuracy: !0,
-            timeout: 15e3,
+            timeout: 2e4,
             maximumAge: 0
         });
     }, window.carregarDados = carregarDados$1, window._validarOS = _validarOS, window._montarObjOS = _montarObjOS, 
@@ -7248,34 +7233,6 @@ var SDR = function(exports) {
             return matchQ && matchT && matchImp;
         });
         _atualizarDropdownCidades(semCidade), renderTabela(semCidade.filter(r => !cidade || r.cidade === cidade));
-    }, window.renderTabela = renderTabela, window.buildServiceRows = buildServiceRows$1, 
-    window.preencherPreco = function(i) {
-        const tipoEl = document.getElementById(`s-tipo-${i}`), vi = document.getElementById(`s-val-${i}`);
-        if (!tipoEl || !vi) return;
-        const tipo = tipoEl.value, pm = getActivePriceMap();
-        vi.value = tipo && pm && void 0 !== pm[tipo] ? pm[tipo] : "", calcTotal();
-    }, window.calcTotal = calcTotal, window.gerarCodigoOS = async function() {
-        const icon = document.getElementById("icon-os");
-        icon && icon.classList.add("fa-spinner", "fa-spin");
-        const ano =  (new Date).getFullYear(), doAno = (allRecords || []).filter(r => r.data && r.data.startsWith(String(ano))), seq = String(doAno.length + 1).padStart(4, "0"), fCodigo = document.getElementById("f-codigo");
-        fCodigo && (fCodigo.value = `OS-${ano}-${seq}`), icon && setTimeout(() => icon.classList.remove("fa-spinner", "fa-spin"), 400);
-    }, window.getActivePriceMap = getActivePriceMap, window._atualizarDropdownTecnicos = _atualizarDropdownTecnicos, 
-    window._atualizarDropdownCidades = _atualizarDropdownCidades, window.popularFiltros = popularFiltros, 
-    window.carregarDescontos = carregarDescontos$2, window.carregarDescontosTec = carregarDescontosTec$1, 
-    window.renderBotoesTecnicos = renderBotoesTecnicos$1, window.renderBotaoTecnicoProprio = function() {
-        const propWrap = document.getElementById("exp-proprio-tec"), botoesEl = document.getElementById("exp-proprio-botoes"), master = document.getElementById("exp-por-tecnico");
-        if ("user" === currentUser.role) {
-            if (_isFiscal(currentUser)) return propWrap && (propWrap.style.display = "none"), 
-            void (master && (master.style.display = "none"));
-            if (propWrap && (propWrap.style.display = "block"), master && (master.style.display = "none"), 
-            botoesEl) {
-                const MESES_PT = [ "Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez" ], hoje =  new Date, meses = [ new Date(hoje.getFullYear(), hoje.getMonth(), 1), new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1) ];
-                botoesEl.innerHTML = meses.map((d, i) => {
-                    const yy = d.getFullYear(), isCur = 0 === i;
-                    return `<button class="btn ${isCur ? "btn-success" : "btn-secondary"}"\n          onclick="exportarTecnicoMes(currentUser.id, '${yy}-${String(d.getMonth() + 1).padStart(2, "0")}')">\n          <i class="fas fa-file-excel"></i> ${`${MESES_PT[d.getMonth()]} ${yy}`}${isCur ? " (atual)" : " (anterior)"}\n        </button>`;
-                }).join("");
-            }
-        } else propWrap && (propWrap.style.display = "none");
     };
     let _padDrawing = !1;
     function _nivelEfetivoPreco$1(r) {
