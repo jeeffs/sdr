@@ -1,5 +1,6 @@
 # CLAUDE.md — SDR Soluções de Rua
 > Leia este arquivo inteiro antes de qualquer ação. Sem exceções.
+> **Última atualização:** 2026-05-12
 
 ---
 
@@ -9,7 +10,7 @@ PWA em produção contínua que gerencia técnicos de campo: importação de pla
 cálculo financeiro, relatórios, EPI/segurança e assinatura digital.
 
 - **URL Produção:** https://solucaoderua.web.app
-- **Admin:** https://solucaoderua.web.app/admin
+- **Admin:** https://solucaoderua.web.app/admin.html
 - **Firebase Projeto:** `solucaoderua`
 - **Responsável:** Jeff (Jefferson Rodrigues)
 
@@ -28,23 +29,29 @@ cálculo financeiro, relatórios, EPI/segurança e assinatura digital.
 - Qualquer erro em produção causa impacto imediato
 - Dúvida? Não faça. Pergunte antes.
 
-### 2. NUNCA trabalhe direto no branch `main`
+### 2. NUNCA faça deploy sem testar no browser
+- Testar admin.html e index.html no browser antes de qualquer deploy
+- Verificar console do browser (sem erros JS)
+
+### 3. NUNCA altere dados do Firebase sem confirmação explícita
+- Deleções e alterações de estrutura do banco são irreversíveis
+- Sempre pergunte antes de qualquer operação de escrita em produção
+
+### 4. NUNCA edite sdr-bundle.js pelo Vite — edite direto
+- O sdr-bundle.js é o arquivo compilado em produção
+- Edições diretas são feitas no arquivo `public/sdr-bundle.js`
+- Para mudanças grandes no admin, editar sdr-bundle.js diretamente com Edit tool
+
+---
+
+## 🚀 COMANDO DE DEPLOY
+
+```powershell
+cd "C:\Users\Jeeff\OneDrive\Documentos\ObsidianAI\Claude\SDR"; firebase deploy --only hosting
 ```
-main     → produção (somente recebe merge aprovado)
-develop  → desenvolvimento (todo trabalho acontece aqui)
-```
-Antes de qualquer mudança, confirme: `git branch` deve mostrar `develop`.
 
-### 3. NUNCA faça deploy sem backup
-Sempre use `.\BACKUP_E_DEPLOY.ps1` — nunca `firebase deploy` direto.
-O script faz backup do código e do banco antes de qualquer mudança em produção.
-
-### 4. NUNCA altere dados do Firebase sem confirmação explícita
-Deleções e alterações de estrutura do banco são irreversíveis.
-Sempre pergunte antes de qualquer operação de escrita em produção.
-
-### 5. Teste antes de fazer merge para `main`
-Toda mudança deve ser testada manualmente no browser antes de ir para produção.
+**Sempre bumpar o SW cache antes de deploy** — incrementar `CACHE_NAME` em `public/sw.js`.
+Cache atual: `sdr-v148`
 
 ---
 
@@ -52,123 +59,134 @@ Toda mudança deve ser testada manualmente no browser antes de ir para produçã
 
 | Recurso | Detalhe |
 |---|---|
-| **Frontend** | Vanilla JS (sem frameworks) |
+| **Frontend Admin** | Vanilla JS, arquivo `public/sdr-bundle.js` (~12.000+ linhas) |
+| **Frontend Mobile** | Vanilla JS, arquivo `public/index.html` (~7.000+ linhas) |
 | **Banco** | Firebase Realtime Database (não Firestore) |
 | **Auth** | Firebase Auth |
 | **Hosting** | Firebase Hosting |
-| **Libs** | Firebase 9.23.0 (compat), ExcelJS 4.3.0, SheetJS 0.18.5, Tesseract.js 5 |
+| **Service Worker** | `public/sw.js` — cache `sdr-v147` |
 
 ### Estrutura de arquivos (o que importa)
 ```
 public/
-├── admin.html        ← painel admin (~13.500 linhas)
-├── index.html        ← app mobile dos técnicos
-├── sdr-module.js     ← módulo compartilhado
-├── sw.js             ← service worker (cache sdr-v7)
-└── manifest.json     ← PWA config
+├── admin.html        ← HTML shell do admin (login, estrutura base)
+├── sdr-bundle.js     ← TODO o código do admin (~12.000 linhas, editar aqui)
+├── index.html        ← app mobile dos técnicos (~7.000 linhas)
+├── sw.js             ← service worker (cache sdr-v147)
+├── manifest.json     ← PWA config
+├── icon-192.png
+└── icon-512.png
 
-firebase.json         ← config hosting + rewrites
+firebase.json         ← config hosting + CSP headers
 .firebaserc           ← projeto: solucaoderua
 ```
 
-### Ordem de carregamento JS (crítico)
-```
-constants → finance → ui-helpers → firebase-helpers → auth → inline admin.html → seguranca
-```
-
-### Namespaces disponíveis
-- `Finance` — cálculos financeiros
-- `UI` — helpers de interface (`$()`, `show()`, `hide()`)
-- `CORES` — cores centralizadas
-- `_dbRead/_dbSet/_dbUpdate/_dbPush/_dbRemove` — wrappers Firebase com retry
-- `_cachedRead(path, ttlMs)` — cache com TTL 5min
-
----
-
-## 🔄 FLUXO DE TRABALHO OBRIGATÓRIO
-
-### Para qualquer mudança:
-```
-1. git checkout develop          (confirmar branch)
-2. Fazer a alteração no código
-3. Testar no browser localmente
-4. git add . && git commit -m "descrição clara"
-5. git push
-6. Revisão visual final
-7. git checkout main
-8. git merge develop
-9. .\BACKUP_E_DEPLOY.ps1        (backup + deploy)
-10. git checkout develop         (voltar para develop)
-```
-
-### Para rollback de emergência:
-```powershell
-# Ver versões anteriores do Firebase Hosting
-firebase hosting:releases:list --project solucaoderua
-
-# Voltar para versão anterior
-firebase hosting:rollback --project solucaoderua
-```
-
----
-
-## 💾 ESTRUTURA DO BANCO (Firebase Realtime Database)
-
+### Firebase RTDB — paths principais
 ```
 root/
-├── users/{uid}/          → técnicos cadastrados
-├── os/{fbKey}/           → ordens de serviço
-├── precos/{v1|v2|v3|v4}/ → tabelas de preço por nível
+├── users/{uid}/           → técnicos cadastrados
+│   ├── name, email, tipo  → dados do técnico
+│   ├── supervisao: true   → flag supervisor (Juliano = tecnico3)
+│   └── aditivo_1/         → dados do aditivo contratual assinado
+├── os/{fbKey}/            → ordens de serviço
+├── precos/
+│   ├── v1/{tipo}          → tabela preços base (precosV1map)
+│   └── v2/{tipo}          → tabela preços V2 (precosV2map)
 ├── config/
-│   ├── profiles          → {FILIAL:[cidades], MATRIZ:[cidades]}
-│   ├── servicos_extra[]  → serviços customizados
-│   ├── emprestimos/      → créditos de ferramenta (Código Civil)
-│   ├── de_para           → aliases de nomes de serviço
-│   └── valoresPlanilha/  → valores originais das planilhas
-├── seguranca/            → EPI e documentos
-├── relatorios/{uid}/{mes}
-├── impostos_mensais/
-└── contratos/
+│   ├── profiles           → {FILIAL:[cidades], MATRIZ:[cidades]}
+│   ├── servicos_extra[]   → serviços customizados
+│   ├── emprestimos/       → créditos de ferramenta
+│   └── de_para            → aliases de nomes de serviço
+├── seguranca/             → EPI e documentos
+├── contratos/
+│   └── {uid}/aditivo_1/   → aditivo contratual por técnico
+└── impostos_mensais/
 ```
 
 ---
 
-## 📋 REGRAS DE NEGÓCIO CRÍTICAS
+## 👥 TÉCNICOS CADASTRADOS
 
-### Importação de planilhas
-- Fingerprint de duplicata: `userId|tipo|cidade|cto_ceo|data|nSvs|total_cents`
-- Arquivos V2 são só referência de preço — não geram registros
+| UID | Nome | Nível | Observação |
+|---|---|---|---|
+| tecnico3 | Juliano | V2 + Supervisor | `supervisao: true` no RTDB |
+| tecnico4 | Ewerton | V1 | Serviço fixo mensal R$750 (KMZ) |
+
+---
+
+## 💰 SISTEMA FINANCEIRO
+
+### Níveis de preço
+- **V1** — preço base (`precosV1map`) — todos os técnicos usam
+- **V2** — preço premium (`precosV2map`) — técnicos com flag V2
+- **Supervisor** — flag `supervisao: true` — cálculo especial (ver SUPERVISOR_DESIGN.md)
+
+### Regras de negócio críticas
+- Valor calculado por `precosV1map[tipo] × qtd` — NUNCA pela coluna VALOR da planilha
+- Crédito de ferramenta: em `config/emprestimos` (não `config/descontos` — depreciado)
+- Importação: fingerprint de duplicata `userId|tipo|cidade|cto_ceo|data|nSvs|total_cents`
+- Arquivos V2: só referência de preço, não geram registros
 - V3 rejeitado se técnico já tem V1 no mesmo lote (exceto Jefferson)
 - Arquivos "GERAL" sempre rejeitados
-- Valor calculado por `_preco(tipo) × qtd` via tabela `de_para` — NUNCA pela coluna VALOR da planilha
 
-### Sistema financeiro
-- Crédito de ferramenta: voluntário, base Código Civil (não CLT)
-- Dados em `config/emprestimos` (não `config/descontos` — depreciado)
-- Saldo = Total bruto − descontos − impostos
+---
 
-### Service Worker
-- Cache atual: `sdr-v7`
-- Para forçar refresh nos clientes após deploy: incrementar versão no `sw.js`
+## 📄 SISTEMA DE CONTRATOS
+
+### Aditivo Contratual (Primeiro Aditivo)
+- Template gerado em `sdr-bundle.js` (função `gerarAditivoContratual`)
+- Assinatura via canvas touch/mouse no mobile (`index.html`)
+- Upload do HTML assinado para Firebase Storage
+- Path RTDB: `contratos/{uid}/aditivo_1/`
+- Após assinatura: HTML deletado do Storage, PDF gerado e mantido
+
+---
+
+## 🔑 SISTEMA SUPERVISOR
+
+Ver `SUPERVISOR_DESIGN.md` para documentação completa.
+
+**Resumo:**
+- Flag: `users/{uid}/supervisao: true`
+- Técnico supervisor: Juliano (tecnico3)
+- Cálculo: próprias OS × precosV1 + diferencial V2-V1 de TODA a equipe
+- Badge roxo no admin, 3 cards no dashboard mobile, 4 cards no financeiro mobile
 
 ---
 
 ## 🚨 ERROS CONHECIDOS — NÃO REPITA
 
-Consulte o Obsidian em `ARQUIVO/SDR/SDR - Log de Erros e Aprendizados` antes de qualquer mudança.
+### Bug duplo bônus no mobile (NÃO CORRIGIDO AINDA)
+- No `renderFinanceiro` do index.html, o bloco `${isV2 ? ...}` exibe o bonus
+  mesmo para supervisor, onde ele já está embutido no `totalLiq`
+- Causa: `isV2 && !isSupervisor` deveria ser a condição, mas está só `isV2`
+- Resultado: Resumo Financeiro mostra R$88,25 duplicado para Juliano
 
-Principais pitfalls:
-- Não remover `_gerarArquivosPorGrupo` e `_buildXlsxGeral` — ainda usadas por `exportarTecnico`
-- `verificarTermosPendentes()` não deve bloquear técnicos (correção legal de 18/03/2026)
-- Cache Firebase tem TTL 5min — mudanças no banco podem demorar para aparecer
+### allRecords no mobile (limitação conhecida)
+- `allRecords` no mobile carrega apenas registros do usuário logado
+- Impacto: "Detalhamento Bônus PRESTADOR" mostra apenas o próprio Juliano
+- Cálculo real do `totalGestao` (toda equipe) está correto, mas detalhe está errado
+
+### SyntaxError corrigido (sdr-bundle.js ~linha 10071)
+- Variáveis `_supServicosHtml` e `_supCoordHtml` pré-computadas antes do template
+- IIFEs dentro de template literals causavam SyntaxError — substituídas por variáveis
 
 ---
 
 ## ✅ CHECKLIST ANTES DO DEPLOY
 
-- [ ] Estou no branch `develop`
-- [ ] Testei a mudança no browser
-- [ ] Não há erros no console do browser
-- [ ] Fiz merge para `main`
-- [ ] Usei `.\BACKUP_E_DEPLOY.ps1` (não `firebase deploy` direto)
-- [ ] Verifiquei o app em produção após o deploy
+- [ ] Testei admin.html no browser (sem erros no console)
+- [ ] Testei index.html no browser (sem erros no console)
+- [ ] Bumpei `CACHE_NAME` em `sw.js` (ex: sdr-v147 → sdr-v148)
+- [ ] Executei: `cd "C:\Users\Jeeff\OneDrive\Documentos\ObsidianAI\Claude\SDR"; firebase deploy --only hosting`
+- [ ] Verifiquei o app em produção após deploy
+
+---
+
+## 🔄 HISTÓRICO RECENTE (ver SPRINT_LOG.md para detalhes)
+
+- `2026-05-12` — Fix sistema supervisor mobile (4 bugs): currentUser+supervisao, duplo bônus, allRecords equipe, detalhamento por serviço
+- `2026-05-12` — Badge supervisor corrigido na `renderFinanceiro$1` do admin
+- `2026-05-07` — SW bump sdr-v147, deploy
+- `2026-05-06` — Implementação completa do sistema supervisor
+- `2026-04-xx` — Aditivo contratual, assinatura digital, Firebase Storage

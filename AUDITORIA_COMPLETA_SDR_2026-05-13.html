@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auditoria Completa SDR — 13/05/2026</title>
+<style>
+:root{
+  --red:#dc2626;--orange:#ea580c;--yellow:#d97706;--green:#16a34a;
+  --blue:#1d4ed8;--purple:#7c3aed;--gray:#64748b;
+  --bg:#f1f5f9;--card:#fff;--border:#e2e8f0;--text:#1e293b;--muted:#64748b;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.6}
+
+/* HEADER */
+.header{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 60%,#1d4ed8 100%);color:#fff;padding:44px 40px 32px;position:relative;overflow:hidden}
+.header::after{content:'';position:absolute;right:-60px;top:-60px;width:320px;height:320px;border-radius:50%;background:rgba(255,255,255,.04)}
+.header h1{font-size:1.8rem;font-weight:800;margin-bottom:4px}
+.header .sub{font-size:.9rem;opacity:.7;margin-bottom:20px}
+.meta{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px}
+.meta-chip{background:rgba(255,255,255,.1);border-radius:8px;padding:8px 16px;font-size:.78rem}
+.meta-chip b{display:block;font-size:.65rem;opacity:.65;text-transform:uppercase;letter-spacing:.8px}
+
+/* LAYOUT */
+.container{max-width:1100px;margin:0 auto;padding:28px 20px}
+.section{margin-bottom:36px}
+.section-title{font-size:1rem;font-weight:800;color:var(--text);border-left:4px solid var(--blue);padding-left:12px;margin-bottom:16px;text-transform:uppercase;letter-spacing:.5px}
+
+/* SCORE GRID */
+.score-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
+.score-card{background:var(--card);border-radius:14px;padding:20px;text-align:center;border:1.5px solid var(--border);box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.score-card .label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:6px}
+.score-card .num{font-size:2.5rem;font-weight:900;line-height:1}
+.score-card .desc{font-size:.72rem;color:var(--muted);margin-top:4px}
+.num.red{color:var(--red)} .num.orange{color:var(--orange)} .num.yellow{color:var(--yellow)} .num.green{color:var(--green)}
+
+/* FINDING CARDS */
+.findings{display:flex;flex-direction:column;gap:12px}
+.fc{border-radius:12px;border-left:5px solid;background:var(--card);padding:16px 18px;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+.fc.critical{border-color:var(--red)} .fc.high{border-color:var(--orange)} .fc.medium{border-color:var(--yellow)} .fc.low{border-color:var(--green)} .fc.info{border-color:var(--blue)}
+.fc-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px}
+.badge{padding:3px 10px;border-radius:20px;font-size:.65rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;flex-shrink:0}
+.b-critical{background:#fee2e2;color:#991b1b} .b-high{background:#ffedd5;color:#9a3412}
+.b-medium{background:#fef9c3;color:#854d0e} .b-low{background:#dcfce7;color:#166534}
+.b-info{background:#dbeafe;color:#1e40af} .b-ok{background:#f0fdf4;color:#15803d}
+.fc-title{font-weight:800;font-size:.92rem;color:var(--text)}
+.fc-body{font-size:.84rem;color:var(--muted);line-height:1.6;margin-bottom:10px}
+.fc-code{background:#0f172a;color:#e2e8f0;padding:10px 14px;border-radius:8px;font-family:Consolas,monospace;font-size:.75rem;line-height:1.65;overflow-x:auto;margin-bottom:10px;white-space:pre-wrap}
+.fc-fix{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;font-size:.82rem;color:#166534}
+.fc-fix strong{font-weight:800}
+
+/* TABLE */
+.tbl{width:100%;border-collapse:collapse;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.tbl th{padding:11px 14px;font-size:.75rem;font-weight:800;text-transform:uppercase;letter-spacing:.5px;background:#1e293b;color:#fff;text-align:left}
+.tbl td{padding:10px 14px;border-bottom:1px solid var(--border);background:var(--card);font-size:.83rem;vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:#f8fafc}
+
+/* SUMMARY BOX */
+.sum-box{border-radius:12px;padding:18px 20px;margin-bottom:16px}
+.sum-box.green{background:#f0fdf4;border:1px solid #bbf7d0} .sum-box.red{background:#fef2f2;border:1px solid #fecaca}
+.sum-box.blue{background:#eff6ff;border:1px solid #bfdbfe} .sum-box.yellow{background:#fefce8;border:1px solid #fef08a}
+.sum-box h3{font-size:.9rem;font-weight:800;margin-bottom:8px}
+.sum-box.green h3{color:#15803d} .sum-box.red h3{color:#b91c1c} .sum-box.blue h3{color:#1e40af} .sum-box.yellow h3{color:#854d0e}
+.sum-box p,.sum-box li{font-size:.83rem;line-height:1.7;color:var(--text)}
+.sum-box ul,.sum-box ol{padding-left:18px}
+
+/* ROADMAP */
+.rm-phase{background:var(--card);border-radius:12px;margin-bottom:14px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.04)}
+.rm-head{padding:12px 18px;font-weight:800;font-size:.85rem;display:flex;align-items:center;gap:8px}
+.ph1{background:#fee2e2;color:#991b1b} .ph2{background:#ffedd5;color:#9a3412}
+.ph3{background:#fef9c3;color:#854d0e} .ph4{background:#dcfce7;color:#166534} .ph5{background:#eff6ff;color:#1e40af}
+.rm-items{padding:0 18px 14px}
+.rm-item{padding:8px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+.rm-item:last-child{border-bottom:none}
+.rm-num{background:var(--blue);color:#fff;border-radius:50%;width:20px;height:20px;font-size:.68rem;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.rm-item-title{font-weight:700;font-size:.84rem}
+.rm-item-desc{font-size:.77rem;color:var(--muted)}
+
+/* PRIORITY GRID */
+.prio-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* TAGS */
+.tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.68rem;font-weight:700;margin-right:4px}
+.tag-ok{background:#dcfce7;color:#15803d} .tag-bug{background:#fee2e2;color:#991b1b}
+.tag-warn{background:#fef9c3;color:#854d0e} .tag-info{background:#dbeafe;color:#1e40af}
+
+.footer{text-align:center;padding:20px;color:var(--muted);font-size:.75rem;border-top:1px solid var(--border);margin-top:20px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🔍 Auditoria Completa — SDR Soluções de Rua</h1>
+  <div class="sub">Análise técnica, jurídica e estratégica de longo prazo — Engenheiro Sênior + Advogado Trabalhista</div>
+  <div class="meta">
+    <div class="meta-chip"><b>Data</b>13 de Maio de 2026</div>
+    <div class="meta-chip"><b>App</b>SDR — solucaoderua.web.app</div>
+    <div class="meta-chip"><b>Bundle</b>sdr-bundle.js ~12.000 linhas</div>
+    <div class="meta-chip"><b>SW Cache</b>sdr-v148</div>
+    <div class="meta-chip"><b>OS no banco</b>11.456+ registros</div>
+    <div class="meta-chip"><b>Técnicos</b>20 usuários</div>
+    <div class="meta-chip"><b>Classificação</b>CONFIDENCIAL</div>
+  </div>
+</div>
+
+<div class="container">
+
+<!-- SCORE CARDS -->
+<div class="section">
+  <div class="section-title">Resumo Executivo</div>
+  <div class="score-grid">
+    <div class="score-card"><div class="label">Crítico</div><div class="num red">8</div><div class="desc">Correção imediata</div></div>
+    <div class="score-card"><div class="label">Alto</div><div class="num orange">12</div><div class="desc">Próximo sprint</div></div>
+    <div class="score-card"><div class="label">Médio</div><div class="num yellow">9</div><div class="desc">Planejável</div></div>
+    <div class="score-card"><div class="label">Jurídico PJ</div><div class="num orange">5</div><div class="desc">Riscos trabalhistas</div></div>
+  </div>
+
+  <div class="sum-box blue">
+    <h3>📋 Metodologia de Teste</h3>
+    <p>Análise estática de código-fonte (sdr-bundle.js ~12.000 linhas, index.html ~7.000 linhas, sw.js, firebase.json, database.rules.json), teste ao vivo no browser via Claude in Chrome, login como usuário Jefferson no mobile (sessão salva), login como JA no admin, captura de console, inspeção de localStorage/sessionStorage, análise do git log, leitura de todos os documentos Obsidian do projeto.</p>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ BUGS CRÍTICOS ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">🔴 Bugs Críticos — Correção Imediata</div>
+  <div class="findings">
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C1 — Hash do Admin em localStorage SEM SALT — Rainbow Table Attack</div></div>
+      <div class="fc-body">Confirmado em produção via inspeção de localStorage: <code>sdr_admin_bio_fhash_master</code> = <code>edbf7822b714ae27955bc2059896bdeed7eb290c6c2cbb9c7d0358a979f4f02c</code> — SHA-256 puro sem salt, armazenado permanentemente. Qualquer XSS ou acesso físico ao computador expõe o hash do admin. Rainbow tables on-line crackam SHA-256 simples em segundos.</div>
+      <div class="fc-code">// localStorage — encontrado em produção:
+"sdr_admin_bio_fhash_master": "edbf7822...f02c"  // SHA-256 sem salt — PERIGO
+
+// O mesmo pattern no mobile:
+"sdr_bio_fhash": uid + ':' + h  // hash em sessionStorage durante toda a sessão</div>
+      <div class="fc-fix"><strong>Solução:</strong> (1) Nunca salvar hash de senha em localStorage/sessionStorage. (2) Substituir por Firebase Auth token (curto prazo de validade). (3) Para biometria: salvar apenas o credentialId WebAuthn, nunca o hash. (4) Migrar imediatamente: <code>localStorage.removeItem('sdr_admin_bio_fhash_master')</code> + recriar fluxo com Firebase token.</div>
+    </div>
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C2 — Git Repository CORROMPIDO — Deploy em Risco</div></div>
+      <div class="fc-body">O diretório <code>.git/</code> contém dezenas de arquivos <code>index.lock.*</code> com nomes extremamente longos (ex: <code>index.lock.gone_c.old.purge.z.gz.del.x.x2.x2...</code>). Isso indica que múltiplas tentativas de operação git falharam e deixaram locks. O repositório está em estado inconsistente. Qualquer <code>git commit</code> pode falhar silenciosamente ou corromper o histórico.</div>
+      <div class="fc-code">// Arquivos encontrados em .git/:
+index.lock.1.gone_c.old.purge.z.gz.del.x.x2.x2.x2.x2...
+index.lock.2.gone_c.old.purge.z.gz...
+index.lock.bak2.gone.gone_c...
+// (dezenas de variações)
+
+// ORIG_HEAD e MERGE_MSG.swp presentes — merge incompleto!</div>
+      <div class="fc-fix"><strong>Solução:</strong> (1) <code>rm -f .git/index.lock*</code> para limpar todos os locks. (2) <code>git fsck --full</code> para verificar integridade. (3) <code>git status</code> e resolver qualquer conflito pendente. (4) Fazer backup completo ANTES de qualquer operação. (5) Configurar <code>.gitignore</code> para excluir arquivos temporários do Windows.</div>
+    </div>
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C3 — firebase:previous_websocket_failure — Firebase WebSocket Falhou em Produção</div></div>
+      <div class="fc-body">Confirmado em localStorage: <code>firebase:previous_websocket_failure: "true"</code>. O SDK Firebase tentou conexão WebSocket e falhou, forçando o monkey-patch REST. Isso cria dois problemas: (1) listeners <code>.on()</code> do SDK não recebem dados em tempo real; (2) cada leitura vira um HTTP GET independente = mais cobranças no RTDB + latência maior. Esta pode ser a causa da cobrança alta reportada ontem.</div>
+      <div class="fc-code">// localStorage em produção:
+"firebase:previous_websocket_failure": "true"
+
+// Impacto no código:
+// db.ref('users').once('value') → HTTP GET /users.json?auth=TOKEN
+// db.ref('os').once('value') → HTTP GET /os.json?auth=TOKEN  (11.456 registros!)
+// Sem cache → cada reload do admin relê TUDO do banco</div>
+      <div class="fc-fix"><strong>Solução imediata:</strong> (1) Verificar no Firebase Console → Realtime Database → Usage se as leituras explodiram. (2) Implementar cache client-side com TTL de 5min para dados que não mudam frequentemente (precos, config, users). (3) Paginar a leitura de OS — não carregar todos os 11.456 de uma vez. (4) Investigar por que o WebSocket está falhando (firewall corporativo? CORS?)</div>
+    </div>
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C4 — Duplo Bônus no Financeiro Mobile do Supervisor (Juliano)</div></div>
+      <div class="fc-body">Bug documentado no CLAUDE.md e SPRINT_LOG_MAIO_2026.md mas NÃO CORRIGIDO. Na função <code>renderFinanceiro</code> do index.html, o bloco do bônus usa condição <code>isV2</code> em vez de <code>isV2 && !isSupervisor</code>. Resultado: o card "Coordenação Técnica" (R$88,25) aparece duplicado no Resumo Financeiro do Juliano.</div>
+      <div class="fc-code">// BUG em index.html — renderFinanceiro:
+if (isV2) {  // ← ERRADO: mostra bônus para supervisor mesmo que já incluso
+  html += `&lt;div class="card purple"&gt;Coordenação Técnica: ${fmt(bonus)}&lt;/div&gt;`;
+}
+
+// CORRETO:
+if (isV2 && !isSupervisor) {  // bônus extra só para V2 não-supervisor
+  html += `...`;
+}</div>
+      <div class="fc-fix"><strong>Solução:</strong> Em <code>public/index.html</code>, na função <code>renderFinanceiro</code>, alterar a condição do bloco do bônus de <code>if (isV2)</code> para <code>if (isV2 && !isSupervisor)</code>. Bumpar SW cache e fazer deploy.</div>
+    </div>
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C5 — allRecords no Mobile Carrega Só Dados do Usuário Logado</div></div>
+      <div class="fc-body">O supervisor (Juliano) precisa de OS de TODA a equipe para calcular <code>totalGestao</code> (diferencial V2-V1). Mas <code>allRecords</code> no mobile filtra apenas os registros do usuário logado. O total exibido no card "Coordenação Técnica" está incorreto — mostra apenas as próprias OS do Juliano multiplicadas pelo diferencial, não o diferencial de toda equipe.</div>
+      <div class="fc-code">// index.html — loginSuccess:
+allRecords = records.filter(r => r.userId === currentUser.id);
+// ↑ Filtra só o próprio Juliano — supervisor precisa de TODOS
+
+// Correto para supervisor:
+allRecords = isSupervisor
+  ? records  // todos os técnicos
+  : records.filter(r => r.userId === currentUser.id);</div>
+      <div class="fc-fix"><strong>Solução:</strong> Após determinar <code>isSupervisor</code> no <code>loginSuccess</code>, carregar todos os registros se o técnico for supervisor, filtrado apenas pelo mês corrente para não explodir memória/leitura.</div>
+    </div>
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C6 — loginComo Sem Verificação de Sessão Master Ativa (Mobile)</div></div>
+      <div class="fc-body">O parâmetro <code>?loginComo=uid&by=masterUid</code> no index.html (linha ~1253) faz impersonate imediato se o <code>by</code> existir no <code>usersCache</code> com <code>role === 'master'</code>. Porém: (1) <code>usersCache</code> é carregado antes do login — qualquer um pode criar uma URL com um uid master existente. (2) Não há verificação de sessão Firebase ativa do master. O fix foi parcial.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Exigir que o parâmetro <code>?loginComo</code> venha acompanhado de um token Firebase válido do admin (gerado server-side via Cloud Function), não apenas um UID no banco.</div>
+    </div>
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C7 — Token Firebase Exposto na URL (REST API)</div></div>
+      <div class="fc-body">O monkey-patch REST em index.html adiciona o token JWT como query string: <code>/os.json?auth=TOKEN</code>. Tokens JWT em URLs são logados em: servidores de proxy corporativos, nginx/apache logs, CDN logs, histórico do browser, Referer headers de terceiros. Qualquer técnico com acesso ao servidor ou proxy pode capturar tokens válidos.</div>
+      <div class="fc-code">// index.html — REST patch:
+const url = `${REST_BASE}/${path}.json?auth=${tok}`;
+// ↑ TOKEN VISÍVEL NA URL
+
+// Correto — token no header:
+fetch(url, { headers: { 'Authorization': `Bearer ${tok}` } })
+// Firebase RTDB REST aceita Authorization: Bearer</div>
+      <div class="fc-fix"><strong>Solução:</strong> Alterar todas as chamadas REST no monkey-patch (index.html e sdr-bundle.js) para mover <code>?auth=TOKEN</code> para o header <code>Authorization: Bearer TOKEN</code>. Firebase RTDB REST suporta ambos os formatos.</div>
+    </div>
+
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">CRÍTICO</span><div class="fc-title">C8 — usersCache Carrega Hashes de Todos os Técnicos Antes do Login</div></div>
+      <div class="fc-body">O mobile carrega <code>db.ref('users').once('value')</code> ANTES da autenticação, trazendo passwordHash, salt, dados bancários (conta, agência, PIX, CPF, RG) de TODOS os 20 técnicos. Qualquer código JS na página pode ler esses dados. Se houver XSS, atacante obtém credenciais de todos.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Antes do login, carregar apenas <code>name</code> e <code>passwordHash</code> + <code>salt</code> do usuário específico (após ele digitar o nome). Dados completos de outros técnicos só devem ser carregados pelo admin após autenticação.</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════ BUGS ALTOS ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">🟠 Problemas Altos — Próximo Sprint</div>
+  <div class="findings">
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A1 — Inventário e Ficha EPI Não Renderizam Conteúdo</div></div>
+      <div class="fc-body">Testado em produção: <code>pg-inventario</code> renderiza apenas 310 caracteres (página quase vazia) e <code>pg-ficha-epi</code> apenas 332 caracteres. O hook <code>showPage</code> não está chamando as funções de render dessas páginas quando o usuário navega até elas. O técnico vê uma página em branco.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Verificar no patch de <code>showPage</code> (index.html) se os casos <code>'pg-inventario'</code> e <code>'pg-ficha-epi'</code> estão presentes. Se não, adicionar <code>if (name === 'pg-inventario') renderInventario();</code> e similar para EPI.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A2 — corrigirPrecosDoMes Grava Total Errado na OS</div></div>
+      <div class="fc-body">Após executar "Corrigir Preços do Mês" no admin, o campo <code>total</code> da OS é calculado somando apenas <code>sv.total</code> dos serviços corrigidos, ignorando os demais. Todos os cálculos financeiros subsequentes ficam errados para OSs corrigidas.</div>
+      <div class="fc-code">// BUG — sdr-bundle.js:
+const novoTotal = servicosCorrigidos.reduce((s, sv) => s + (Number(sv.total)||0), 0);
+// sv.total não existe para serviços não-corrigidos → contribuem com 0
+
+// CORRETO:
+const novoTotal = servicosCorrigidos.reduce((s, sv) =>
+  s + (Number(sv.qtd)||0) * (Number(sv.valor)||0), 0);</div>
+      <div class="fc-fix"><strong>Solução:</strong> Corrigir a redução para usar <code>sv.qtd × sv.valor</code> em vez de <code>sv.total</code>.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A3 — Rate Limiting Apenas em Memória — Brute Force com F5</div></div>
+      <div class="fc-body">O rate limiting do admin (<code>_loginAttempts</code>) fica em memória. Um reload da página (F5) zera o contador, permitindo brute force ilimitado. O mobile tem rate limit persistido em <code>localStorage</code> (<code>sdr_mob_rl</code> encontrado em produção), mas o admin não tem essa proteção.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Persistir <code>_loginAttempts</code> em <code>localStorage</code> com TTL de 15 minutos, como já foi feito no mobile. Ou implementar Firebase App Check para bloquear requests não-browser.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A4 — CSP com unsafe-inline + unsafe-eval — XSS Desprotegido</div></div>
+      <div class="fc-body">O <code>firebase.json</code> define CSP com <code>'unsafe-inline'</code> e <code>'unsafe-eval'</code> em <code>script-src</code>. Essas duas diretivas anulam completamente a proteção do CSP contra XSS. Qualquer script injetado por XSS executa normalmente.</div>
+      <div class="fc-code">// firebase.json — CSP atual (INSEGURO):
+"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://..."
+// 'unsafe-inline' + 'unsafe-eval' = CSP inútil contra XSS
+
+// Alvo (requer migrar scripts inline para externos):
+"script-src 'self' 'nonce-{random}' https://www.gstatic.com https://cdnjs.cloudflare.com"</div>
+      <div class="fc-fix"><strong>Solução longa:</strong> Mover todos os scripts inline para arquivos externos (<code>sdr-bundle.js</code> já é o caminho certo). Remover <code>'unsafe-eval'</code> verificando quais libs CDN realmente precisam (geralmente nenhuma). Usar nonce ou hash no CSP.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A5 — Sem Fila Offline de OS — Perda de Dados em Campo</div></div>
+      <div class="fc-body">Se um técnico lançar uma OS sem rede, o <code>salvarOS()</code> falha e a OS é perdida sem retry. O patch REST substituiu o SDK Firebase, que tinha <code>keepSynced</code> nativo para offline. O técnico nem vê mensagem de erro clara — simplesmente perde o trabalho.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Implementar fila em <code>IndexedDB</code>: gravar localmente primeiro com status "pendente", exibir badge "1 OS aguardando sync", sincronizar via listener <code>window.addEventListener('online', ...)</code>.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A6 — Dados Bancários e CPF/RG em Texto Puro no Firebase</div></div>
+      <div class="fc-body">Campos <code>emp-banco</code>, <code>emp-agencia</code>, <code>emp-conta</code>, <code>emp-pix</code>, <code>emp-resp-cpf</code>, <code>emp-resp-rg</code> são gravados em plaintext em <code>users/{uid}</code>. Esses dados são sensíveis pela LGPD (art. 5º, II) e qualquer vazamento do RTDB os expõe diretamente. CPF é dado sensível — exige atenção especial.</div>
+      <div class="fc-fix"><strong>Solução:</strong> (1) Criptografar via Web Crypto API (AES-GCM) antes de gravar. (2) Ou mover para subcoleção separada com regras RTDB mais restritivas. (3) Adicionar aviso de privacidade (LGPD art. 8º) no formulário de dados empresariais.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A7 — Service Worker: Versão no Comentário Desatualizada</div></div>
+      <div class="fc-body">O <code>sw.js</code> tem comentário <code>// v132</code> no topo, mas <code>CACHE_NAME = 'sdr-v148'</code>. Além disso, o log de install está hardcoded como <code>'[SDR SW] install — v42'</code> em vez de referenciar <code>CACHE_NAME</code>. Dificulta diagnóstico de problemas de cache em produção — o console mostra uma versão que não bate com nada.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Atualizar comentário do arquivo para <code>// sdr-v148</code>. Mudar <code>console.log('[SDR SW] install — v42')</code> para <code>console.log('[SDR SW] install —', CACHE_NAME)</code>.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A8 — Exceção Jefferson Implementada de 4 Formas Diferentes</div></div>
+      <div class="fc-body">Cada módulo identifica Jefferson de forma diferente: <code>importar.js</code> usa <code>.includes('JEFFERSON')</code> (captura "Carlos Jefferson" errado), <code>admin.html</code> usa <code>=== 'jefferson'</code>, <code>dashboard_admin.js</code> usa <code>=== 'jefferson'</code>, <code>financeiro.js</code> usa <code>.includes('jefferson')</code>. Comportamento inconsistente entre módulos.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Centralizar em campo <code>excecaoV3: true</code> no Firebase <code>users/jefferson/excecaoV3</code>. Todos os módulos consultam esse flag em vez de comparar nomes hardcoded.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A9 — Sem SRI nas Bibliotecas CDN — Supply Chain Attack</div></div>
+      <div class="fc-body">Leaflet, Font Awesome, Tesseract.js, qrcode-generator e ExcelJS são carregados de CDN sem atributo <code>integrity</code> (SRI — Subresource Integrity). Se o CDN for comprometido, JS malicioso é entregue a todos os técnicos sem que o browser detecte. Risco real: cdnjs.cloudflare.com já teve incidentes.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Adicionar <code>integrity="sha384-..."</code> e <code>crossorigin="anonymous"</code> em cada <code>&lt;script&gt;</code> e <code>&lt;link&gt;</code> CDN. Gerar os hashes via <code>openssl dgst -sha384 -binary FILE | openssl base64 -A</code>.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A10 — Tesseract.js (~2.5MB) Carregado para Todos no Head</div></div>
+      <div class="fc-body">A biblioteca de OCR Tesseract.js (~2.5MB) é carregada sincronicamente no <code>&lt;head&gt;</code> de <code>index.html</code> para todos os técnicos, mesmo os que nunca usam OCR. Isso aumenta o tempo de carregamento inicial em ~1-2 segundos em redes 3G (campo). Piora significativa da experiência do técnico em campo.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Lazy-load com <code>import()</code> dinâmico apenas quando o recurso de OCR for acionado. Se o recurso não estiver sendo usado atualmente, remover completamente.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A11 — Leitura de Todos os 11.456 OS a Cada Login no Admin — Cobrança Alta</div></div>
+      <div class="fc-body">O admin faz <code>db.ref('os').once('value')</code> carregando todos os registros a cada login. Com 11.456 OS e crescendo, isso gera cobranças significativas no Firebase RTDB (plano Blaze cobra por GB baixado). Este provavelmente é o motivo da "cobrança alta" reportada ontem — além do <code>firebase:previous_websocket_failure</code> que faz o SDK tentar WebSocket E depois REST.</div>
+      <div class="fc-code">// Impacto estimado:
+// 11.456 OS × ~500 bytes/OS = ~5.7 MB por leitura completa
+// Se 10 logins/dia no admin = ~57 MB/dia de leituras
+// Firebase cobra $1/GB — parece barato mas escala
+
+// firebase:previous_websocket_failure = true
+// → SDK tenta WebSocket (falha) → depois REST (cobra)
+// → 2x tentativas por operação</div>
+      <div class="fc-fix"><strong>Solução:</strong> (1) Paginar leitura de OS: carregar apenas o mês atual por padrão. (2) Implementar cache em memória com TTL de 5min. (3) Investigar e corrigir a falha do WebSocket (provavelmente firewall bloqueando WSS). (4) Usar <code>limitToLast(200)</code> na listagem inicial.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">ALTO</span><div class="fc-title">A12 — Fingerprint de Duplicata Diverge Entre Preview e Execução</div></div>
+      <div class="fc-body">O fingerprint anti-duplicata usa campos diferentes no preview da importação vs. na execução real. Se preços mudarem entre duas importações do mesmo arquivo, o fingerprint não bate e a OS é importada como nova, gerando duplicatas no banco.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Normalizar fingerprint para usar apenas campos não-monetários: <code>userId|tipo|cidade|cto|data|nSvs</code> — excluindo o total que varia com reajuste de preços.</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════════════════════════ MÉDIOS ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">🟡 Problemas Médios</div>
+  <table class="tbl">
+    <thead><tr><th>ID</th><th>Descrição</th><th>Arquivo</th><th>Impacto</th></tr></thead>
+    <tbody>
+      <tr><td><span class="badge b-medium">M1</span></td><td>user-scalable=no — impede zoom no celular em campo, viola WCAG 1.4.4</td><td>index.html linha 4</td><td>Acessibilidade</td></tr>
+      <tr><td><span class="badge b-medium">M2</span></td><td>descontosCache lê caminho deprecado <code>descontos/</code> em vez de <code>config/emprestimos</code></td><td>index.html ~ln1733</td><td>Dados errados no financeiro mobile</td></tr>
+      <tr><td><span class="badge b-medium">M3</span></td><td>showPage sobrescrita 3x em monkey-patch empilhado — frágil à ordem de carregamento</td><td>src/core/bootstrap.js, src/realtime</td><td>Erros intermitentes em navegação</td></tr>
+      <tr><td><span class="badge b-medium">M4</span></td><td>Biometria sem allowCredentials — qualquer credencial WebAuthn do device é aceita</td><td>index.html ~ln1484</td><td>Auth fraca — risco de login indevido</td></tr>
+      <tr><td><span class="badge b-medium">M5</span></td><td>Session timeout de 3h no mobile vs 30min no admin — inconsistente</td><td>index.html ~ln1527</td><td>Celular desbloqueado em campo expõe conta</td></tr>
+      <tr><td><span class="badge b-medium">M6</span></td><td>Credencial biométrica em localStorage sem expiração (persiste anos)</td><td>src/admin/auth.js ln274</td><td>Risco de credencial obsoleta válida</td></tr>
+      <tr><td><span class="badge b-medium">M7</span></td><td>Bottom nav com 11 itens sem indicador de scroll — técnico com luvas não percebe</td><td>index.html</td><td>UX ruim em campo</td></tr>
+      <tr><td><span class="badge b-medium">M8</span></td><td>innerHTML sem escapeHtml em tickets e alertas (src/tickets/index.js)</td><td>tickets/index.js lns 104-118</td><td>XSS se admin gravar HTML no banco</td></tr>
+      <tr><td><span class="badge b-medium">M9</span></td><td>catch(_){} silencioso em seguranca.js — falha de EPI não reportada ao técnico</td><td>src/admin/seguranca.js</td><td>Técnico passa sem verificação EPI</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ══════════════════════════════ EXCEL vs CSV ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">📊 Excel (.xlsx/.xlsm) vs CSV — Investigação dos Erros no Console</div>
+
+  <div class="sum-box yellow">
+    <h3>⚠️ Conclusão: Manter Excel para importação — CSV não é substituto aqui</h3>
+    <p>As planilhas usadas pelos técnicos são arquivos <strong>.xlsm</strong> (com macros) que contêm fórmulas de cálculo. Converter para CSV perderia essas fórmulas. O sistema usa duas bibliotecas para leitura: <code>XLSX</code> (SheetJS) no browser e <code>openpyxl</code> (Python) no script de relatório.</p>
+  </div>
+
+  <div class="findings">
+    <div class="fc info">
+      <div class="fc-head"><span class="badge b-info">ANÁLISE</span><div class="fc-title">Causa Real dos Erros no Console — Não é o Formato do Arquivo</div></div>
+      <div class="fc-body">Os erros de console reportados provavelmente são de: (1) <strong>WebSocket bloqueado</strong> — Firebase RTDB SDK tenta WSS e falha (confirmado pelo <code>firebase:previous_websocket_failure</code>). (2) <strong>CSP violations</strong> — scripts inline bloqueados em algumas situações. (3) <strong>Erro de SyntaxError</strong> em template literals (corrigido nos commits recentes). (4) <strong>Funções não definidas</strong> como <code>MAX_SERVICOS_POR_OS</code> (documentado e corrigido). O formato Excel em si não causa erros de console — a biblioteca SheetJS é estável.</div>
+      <div class="fc-code">// Erros típicos de console esperados no SDR:
+[Firebase SDK] WebSocket connection failed → REST fallback
+Content Security Policy: blocked inline script...
+ReferenceError: MAX_SERVICOS_POR_OS is not defined (corrigido)
+[SDR REST mobile] .once() erro: ... (rede instável em campo)
+
+// NÃO relacionados a Excel/CSV:
+// O SheetJS (XLSX) é confiável para .xlsx e .xlsm
+// openpyxl é confiável para Python scripts</div>
+      <div class="fc-fix"><strong>Recomendação:</strong> (1) Manter <strong>.xlsx/.xlsm para importação de OS</strong>. (2) Usar <strong>CSV apenas para exportações simples</strong> (já implementado para Clientes e ONUs). (3) Investigar e corrigir o WebSocket Firebase (main cause dos erros). (4) Para o script Python, openpyxl está correto — não mudar.</div>
+    </div>
+
+    <div class="fc info">
+      <div class="fc-head"><span class="badge b-info">OBSERVAÇÃO</span><div class="fc-title">O Script gerar_relatorio_sdr.py tem Caminhos Hardcoded que Podem Falhar</div></div>
+      <div class="fc-body">O arquivo <code>gerar_relatorio_sdr.py</code> referencia caminhos absolutos do Windows (<code>C:\Users\Jeeff\OneDrive\...</code>). Se rodado em outro computador ou se o OneDrive sincronizar em local diferente, todos os <code>FILES</code> falham com <code>FileNotFoundError</code>.</div>
+      <div class="fc-fix"><strong>Solução:</strong> Usar <code>pathlib.Path(__file__).parent / 'DADOS' / 'planilhas'</code> para caminhos relativos ao script.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ JURÍDICO ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">⚖️ Análise Jurídico-Trabalhista — Risco de Vínculo Empregatício</div>
+
+  <div class="sum-box green">
+    <h3>✅ O Que Está Correto nos Contratos</h3>
+    <ul>
+      <li>O contrato de prestação de serviços gerado pelo sistema (sdr-bundle.js) inclui <strong>Cláusula 4ª</strong> explícita: "não configurando, sob hipótese alguma, vínculo empregatício, subordinação, habitualidade ou pessoalidade" — adequado.</li>
+      <li>Referência correta ao <strong>art. 442 da CLT</strong> (prestação de serviços por PJ não gera vínculo) e <strong>arts. 593-609 do Código Civil</strong>.</li>
+      <li>Referência à <strong>Lei nº 14.063/2020</strong> para validade da assinatura eletrônica.</li>
+      <li>Campo de empresa (CNPJ, Razão Social) existe no app — técnicos devem preencher como PJ.</li>
+      <li>O título dos documentos usa "Prestador Autônomo" e "Instrumento Particular de Parcelamento" — sem menção a salário, férias, FGTS, 13º.</li>
+      <li>O aditivo contratual menciona o prestador como "responsável pelo recolhimento de seus tributos, encargos sociais e previdenciários" — correto.</li>
+    </ul>
+  </div>
+
+  <div class="sum-box red">
+    <h3>🚨 Pontos de Risco Trabalhista Detectados no Sistema</h3>
+    <ul>
+      <li><strong>Habitualidade</strong>: 11.456 OS registradas indica prestação contínua e habitual — principal elemento caracterizador de vínculo (art. 3º CLT). Mitigar com intervalos, múltiplos clientes.</li>
+      <li><strong>Subordinação via Supervisor</strong>: O técnico Juliano "coordena" e "supervisiona" a equipe, recebendo diferencial financeiro. Essa estrutura hierárquica dentro do sistema pode ser interpretada como subordinação direta. Evitar linguagem de "supervisor" — preferir "coordenador de projetos autônomo".</li>
+      <li><strong>Controle de Jornada</strong>: O campo "Hora" nas OS registra horário preciso de cada serviço. Se os horários forem consistentemente dentro de uma janela fixa (08h-17h), isso pode configurar controle de jornada — elemento de vínculo. O sistema deveria apenas registrar a OS, não controlar horário.</li>
+      <li><strong>Pessoalidade</strong>: UIDs individuais (<code>tecnico1, tecnico2...</code>) vinculam serviços à pessoa física, não à empresa. Idealmente, o login deveria ser pelo CNPJ/empresa, não pelo nome pessoal.</li>
+      <li><strong>Exclusividade Econômica</strong>: O supervisor recebe percentual de toda a equipe — criando dependência econômica do sistema SDR. Se o técnico prestar serviço 100% para uma empresa, Justiça do Trabalho presume relação de emprego (Súmula 331 TST).</li>
+    </ul>
+  </div>
+
+  <div class="findings">
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">RISCO ALTO</span><div class="fc-title">J1 — Campo "Hora" nas OS Pode Configurar Controle de Jornada</div></div>
+      <div class="fc-body">O formulário "Nova Ordem de Serviço" tem campo obrigatório "Hora" (input type="time"), preenchido automaticamente com a hora atual. Registros de OS mostrando técnicos sempre trabalhando das 08h às 17h podem ser usados em reclamação trabalhista como prova de controle de jornada.</div>
+      <div class="fc-fix"><strong>Recomendação jurídica:</strong> (1) Tornar o campo "Hora" opcional. (2) Adicionar disclaimer: "Hora de execução do serviço (autonomamente definida pelo prestador)". (3) Ou remover o campo de hora — registrar apenas a data da OS.</div>
+    </div>
+
+    <div class="fc high">
+      <div class="fc-head"><span class="badge b-high">RISCO ALTO</span><div class="fc-title">J2 — Termo "Supervisor" Cria Aparência de Subordinação Hierárquica</div></div>
+      <div class="fc-body">O sistema usa "Supervisão Técnica", "Supervisor", "coordena a equipe" para o Juliano. A CLT define subordinação como o poder do empregador de dirigir, controlar e disciplinar a prestação de serviços. Uma auditoria trabalhista que veja "Supervisão: true" no banco pode argumentar subordinação.</div>
+      <div class="fc-fix"><strong>Recomendação jurídica:</strong> (1) Renomear no banco e no UI: "supervisao" → "coordenador_projeto". (2) Contrato do Juliano deve especificar que a coordenação é responsabilidade PJ dele, não poder de direção da contratante. (3) O diferencial V2-V1 deve ser chamado de "comissão por resultado da equipe" ou "bônus de coordenação por projeto".</div>
+    </div>
+
+    <div class="fc medium">
+      <div class="fc-head"><span class="badge b-medium">RISCO MÉDIO</span><div class="fc-title">J3 — UIDs Pessoais Vinculam Serviços à Pessoa Física, Não à Empresa</div></div>
+      <div class="fc-body">Os UIDs <code>tecnico1, tecnico2, jefferson</code> são nomes pessoais, não empresariais. Idealmente, o contratante paga o CNPJ/empresa, e a empresa (MEI/ME) presta o serviço. O sistema deve exibir e registrar pelo nome da empresa quando disponível.</div>
+      <div class="fc-fix"><strong>Recomendação:</strong> Exibir no admin e nos relatórios a Razão Social do prestador (já coletada no campo <code>emp-razao-social</code>), não o nome pessoal. Garantir que todos os técnicos tenham o campo empresa preenchido.</div>
+    </div>
+
+    <div class="fc medium">
+      <div class="fc-head"><span class="badge b-medium">RISCO MÉDIO</span><div class="fc-title">J4 — Ausência de Cláusula de Não-Exclusividade Explícita</div></div>
+      <div class="fc-body">O contrato gerado não tem cláusula de não-exclusividade. A Súmula 331 do TST considera que exclusividade é elemento de vínculo. Documentar que o prestador pode e deve atender outros clientes é proteção adicional.</div>
+      <div class="fc-fix"><strong>Recomendação:</strong> Adicionar ao template do contrato: "Cláusula X — Da Não-Exclusividade: O PRESTADOR é livre para prestar serviços a outras pessoas físicas ou jurídicas, não havendo qualquer restrição de exclusividade neste instrumento."</div>
+    </div>
+
+    <div class="fc medium">
+      <div class="fc-head"><span class="badge b-medium">RISCO MÉDIO</span><div class="fc-title">J5 — LGPD: CPF e RG Coletados Sem Aviso de Privacidade</div></div>
+      <div class="fc-body">O formulário de dados empresariais coleta CPF e RG (dados sensíveis conforme LGPD art. 5º, II) sem exibir aviso de privacidade, base legal ou finalidade do tratamento. A ANPD pode autuar com multas de até 2% do faturamento (máx. R$50M).</div>
+      <div class="fc-fix"><strong>Recomendação:</strong> Adicionar antes do formulário: "Seus dados são coletados para fins contratuais (art. 7º, V, LGPD) e serão tratados com confidencialidade. Não serão compartilhados com terceiros." + link para Política de Privacidade.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ OBSIDIAN ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">📓 Análise do Obsidian — Status de Atualização</div>
+  <div class="sum-box yellow">
+    <h3>⚠️ Obsidian desatualizado em vários pontos críticos</h3>
+    <ul>
+      <li><strong>STATUS_SISTEMA.md</strong>: última atualização 08/04/2026 — desatualizado há 35 dias. Não reflete o sistema supervisor (Maio 2026), os bugs conhecidos, ou o SW sdr-v148.</li>
+      <li><strong>SPRINT_LOG.md</strong> (principal): parado em Abril 2026. As informações de Maio ficaram só no <code>SPRINT_LOG_MAIO_2026.md</code> — fragmentação de documentação.</li>
+      <li><strong>PROJETOS/SDR/README.md</strong>: descreve o sistema como "Gestão de Ordens de Serviço" mas o sistema evoluiu para plataforma GIS/FTTH completa. Stack técnica desatualizada.</li>
+      <li><strong>Bugs conhecidos</strong> (duplo bônus, allRecords, inventário vazio) não estão documentados no INDEX do SDR no Obsidian.</li>
+      <li><strong>SDR_Auditoria_Seguranca.html</strong> (27/04/2026) existe mas não está referenciado/linkado na documentação do Obsidian.</li>
+      <li><strong>CLAUDE.md</strong> (dentro do projeto SDR) está mais atualizado que o Obsidian — inverter prioridade: atualizar Obsidian primeiro.</li>
+    </ul>
+  </div>
+
+  <div class="sum-box blue">
+    <h3>📋 O que atualizar no Obsidian agora</h3>
+    <ol>
+      <li>STATUS_SISTEMA.md → SW sdr-v148, bugs conhecidos (C4, C5), sistema supervisor em produção</li>
+      <li>Consolidar SPRINT_LOG_MAIO_2026.md no SPRINT_LOG.md principal</li>
+      <li>Adicionar link para SDR_Auditoria_Seguranca.html no INDEX do SDR</li>
+      <li>Atualizar README do SDR com stack atual (Vite em andamento, sdr-bundle.js como arquivo principal)</li>
+      <li>Criar nota "BUGS_ABERTOS.md" com os 8 críticos e 12 altos listados neste relatório</li>
+    </ol>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ ANALISE COBRANÇA ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">💰 Análise da Cobrança Alta no Firebase RTDB — Mudança de Ontem</div>
+  <div class="findings">
+    <div class="fc critical">
+      <div class="fc-head"><span class="badge b-critical">URGENTE</span><div class="fc-title">Causa Identificada: WebSocket Failure + Leituras Sem Cache</div></div>
+      <div class="fc-body">Dois fatores combinados explicam a cobrança alta:<br><br>
+      <strong>1. firebase:previous_websocket_failure = true</strong> (confirmado em localStorage de produção): O SDK Firebase tenta conectar via WebSocket (wss://*.firebaseio.com) e falha. Isso gera uma tentativa de conexão TCP + handshake + timeout para CADA operação, antes do fallback para REST. Multiplica o número de requests.<br><br>
+      <strong>2. Leitura completa de OS sem paginação</strong>: O admin carrega todos os 11.456+ registros a cada login (~5.7MB). Com múltiplos logins/dia e sem cache, isso gera cobranças crescentes com o banco. Os arquivos <code>admin.html</code> e <code>sdr-bundle.js</code> foram modificados em 13/05 às 10:39-11:13 — as mudanças podem ter alterado o padrão de leituras.</div>
+      <div class="fc-code">// Solução imediata — verificar no Firebase Console:
+// Console → solucaoderua → Realtime Database → Usage
+// Verificar: Connections (simultâneas) e Bandwidth (GB/dia)
+
+// Se WebSocket está falhando por firewall/proxy, adicionar:
+firebase.database().goOffline(); // força REST imediatamente
+// ... ou configurar:
+const db = firebase.database();
+// Tentar forçar persistência de REST:
+// Não existe API direta, mas confirmar via Firebase Support</div>
+      <div class="fc-fix"><strong>Ações imediatas:</strong> (1) Abrir Firebase Console → Usage → verificar pico de cobranças. (2) Implementar cache TTL de 5min para leituras de <code>users</code>, <code>precos</code>, <code>config</code>. (3) Paginar leitura de <code>os/</code> com <code>limitToLast()</code> e filtro por mês. (4) Investigar por que WebSocket está falhando — se for firewall, configurar <code>database.settings({longPollingEnabled: true})</code>.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ LONG TERM ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">🚀 Análise de Longo Prazo — Crescimento e Mudanças Necessárias</div>
+
+  <div class="rm-phase">
+    <div class="rm-head ph1">🔴 Fase 1 — Agora (Esta semana) — Estabilidade e Segurança</div>
+    <div class="rm-items">
+      <div class="rm-item"><div class="rm-num">1</div><div><div class="rm-item-title">Limpar git repository corrompido</div><div class="rm-item-desc">rm -f .git/index.lock* && git fsck --full — sem isso, deploys via script são arriscados</div></div></div>
+      <div class="rm-item"><div class="rm-num">2</div><div><div class="rm-item-title">Remover sdr_admin_bio_fhash_master do localStorage</div><div class="rm-item-desc">Hash de senha permanente sem salt — substituir por Firebase token com expiração</div></div></div>
+      <div class="rm-item"><div class="rm-num">3</div><div><div class="rm-item-title">Corrigir duplo bônus supervisor (isV2 && !isSupervisor)</div><div class="rm-item-desc">Bug financeiro afeta o Juliano diretamente — corrigir em index.html renderFinanceiro</div></div></div>
+      <div class="rm-item"><div class="rm-num">4</div><div><div class="rm-item-title">Mover token Firebase de query string para header Authorization</div><div class="rm-item-desc">?auth=TOKEN → Authorization: Bearer TOKEN em todos os REST calls</div></div></div>
+      <div class="rm-item"><div class="rm-num">5</div><div><div class="rm-item-title">Verificar cobranças no Firebase Console e implementar cache TTL</div><div class="rm-item-desc">Cache de 5min para users, precos, config — evita releituras desnecessárias</div></div></div>
+    </div>
+  </div>
+
+  <div class="rm-phase">
+    <div class="rm-head ph2">🟠 Fase 2 — Próximo Mês — Qualidade e Performance</div>
+    <div class="rm-items">
+      <div class="rm-item"><div class="rm-num">1</div><div><div class="rm-item-title">Implementar fila offline de OS com IndexedDB</div><div class="rm-item-desc">Técnico em campo sem rede não pode perder dados — salvar local, sync quando voltar online</div></div></div>
+      <div class="rm-item"><div class="rm-num">2</div><div><div class="rm-item-title">Paginar leitura de OS no admin (limitToLast + filtro por mês)</div><div class="rm-item-desc">Reduz cobrança Firebase e melhora velocidade de carregamento significativamente</div></div></div>
+      <div class="rm-item"><div class="rm-num">3</div><div><div class="rm-item-title">Corrigir allRecords para supervisor (carregar toda equipe)</div><div class="rm-item-desc">Cálculo de totalGestao do Juliano está incorreto — impacto financeiro real</div></div></div>
+      <div class="rm-item"><div class="rm-num">4</div><div><div class="rm-item-title">Adicionar SRI nas bibliotecas CDN</div><div class="rm-item-desc">Supply chain attack protection — integrity hash em Leaflet, FA, xlsx, etc.</div></div></div>
+      <div class="rm-item"><div class="rm-num">5</div><div><div class="rm-item-title">Lazy-load Tesseract.js e Leaflet</div><div class="rm-item-desc">Reduz carregamento inicial em ~2.6MB — crítico para técnicos em 3G</div></div></div>
+      <div class="rm-item"><div class="rm-num">6</div><div><div class="rm-item-title">Centralizar identificação Jefferson em flag Firebase excecaoV3</div><div class="rm-item-desc">Eliminar 4 implementações inconsistentes — um campo no banco resolve tudo</div></div></div>
+    </div>
+  </div>
+
+  <div class="rm-phase">
+    <div class="rm-head ph3">🟡 Fase 3 — Próximos 3 Meses — Modularização</div>
+    <div class="rm-items">
+      <div class="rm-item"><div class="rm-num">1</div><div><div class="rm-item-title">Concluir migração Vite + ES Modules (já planejado no roadmap)</div><div class="rm-item-desc">sdr-bundle.js de 12.000 linhas é insustentável — modularizar por domínio conforme architecture.md</div></div></div>
+      <div class="rm-item"><div class="rm-num">2</div><div><div class="rm-item-title">Implementar Firebase Security Rules por perfil (admin/tecnico/visualizador)</div><div class="rm-item-desc">Regras atuais permitem qualquer auth escrever em users, contratos, seguranca — muito permissivo</div></div></div>
+      <div class="rm-item"><div class="rm-num">3</div><div><div class="rm-item-title">Migrar para Firestore para os/ com paginação nativa</div><div class="rm-item-desc">RTDB não tem paginação por índices — Firestore resolve com queries compostas e limites nativos</div></div></div>
+      <div class="rm-item"><div class="rm-num">4</div><div><div class="rm-item-title">Implementar audit log completo (core/audit.js do roadmap)</div><div class="rm-item-desc">Toda escrita deve registrar quem, quando, o quê, antes, depois — essencial para rastreabilidade</div></div></div>
+      <div class="rm-item"><div class="rm-num">5</div><div><div class="rm-item-title">Adicionar cláusulas jurídicas faltantes ao contrato</div><div class="rm-item-desc">Não-exclusividade, autonomia de horário, referência ao CNPJ como contratado, remover "Supervisor"</div></div></div>
+    </div>
+  </div>
+
+  <div class="rm-phase">
+    <div class="rm-head ph4">🟢 Fase 4 — Próximos 6-12 Meses — Escalabilidade</div>
+    <div class="rm-items">
+      <div class="rm-item"><div class="rm-num">1</div><div><div class="rm-item-title">CI/CD com GitHub Actions — deploy automático no merge de main</div><div class="rm-item-desc">Eliminar deploy manual — build, test, deploy em pipeline. Eliminar risco de .git corrompido.</div></div></div>
+      <div class="rm-item"><div class="rm-num">2</div><div><div class="rm-item-title">App mobile nativo (React Native / Flutter) para técnicos</div><div class="rm-item-desc">PWA tem limitações sérias offline. App nativo com SQLite local resolve a perda de OS em campo.</div></div></div>
+      <div class="rm-item"><div class="rm-num">3</div><div><div class="rm-item-title">Analytics e monitoring (Firebase Analytics + Sentry)</div><div class="rm-item-desc">Sem analytics, não há visibilidade de erros em produção em tempo real. Sentry captura JS errors automaticamente.</div></div></div>
+      <div class="rm-item"><div class="rm-num">4</div><div><div class="rm-item-title">Backup automático diário do Firebase RTDB</div><div class="rm-item-desc">Último backup manual foi em 08/04/2026 — 35 dias sem backup é risco crítico de perda de dados.</div></div></div>
+      <div class="rm-item"><div class="rm-num">5</div><div><div class="rm-item-title">Criptografia de dados sensíveis (CPF, RG, contas bancárias)</div><div class="rm-item-desc">AES-GCM via Web Crypto API no cliente antes de gravar no Firebase — compliance LGPD</div></div></div>
+      <div class="rm-item"><div class="rm-num">6</div><div><div class="rm-item-title">Firebase App Check + reCAPTCHA v3 (como o EMAD já tem)</div><div class="rm-item-desc">Bloqueia bots e requests não-browser. O EMAD tem nota A de segurança — SDR pode atingir o mesmo nível.</div></div></div>
+    </div>
+  </div>
+
+  <div class="rm-phase">
+    <div class="rm-head ph5">🔵 Fase 5 — Longo Prazo (1-2 anos) — Plataforma SaaS</div>
+    <div class="rm-items">
+      <div class="rm-item"><div class="rm-num">1</div><div><div class="rm-item-title">Multi-tenancy — suporte a múltiplas empresas ISP</div><div class="rm-item-desc">Arquitetura atual é single-tenant. Para virar SaaS, cada ISP precisa de namespace isolado no banco.</div></div></div>
+      <div class="rm-item"><div class="rm-num">2</div><div><div class="rm-item-title">Integração TR-069 / Anlix / Flashman para provisionamento ONU</div><div class="rm-item-desc">Já planejado no roadmap — conectar o mapa SDR com o provisionamento automático de equipamentos.</div></div></div>
+      <div class="rm-item"><div class="rm-num">3</div><div><div class="rm-item-title">ERP integrado (SDR ERP) com módulos Clientes, Financeiro, OS</div><div class="rm-item-desc">Já no roadmap — consolidar gestão de campo e gestão empresarial em uma plataforma.</div></div></div>
+      <div class="rm-item"><div class="rm-num">4</div><div><div class="rm-item-title">Diagrama ODN visual + BOM automático — diferencial vs OZmap/GeoSite</div><div class="rm-item-desc">Funcionalidade que OZmap cobra R$3.000+/mês — implementar como diferencial competitivo.</div></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ PRIORIDADE ══════════════════════════════ -->
+<div class="section">
+  <div class="section-title">✅ Plano de Ação Consolidado — Ordem de Execução</div>
+  <div class="prio-grid">
+    <div class="sum-box red">
+      <h3>🔴 Esta Semana (Crítico)</h3>
+      <ol>
+        <li>Limpar .git/index.lock* corrompido</li>
+        <li>Remover hash de senha do localStorage (sdr_admin_bio_fhash_master)</li>
+        <li>Corrigir duplo bônus supervisor (isV2 → isV2 &amp;&amp; !isSupervisor)</li>
+        <li>Mover token Firebase para Authorization header</li>
+        <li>Verificar cobranças no Firebase Console</li>
+        <li>Implementar cache TTL 5min para users/precos/config</li>
+        <li>Adicionar cláusula de não-exclusividade ao contrato</li>
+        <li>Renomear "supervisao" para "coordenador_projeto" (jurídico)</li>
+      </ol>
+    </div>
+    <div class="sum-box yellow">
+      <h3>🟡 Próximo Sprint</h3>
+      <ol>
+        <li>Corrigir allRecords para supervisor</li>
+        <li>Inventário e Ficha EPI — verificar showPage hook</li>
+        <li>Fila offline IndexedDB para OS</li>
+        <li>Paginar leitura de OS (limitToLast + mês)</li>
+        <li>Lazy-load Tesseract.js</li>
+        <li>SRI em todas as libs CDN</li>
+        <li>Rate limiting persistente no admin</li>
+        <li>Atualizar Obsidian (STATUS_SISTEMA.md, SPRINT_LOG)</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<div class="footer">
+  Auditoria gerada automaticamente em 13/05/2026 — SDR Soluções de Rua — CONFIDENCIAL<br>
+  Análise: Código-fonte estático + Testes ao vivo no browser (mobile: Jefferson + admin: JA) + Inspeção localStorage/sessionStorage + Git log + Documentação Obsidian
+</div>
+
+</div>
+</body>
+</html>

@@ -36,6 +36,34 @@ async function renderDocumentosAutenticados() {
       }
     }
 
+    // 1b. Histórico de contratos arquivados (contratos/{uid}/historico)
+    if (filtroTipo === 'todos' || filtroTipo === 'prestacao') {
+      const snapContratos2 = await db.ref('contratos').once('value');
+      const contratos2 = snapContratos2.val() || {};
+      for (const [uid, data] of Object.entries(contratos2)) {
+        const hist = data?.historico;
+        if (!hist || typeof hist !== 'object') continue;
+        const userName = usersCache?.[uid]?.name || uid;
+        for (const [ts, ps] of Object.entries(hist)) {
+          if (ps && ps.status === 'assinado') {
+            docs.push({
+              tipo: 'Prestação de Serviços',
+              tipoIcon: 'fa-file-contract',
+              tipoColor: '#64748b',
+              uid, userName,
+              arquivado: true,
+              arquivadoEm: ps.arquivadoEm || '',
+              assinadoEm: ps.assinadoEm || '',
+              nomeArquivo: ps.nomeArquivo || 'contrato.pdf',
+              pdfBase64: ps.pdfBase64 || null,
+              validacao: ps.validacao || {},
+              fbPath: `contratos/${uid}/historico/${ts}`
+            });
+          }
+        }
+      }
+    }
+
     // 2. Contratos de Venda a Prazo (config/descontos)
     if (filtroTipo === 'todos' || filtroTipo === 'vendaPrazo') {
       const snapDesc = await db.ref('config/descontos').once('value');
@@ -58,6 +86,12 @@ async function renderDocumentosAutenticados() {
           });
         }
       }
+    }
+
+    // 3. Contratos OTDR (contratos_equipamentos/otdr_730d)
+    if ((filtroTipo === 'todos' || filtroTipo === 'otdr') && typeof window._carregarDocsOTDR === 'function') {
+      const docsOTDR = await window._carregarDocsOTDR();
+      docs.push(...docsOTDR);
     }
 
     // Filtro por nome
@@ -92,12 +126,18 @@ async function renderDocumentosAutenticados() {
             <i class="fas fa-clock"></i> ${dataFmt}
             &nbsp;|&nbsp; <i class="fas fa-file"></i> ${d.nomeArquivo}
             ${d.validacao?.sigScore ? ` &nbsp;|&nbsp; Score: ${d.validacao.sigScore}` : ''}
+            ${d.arquivado ? ` &nbsp;|&nbsp; <i class="fas fa-archive" style="color:#f59e0b"></i> <span style="color:#b45309;font-weight:600">Arquivado em ${d.arquivadoEm ? new Date(d.arquivadoEm).toLocaleDateString('pt-BR') : '—'}</span>` : ''}
           </div>
         </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
+        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
           ${temPDF ? `<button onclick="visualizarDocAutenticado(${i})" style="background:#1f4e79;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:.78rem;font-weight:600;cursor:pointer" title="Visualizar PDF">
             <i class="fas fa-eye"></i> Ver PDF
           </button>` : `<span style="font-size:.72rem;color:#94a3b8;padding:8px"><i class="fas fa-ban"></i> Sem arquivo</span>`}
+          ${d.tipo === 'Prestação de Serviços' && !d.arquivado ? `<button onclick="solicitarNovoContrato('${d.uid}')"
+            style="background:#fff1f2;color:#dc2626;border:1.5px solid #fca5a5;border-radius:8px;padding:8px 12px;font-size:.78rem;font-weight:600;cursor:pointer"
+            title="Invalida o contrato atual e solicita um novo do prestador">
+            <i class="fas fa-redo-alt"></i> Solicitar Novo
+          </button>` : ''}
         </div>
       </div>`;
     });
@@ -1441,8 +1481,50 @@ async function escolherOpcaoPagamento(fbKey, opcao) {
   }
 }
 
+// ── Solicitar novo contrato (invalida o atual e reinicia o fluxo) ──
+async function solicitarNovoContrato(uid) {
+  const u = usersCache[uid];
+  const nome = u?.name || uid;
+  if (!confirm(`Invalidar o contrato atual de "${nome}" e solicitar um novo?\n\nO contrato anterior será arquivado. O prestador será bloqueado até assinar o novo.`)) return;
+
+  const novoHash = `${uid}-${Date.now().toString(36)}`;
+  const geradoEm = new Date().toISOString();
+  const tsArquivo = Date.now();
+
+  try {
+    // 1. Lê o contrato atual antes de sobrescrever
+    const snapAtual = await db.ref(`contratos/${uid}/prestacaoServicos`).once('value');
+    const contratoAtual = snapAtual.val();
+
+    // 2. Arquiva o contrato anterior em contratos/{uid}/historico/{timestamp}
+    if (contratoAtual) {
+      await _dbSet(`contratos/${uid}/historico/${tsArquivo}`, {
+        ...contratoAtual,
+        arquivadoEm: geradoEm,
+        arquivadoPor: 'admin',
+        motivo: 'Invalidado pelo administrador — novo contrato solicitado'
+      });
+    }
+
+    // 3. Reseta o nó principal para aguardar nova assinatura
+    await _dbSet(`contratos/${uid}/prestacaoServicos`, {
+      hash: novoHash,
+      status: 'aguardando_assinatura',
+      geradoEm,
+      motivoResolicitacao: 'Contrato anterior invalidado pelo administrador em ' + new Date().toLocaleString('pt-BR')
+    });
+
+    toast(`✅ Contrato arquivado e novo solicitado para ${nome}. O prestador assinará no próximo acesso.`, 'success');
+    if (typeof renderDocumentosAutenticados === 'function') renderDocumentosAutenticados();
+  } catch(e) {
+    console.error('[solicitarNovoContrato]', e);
+    toast('Erro ao solicitar novo contrato: ' + (e.message || e), 'error');
+  }
+}
+
 // ── Expor funções como globals para o admin.html (tree-shaking fix) ──
 window.renderDocumentosAutenticados = renderDocumentosAutenticados;
+window.solicitarNovoContrato = solicitarNovoContrato;
 window.visualizarDocAutenticado = visualizarDocAutenticado;
 window._parsePDFSignature = _parsePDFSignature;
 window._validarConteudoTermo = _validarConteudoTermo;

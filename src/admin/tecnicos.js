@@ -285,7 +285,7 @@ window.atualizarDados = function() {
 // ── Navegação entre telas (screen-loading, screen-login, screen-app, etc.) ──
 // Exposta como window.screen (sobrescreve API nativa) E window.appScreen
 function appScreen(name) {
-  ['loading','setup','login','first-login','app','termo-pendente','cadastro-empresa','contrato-pendente'].forEach(s => {
+  ['loading','setup','login','first-login','app','termo-pendente','cadastro-empresa','contrato-pendente','otdr-pendente'].forEach(s => {
     const el = document.getElementById(`screen-${s}`);
     if (el) el.style.display = 'none';
   });
@@ -440,6 +440,63 @@ window.loginSuccess = async function(user) {
     if (window._isFiscal(user)) {
       setTimeout(() => window._mostrarModalAlertasFiscal(), 600);
     }
+    // Lembrete OTDR desativado — gerenciado pelo admin via painel
+    // if (!window._isAdmin(user) && !window._isFiscal(user) && !window._isObservador(user)) {
+    if (false) {
+      setTimeout(async () => {
+        if (typeof window.verificarContratoOTDRPendente !== 'function') return;
+        const otdr = await window.verificarContratoOTDRPendente();
+        if (!otdr) return;
+        let overlay = document.getElementById('modal-otdr-pendente');
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.id = 'modal-otdr-pendente';
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px';
+          document.body.appendChild(overlay);
+        }
+        overlay.innerHTML = `<div style="background:#fff;border-radius:16px;max-width:440px;width:100%;padding:28px 24px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.3)">
+          <div style="background:#1f4e79;width:56px;height:56px;border-radius:50%;
+            display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+            <i class="fas fa-file-contract" style="color:#fff;font-size:1.5rem"></i>
+          </div>
+          <div style="font-weight:800;font-size:1.05rem;color:#1e293b;margin-bottom:8px">
+            Assinar Contrato OTDR
+          </div>
+          <div style="font-size:.85rem;color:#475569;line-height:1.6;margin-bottom:16px">
+            O <strong>Contrato OTDR EXFO MAXI 730D</strong> precisa da sua
+            assinatura digital para ser formalizado no sistema.<br><br>
+            <ol style="text-align:left;padding-left:20px;margin:8px 0 10px">
+              <li style="margin-bottom:6px">Abra o contrato e salve como PDF</li>
+              <li style="margin-bottom:6px">Assine via
+                <strong><a href="https://assinador.iti.br" target="_blank"
+                style="color:#15803d">assinador.iti.br</a></strong>
+                (conta gov.br Prata ou Ouro)</li>
+              <li>Envie o PDF assinado aqui no app</li>
+            </ol>
+            <span style="font-size:.79rem;color:#64748b">
+              Desconto de R$ 250,00/mês por 60 meses — já em andamento desde fev/2026.
+            </span>
+          </div>
+          <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+            <button onclick="document.getElementById('modal-otdr-pendente').remove();
+              window._renderContratoPendenteOTDR('${otdr.uid}')
+                .then(()=>window.screen('otdr-pendente'))"
+              style="background:#1f4e79;color:#fff;border:none;border-radius:10px;
+              padding:12px 20px;font-size:.88rem;font-weight:700;cursor:pointer">
+              <i class="fas fa-file-contract"></i> Assinar Agora
+            </button>
+            <button onclick="document.getElementById('modal-otdr-pendente').remove()"
+              style="background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;
+              border-radius:10px;padding:12px 20px;font-size:.88rem;font-weight:600;cursor:pointer">
+              Assinar depois
+            </button>
+          </div>
+          <div style="font-size:.72rem;color:#94a3b8;margin-top:14px">
+            <i class="fas fa-info-circle"></i> Este aviso aparecerá a cada login até a assinatura
+          </div>
+        </div>`;
+      }, 1200);
+    }
     // Aviso: contrato assinado sem autenticação gov.br
     if (_contratoSemGovBr) {
       const csg = _contratoSemGovBr;
@@ -485,8 +542,6 @@ window.loginSuccess = async function(user) {
     }
   }
   window.limparForm();
-  // Oferece biometria se disponível e não cadastrada (só se não estiver bloqueado)
-  if (!bloqueadoPorTermo) setTimeout(() => window.ofereceRegistrarBiometria(user), 800);
 }
 
 window.buildSidebar = function() {
@@ -682,7 +737,15 @@ window.cfgMostrarSubTab = function(sub) {
       }
     }
   }
-  // cfg-sub-precos agora contém apenas Gerenciar Profiles & Cidades (sem tabela de preços)
+  // cfg-sub-precos: Gerenciar Profiles & Cidades
+  if (sub === 'precos') {
+    if (typeof window._pageRenderVersion !== 'undefined' && typeof window._dataVersion !== 'undefined') {
+      if (window._pageRenderVersion['cfg-precos-sub'] !== window._dataVersion) {
+        window._pageRenderVersion['cfg-precos-sub'] = window._dataVersion;
+        if (typeof window.renderGerenciarProfiles === 'function') window.renderGerenciarProfiles();
+      }
+    }
+  }
   if (sub === 'documentos') {
     window.renderDocumentosAutenticados();
   }

@@ -1,6 +1,5 @@
 // src/admin/auth.js
-// Autenticação, sessão e biometria
-// Extraído de admin.html Fase A
+// Autenticação e sessão
 
 // ── Hash SHA-256 ──
 window.sha256 = async function(msg) {
@@ -164,19 +163,6 @@ window.showLoginErr = function(msg) {
   if (el) { el.textContent = msg; el.style.display = 'block'; }
 };
 
-// ── Diagnóstico de biometria ──
-window._bioDiagnostico = async function() {
-  if (!window.isSecureContext) return { ok: false, motivo: 'sem-https', msg: 'Biometria requer HTTPS.' };
-  if (!window.PublicKeyCredential) return { ok: false, motivo: 'sem-api', msg: 'WebAuthn não está disponível neste navegador.' };
-  try {
-    const avail = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    if (!avail) return { ok: false, motivo: 'sem-autenticador', msg: 'Nenhum autenticador de plataforma encontrado.' };
-  } catch(e) {
-    return { ok: false, motivo: 'erro-verificacao', msg: 'Erro ao verificar disponibilidade de biometria.' };
-  }
-  return { ok: true };
-};
-
 window.initLoginScreen = function() {
   const lastUser = localStorage.getItem('srua_lastUser');
   if (lastUser) {
@@ -185,98 +171,5 @@ window.initLoginScreen = function() {
       inp.value = lastUser;
       setTimeout(() => { const el = document.getElementById('pwd-input'); if (el) el.focus(); }, 100);
     }
-  }
-  const lastUid  = localStorage.getItem('srua_lastUid');
-  const credB64  = lastUid ? localStorage.getItem('srua_cred_' + lastUid) : null;
-  const bioBtn   = document.getElementById('btn-biometrico');
-  if (bioBtn) {
-    if (credB64 && lastUser && window.isSecureContext && window.PublicKeyCredential) {
-      const sp = bioBtn.querySelector('span');
-      if (sp) sp.textContent = 'Entrar como ' + lastUser + ' com biometria';
-      bioBtn.style.display = 'block';
-    } else {
-      bioBtn.style.display = 'none';
-    }
-  }
-};
-
-window.loginBiometrico = async function() {
-  const lastUid = localStorage.getItem('srua_lastUid');
-  const credB64 = lastUid ? localStorage.getItem('srua_cred_' + lastUid) : null;
-  if (!credB64 || !lastUid) { window.showLoginErr('Nenhuma biometria cadastrada para este usuário.'); return; }
-  const diag = await window._bioDiagnostico();
-  if (!diag.ok) { window.showLoginErr(diag.msg); return; }
-  try {
-    const rawId     = Uint8Array.from(atob(credB64), c => c.charCodeAt(0));
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        allowCredentials: [{ type: 'public-key', id: rawId }],
-        userVerification: 'required',
-        timeout: 60000,
-      }
-    });
-    const u = window.usersCache[lastUid];
-    if (!u) { window.showLoginErr('Usuário não encontrado.'); return; }
-    if (u.ativo === false) { window.showLoginErr('Usuário inativo.'); return; }
-    window.loginSuccess({ id: lastUid, name: u.name, role: u.role, nivel: u.nivel || 'V1' });
-  } catch(e) {
-    if (e.name === 'NotAllowedError') window.showLoginErr('Biometria cancelada ou não reconhecida pelo dispositivo.');
-    else if (e.name === 'SecurityError') window.showLoginErr('Erro de segurança: acesse via HTTPS para usar biometria.');
-    else window.showLoginErr('Erro na autenticação biométrica: ' + e.message);
-  }
-};
-
-let _biometricoUserPending = null;
-
-window.ofereceRegistrarBiometria = async function(user) {
-  if (localStorage.getItem('srua_cred_' + user.id)) return;
-  const diag = await window._bioDiagnostico();
-  if (!diag.ok) {
-    if (!sessionStorage.getItem('bio_diag_shown')) {
-      sessionStorage.setItem('bio_diag_shown', '1');
-      if (diag.motivo !== 'sem-https') window.toast('Biometria indisponível: ' + diag.msg, 'error');
-    }
-    return;
-  }
-  _biometricoUserPending = user;
-  const banner = document.getElementById('bio-offer-banner');
-  if (banner) banner.style.display = 'flex';
-};
-
-window.ativarBiometriaOffer = async function() {
-  const banner = document.getElementById('bio-offer-banner');
-  if (banner) banner.style.display = 'none';
-  if (!_biometricoUserPending) return;
-  await window.registrarBiometria(_biometricoUserPending);
-};
-
-window.registrarBiometria = async function(user) {
-  const diag = await window._bioDiagnostico();
-  if (!diag.ok) { window.toast(diag.msg, 'error'); return; }
-  try {
-    const challenge   = crypto.getRandomValues(new Uint8Array(32));
-    const userIdBytes = new TextEncoder().encode(user.id);
-    const rpId        = location.hostname || 'localhost';
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { name: 'Solução de Rua', id: rpId },
-        user: { id: userIdBytes, name: user.name, displayName: user.name },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
-        timeout: 60000,
-      }
-    });
-    const rawId = new Uint8Array(cred.rawId);
-    const b64   = btoa(String.fromCharCode(...rawId));
-    localStorage.setItem('srua_cred_' + user.id, b64);
-    window.toast('Biometria ativada com sucesso! Use-a no próximo login.', 'success');
-    _biometricoUserPending = null;
-  } catch(e) {
-    if (e.name === 'NotAllowedError') window.toast('Registro de biometria cancelado pelo usuário.', 'error');
-    else if (e.name === 'SecurityError') window.toast('Erro de segurança: acesse via HTTPS para registrar biometria.', 'error');
-    else window.toast('Não foi possível registrar a biometria: ' + e.message, 'error');
   }
 };

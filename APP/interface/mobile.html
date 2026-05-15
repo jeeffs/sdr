@@ -13,6 +13,12 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <title>Solução de Rua</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -424,25 +430,43 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
 <!-- ═══ PRIMEIRO ACESSO - CRIAR SENHA ═══ -->
 <!-- Tela: Upload de Relatorio Assinado (via link ?relatorio=CODIGO) -->
 <div class="screen" id="scr-upload-relatorio">
-  <div style="flex:1;overflow-y:auto;width:100%;max-width:500px;padding:24px 18px;display:flex;flex-direction:column;justify-content:center">
-    <div style="text-align:center;margin-bottom:20px">
-      <i class="fas fa-file-signature" style="font-size:2.5rem;color:#25d366;margin-bottom:10px"></i>
-      <h1 style="color:#fff;font-size:1.2rem;margin-bottom:6px">Enviar Relatorio Assinado</h1>
+  <div style="flex:1;overflow-y:auto;width:100%;max-width:600px;padding:16px 14px">
+
+    <!-- Cabecalho -->
+    <div style="text-align:center;margin-bottom:14px">
+      <i class="fas fa-file-signature" style="font-size:2rem;color:#25d366;margin-bottom:8px"></i>
+      <h1 style="color:#fff;font-size:1.1rem;margin-bottom:4px">Relatorio de Servicos</h1>
       <div id="rel-upload-info" style="color:#94a3b8;font-size:.82rem"></div>
     </div>
-    <div class="login-box" style="padding:20px">
+
+    <!-- Iframe com o relatorio (aparece quando htmlContent existe) -->
+    <div id="rel-html-wrap" style="display:none;margin-bottom:14px;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.3)">
+      <div style="background:#1f4e79;color:#fff;padding:8px 14px;font-size:.78rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">
+        <span><i class="fas fa-file-alt" style="margin-right:6px"></i>Seu Relatorio</span>
+        <button id="rel-btn-imprimir" style="background:#25d366;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:.75rem;font-weight:700;cursor:pointer">
+          <i class="fas fa-print" style="margin-right:4px"></i>Salvar como PDF
+        </button>
+      </div>
+      <iframe id="rel-html-frame" style="width:100%;height:520px;border:none;background:#fff" sandbox="allow-same-origin allow-popups"></iframe>
+    </div>
+
+    <!-- Box de upload -->
+    <div class="login-box" style="padding:18px">
       <div id="rel-upload-err" style="color:#dc2626;font-size:.82rem;margin-bottom:10px;display:none"></div>
-      <div style="background:#dbeafe;border-radius:10px;padding:12px;margin-bottom:14px;font-size:.8rem;color:#1e40af">
+
+      <div style="background:#dbeafe;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:.78rem;color:#1e40af">
         <i class="fas fa-info-circle" style="margin-right:4px"></i>
         <strong>Instrucoes:</strong><br>
-        1. Assine o PDF via <a href="https://assinador.iti.br" target="_blank" style="color:#1d4ed8;font-weight:700">assinador.iti.br</a> (Gov.br Prata/Ouro)<br>
-        2. Selecione o PDF assinado abaixo<br>
-        3. Clique "Enviar"
+        1. Visualize o relatorio acima e salve como PDF<br>
+        2. Assine o PDF via <a href="https://assinador.iti.br" target="_blank" style="color:#1d4ed8;font-weight:700">assinador.iti.br</a> (Gov.br Prata/Ouro)<br>
+        3. Selecione o PDF assinado abaixo e envie
       </div>
+
       <div id="rel-upload-codigo" style="background:#f0f4ff;border-radius:8px;padding:8px 12px;margin-bottom:14px;text-align:center">
         <div style="font-size:.68rem;color:#64748b">CODIGO DO RELATORIO</div>
         <div id="rel-codigo-display" style="font-family:monospace;font-size:1rem;font-weight:800;color:#1f4e79;letter-spacing:.05em"></div>
       </div>
+
       <label style="font-size:.82rem;font-weight:600;margin-bottom:6px;display:block">PDF Assinado via Gov.br *</label>
       <input type="file" id="rel-upload-file" accept=".pdf" style="width:100%;margin-bottom:14px;font-size:.85rem">
       <button onclick="_enviarRelatorioAssinado()" style="width:100%;background:#25d366;color:#fff;border:none;border-radius:10px;padding:14px;font-size:.92rem;font-weight:700;cursor:pointer">
@@ -475,13 +499,38 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
       <div class="login-err" id="first-login-err"></div>
 
       <label>Nova Senha *</label>
-      <input type="password" id="fl-pwd1" class="form-input" placeholder="Mínimo 4 caracteres" autocomplete="new-password">
+      <input type="password" id="fl-pwd1" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
 
       <label style="margin-top:14px">Confirmar Senha *</label>
       <input type="password" id="fl-pwd2" class="form-input" placeholder="Repita a senha" autocomplete="new-password">
 
       <button class="btn-login" id="btn-set-pwd" onclick="salvarSenhaInicial()" style="margin-top:16px">
         <i class="fas fa-check"></i> Definir Senha
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ UPGRADE SENHA OBRIGATÓRIO ═══ -->
+<div class="screen" id="scr-upgrade-senha">
+  <div style="flex:1;overflow-y:auto;width:100%;max-width:500px;padding:24px 18px;display:flex;flex-direction:column;justify-content:center">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="font-size:2.5rem;margin-bottom:12px">🔒</div>
+      <h1 style="color:#fff;font-size:1.3rem;margin-bottom:8px">Atualização de Senha Obrigatória</h1>
+      <p style="color:#94a3b8;font-size:.85rem;line-height:1.5">Para sua segurança, crie uma nova senha com no mínimo <strong style="color:#fff">6 caracteres</strong>.</p>
+    </div>
+
+    <div class="login-box">
+      <div class="login-err" id="upgrade-senha-err"></div>
+
+      <label>Nova Senha *</label>
+      <input type="password" id="us-pwd1" class="form-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+
+      <label style="margin-top:14px">Confirmar Senha *</label>
+      <input type="password" id="us-pwd2" class="form-input" placeholder="Repita a nova senha" autocomplete="new-password">
+
+      <button class="btn-login" onclick="salvarUpgradeSenha()" style="margin-top:16px">
+        <i class="fas fa-shield-alt"></i> Salvar Nova Senha
       </button>
     </div>
   </div>
@@ -508,6 +557,11 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
     <!-- ── DASHBOARD ── -->
     <div class="page active" id="pg-dash"></div>
 
+
+    <!-- MAPA DE REDE (read-only) -->
+    <div class="page" id="pg-mapa" style="padding:0;overflow:hidden">
+      <div id="mob-sdr-map" style="width:100%;height:calc(100vh - 56px - 58px)"></div>
+    </div>
     <!-- ── LANÇAR OS ── -->
     <div class="page" id="pg-lancar">
       <div class="card fade-in">
@@ -772,6 +826,9 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
     <div class="nav-item" data-page="pg-veiculo" onclick="navTo('pg-veiculo')">
       <i class="fas fa-car"></i>Veículo
     </div>
+    <div class="nav-item" data-page="pg-mapa" onclick="navTo('pg-mapa')">
+      <i class="fas fa-network-wired"></i>Mapa
+    </div>
     <div class="nav-item" data-page="pg-relatorio" onclick="navTo('pg-relatorio')">
       <i class="fas fa-download"></i>Exportar
     </div>
@@ -894,6 +951,7 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
 <!-- SheetJS for CSV / ExcelJS for XLSX export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1024,16 +1082,24 @@ let matCount = 0;
 // STATE
 // ════════════════════════════════════════════════════════
 let db = null;
+let storage = null;
 let currentUser = null;
 let usersCache = {};
 let allRecords = [];
 let _impersonating = false; // master logado como outro usuario — pula bloqueios
+let _sessionBioHash = null; // hash Firebase derivado — armazenado em memória (não sessionStorage)
 let precosV1map = {...PRECOS_V1};
 let precosV2map = {...PRECOS_V2};
 let descontosCache = {};
 let profilesCidades = { FILIAL: [...FILIAL_CIDADES], MATRIZ: [...MATRIZ_CIDADES] };
 let svcCount = 0;
 let _editKey = null;
+
+// ── Session caches — evitam reads repetidos ao Firebase na mesma sessão ──────
+let _alertasVencCache    = null;  // resultado de _obterAlertasVencimento (TTL 10min)
+let _alertasVencCacheTs  = 0;
+let _descontosVpCache    = null;  // config/descontos (termos antigos)
+let _assinaturaMasterCache = null; // config/assinatura_master
 
 // ════════════════════════════════════════════════════════
 // UTILS
@@ -1061,49 +1127,125 @@ async function initFirebase() {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
+    storage = firebase.storage();
 
     // Autenticação anônima (necessária pelas regras do Firebase)
     const auth = firebase.auth();
     try { await auth.signInAnonymously(); } catch(_) {}
 
+    // ── Monkey-patch: db.ref() → REST API completo ────────────────────────────
+    // SDK Firebase abre WebSocket no nível TCP mas falha no handshake de app.
+    // Leituras (.once) E escritas (.set/.update/.remove/.push) ficam penduradas.
+    // REST HTTPS funciona perfeitamente para todas as operações.
+    ;(function _patchDbRest() {
+      const _base = 'https://solucaoderua-default-rtdb.firebaseio.com';
+      const _origRef = db.ref.bind(db);
+
+      async function _tk() {
+        const u = firebase.auth().currentUser;
+        if (!u) return null;
+        return u.getIdToken();
+      }
+      function _p(path) { return String(path||'').replace(/^\/+/,''); }
+
+      db.ref = function(path) {
+        const _r = _origRef(path);
+
+        // ── READ: .once() ──
+        _r.once = async function(evt) {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).once(evt);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              signal:AbortSignal.timeout(30000)
+            });
+            const val = res.ok ? await res.json() : null;
+            return { val:()=>val, exists:()=>val!==null, key:_p(path).split('/').pop()||'',
+                     child:(c)=>({val:()=>(val||{})[c]??null, exists:()=>(val||{})[c]!=null}),
+                     forEach:(cb)=>{ if(val&&typeof val==='object') Object.entries(val).forEach(([k,v])=>cb({key:k,val:()=>v,exists:()=>true})); } };
+          } catch(e) {
+            console.warn('[SDR REST mobile] .once() erro:', path, e.message);
+            return { val:()=>null, exists:()=>false, key:'', child:()=>({val:()=>null,exists:()=>false}), forEach:()=>{} };
+          }
+        };
+
+        // ── WRITE: .set() → PUT ──
+        _r.set = async function(value) {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).set(value);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'PUT', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+          } catch(e) {
+            console.warn('[SDR REST mobile] .set() erro:', path, e.message);
+            throw e;
+          }
+        };
+
+        // ── WRITE: .update() → PATCH ──
+        _r.update = async function(value) {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).update(value);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'PATCH', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+          } catch(e) {
+            console.warn('[SDR REST mobile] .update() erro:', path, e.message);
+            throw e;
+          }
+        };
+
+        // ── WRITE: .remove() → DELETE ──
+        _r.remove = async function() {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).remove();
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'DELETE',
+              signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+          } catch(e) {
+            console.warn('[SDR REST mobile] .remove() erro:', path, e.message);
+            throw e;
+          }
+        };
+
+        // ── WRITE: .push() → POST ──
+        _r.push = async function(value) {
+          try {
+            const tok = await _tk();
+            if (!tok) return _origRef(path).push(value);
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            return { key: data.name };
+          } catch(e) {
+            console.warn('[SDR REST mobile] .push() erro:', path, e.message);
+            throw e;
+          }
+        };
+
+        return _r;
+      };
+    })();
+
     // Carrega users
     const usSnap = await db.ref('users').once('value');
     usersCache = usSnap.val() || {};
 
-    // Carrega preços personalizados
-    const prSnap = await db.ref('precos').once('value');
-    const raw = prSnap.val();
-    if (raw) {
-      const _normT = t => { try { return (decodeURIComponent(t)||t).replace(/\//g,'-'); } catch(_){ return (t||'').replace(/\//g,'-'); } };
-      const dec = o => { const m={}; Object.entries(o).forEach(([k,v])=>{ m[_normT(k)]=v; }); return m; };
-      if (raw.v1) precosV1map = dec(raw.v1);
-      if (raw.v2) precosV2map = dec(raw.v2);
-    }
-
-    // Carrega cidades personalizadas (mesmo path que admin: config/profiles)
-    const cfgSnap = await db.ref('config/profiles').once('value');
-    const cfgCid = cfgSnap.val();
-    if (cfgCid && typeof cfgCid === 'object') {
-      Object.entries(cfgCid).forEach(([k, v]) => {
-        profilesCidades[k] = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []);
-      });
-      if (!profilesCidades.FILIAL) profilesCidades.FILIAL = [...FILIAL_CIDADES];
-      if (!profilesCidades.MATRIZ) profilesCidades.MATRIZ = [...MATRIZ_CIDADES];
-    }
-
-    // Carrega OS
-    const osSnap = await db.ref('os').once('value');
-    const osRaw = osSnap.val() || {};
-    allRecords = Object.entries(osRaw).map(([k,v]) => {
-      // Normaliza nomes de serviço legados (/ → -) para compatibilidade
-      if (v.servicos) v.servicos.forEach(sv => { if (sv.tipo) sv.tipo = sv.tipo.replace(/\//g,'-'); });
-      if (v.tipo) v.tipo = v.tipo.replace(/\//g,'-');
-      return {...v, _key:k};
-    });
-
-    // Carrega descontos
-    const descSnap = await db.ref('descontos').once('value');
-    descontosCache = descSnap.val() || {};
+    // precos e config/profiles são carregados em loginSuccess() após autenticação
+    // OS e descontos são carregados em carregarOsDoUsuario(uid) após o login
+    // para evitar download de toda a coleção /os (muito grande → timeout 10s)
 
     // Popula login
     populateLogin();
@@ -1111,15 +1253,17 @@ async function initFirebase() {
     // Verifica parametros da URL
     const urlParams = new URLSearchParams(window.location.search);
 
-    // Login como outro usuario (master impersonate): ?loginComo=uid
+    // Login como outro usuario (master impersonate): ?loginComo=uid&by=masterUid
     const loginComoUid = urlParams.get('loginComo');
-    if (loginComoUid && usersCache[loginComoUid]) {
+    const loginComBy   = urlParams.get('by');
+    if (loginComoUid && usersCache[loginComoUid] && loginComBy && usersCache[loginComBy]?.role === 'master') {
       // Limpa URL para nao relogar infinitamente
       window.history.replaceState({}, '', window.location.pathname);
       // Impersonate: pula TODOS os bloqueios (empresa, rescisão, termos, segurança)
       _impersonating = true;
       sessionStorage.setItem('sdr_mobile_uid', loginComoUid);
       sessionStorage.setItem('sdr_impersonate', '1');
+      sessionStorage.setItem('sdr_impersonate_by', loginComBy); // quem iniciou o impersonate
       loginSuccess(loginComoUid);
       return;
     }
@@ -1137,6 +1281,14 @@ async function initFirebase() {
           document.getElementById('rel-upload-info').innerHTML = `<strong>${rel.nomePrestador||''}</strong><br>${MESES_PT[rm-1]||''} ${ry}<br>Valor: R$ ${Number(rel.valorTotal||0).toFixed(2).replace('.',',')}`;
           window._relatorioParaUpload = rel;
           window._relatorioCodigoUpload = codigoRel;
+          if (rel.htmlContent) {
+            const blob = new Blob([rel.htmlContent], {type:'text/html;charset=utf-8'});
+            const blobUrl = URL.createObjectURL(blob);
+            const frame = document.getElementById('rel-html-frame');
+            frame.src = blobUrl;
+            document.getElementById('rel-html-wrap').style.display = 'block';
+            document.getElementById('rel-btn-imprimir').onclick = function() { frame.contentWindow.print(); };
+          }
           screen('upload-relatorio');
           return;
         } else if (rel && rel.status !== 'enviado') {
@@ -1154,7 +1306,11 @@ async function initFirebase() {
     const sessUid = sessionStorage.getItem('sdr_mobile_uid');
     if (sessUid && usersCache[sessUid] && usersCache[sessUid].ativo !== false) {
       // Restaura flag de impersonate se a sessão foi aberta pelo master
-      if (sessionStorage.getItem('sdr_impersonate') === '1') _impersonating = true;
+      // Valida impersonate: exige que o iniciador conste como master no cache
+    const _impBy = sessionStorage.getItem('sdr_impersonate_by');
+    if (sessionStorage.getItem('sdr_impersonate') === '1' && _impBy && usersCache[_impBy]?.role === 'master') {
+      _impersonating = true;
+    }
       const u = usersCache[sessUid];
       const nivel = u.nivel || 'V1';
       if (u.role !== 'master' && (nivel === 'V1' || nivel === 'V2' || nivel === 'V3' || nivel === 'V0')) {
@@ -1188,6 +1344,109 @@ async function verificarSenha(senha, user) {
   // Fallback: senha antiga sem salt (campo "senha")
   const hash = await sha256(senha);
   return hash === user.passwordHash || hash === user.senha;
+}
+
+// ════════════════════════════════════════════════════════
+// FIREBASE AUTH — Migração por usuário (email/password)
+// Cada técnico recebe uma conta Firebase Auth própria no formato
+// {uid}@solucaoderua.app, criada silenciosamente na primeira vez
+// que o técnico faz login após esta atualização.
+// Enquanto a migração não ocorre, o sistema continua usando
+// autenticação anônima como fallback — sem impacto ao usuário.
+// ════════════════════════════════════════════════════════
+
+function _fbAuthEmail(uid) {
+  return uid.replace(/[^a-zA-Z0-9._\-]/g, '_') + '@solucaoderua.app';
+}
+
+// Deriva "senha Firebase" a partir da senha local do técnico.
+// Firebase Auth exige mínimo 6 chars; o app local permite 4.
+// Solução: sha256('sdr:' + uid + ':' + senha) → sempre 64 hex chars.
+// A senha real NUNCA é enviada ao Firebase — apenas o hash derivado.
+async function _fbAuthSenha(uid, senha) {
+  return await sha256('sdr:' + uid + ':' + senha);
+}
+
+// Cria conta Firebase Auth email/password para o técnico (chamado em background)
+async function _vincularFirebaseAuth(uid, senha) {
+  try {
+    const authInst = firebase.auth();
+    const email = _fbAuthEmail(uid);
+    const fbSenha = await _fbAuthSenha(uid, senha);
+    try {
+      const cred = await authInst.createUserWithEmailAndPassword(email, fbSenha);
+      // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
+      if (cred && cred.user) {
+        db.ref(`authUidToAppUid/${cred.user.uid}`).set(uid).catch(() => {});
+      }
+      console.log('[SDR Auth] Conta Firebase Auth criada para:', uid);
+    } catch(e) {
+      if (e.code === 'auth/email-already-in-use') {
+        // Conta já existe — faz login com ela
+        const cred2 = await authInst.signInWithEmailAndPassword(email, fbSenha);
+        if (cred2 && cred2.user) {
+          db.ref(`authUidToAppUid/${cred2.user.uid}`).set(uid).catch(() => {});
+        }
+        console.log('[SDR Auth] Login Firebase Auth (conta existente):', uid);
+      } else if (e.code === 'auth/network-request-failed' || e.code === 'auth/too-many-requests') {
+        console.warn('[SDR Auth] Vinculação adiada (rede/limite):', uid, e.code);
+        return false;
+      } else {
+        throw e;
+      }
+    }
+    // Marca o usuário como vinculado no banco
+    await db.ref(`users/${uid}/firebaseAuthLinked`).set(true);
+    if (usersCache[uid]) usersCache[uid].firebaseAuthLinked = true;
+    return true;
+  } catch(e) {
+    console.warn('[SDR Auth] Falha ao vincular Firebase Auth (não-crítico):', uid, e.message);
+    return false;
+  }
+}
+
+// Faz login com Firebase Auth email/password (para técnicos já migrados)
+async function _loginFirebaseAuth(uid, senha) {
+  try {
+    const authInst = firebase.auth();
+    const email = _fbAuthEmail(uid);
+    const fbSenha = await _fbAuthSenha(uid, senha);
+    const cred = await authInst.signInWithEmailAndPassword(email, fbSenha);
+    // Grava mapeamento fbUid → appUid (necessário para regras de banco por usuário)
+    if (cred && cred.user) {
+      db.ref(`authUidToAppUid/${cred.user.uid}`).set(uid).catch(() => {});
+    }
+    console.log('[SDR Auth] Login Firebase Auth OK:', uid);
+    return true;
+  } catch(e) {
+    console.warn('[SDR Auth] Login Firebase Auth falhou, mantendo sessão anônima:', uid, e.message);
+    return false;
+  }
+}
+
+// Atualiza senha do Firebase Auth quando técnico troca a senha local.
+// Usa a senha antiga para autenticar no Firebase Auth, depois chama updatePassword().
+async function _atualizarSenhaFirebaseAuth(uid, senhaAntiga, senhaNova) {
+  try {
+    const authInst = firebase.auth();
+    const email = _fbAuthEmail(uid);
+    const fbSenhaAntiga = await _fbAuthSenha(uid, senhaAntiga);
+    const fbSenhaNova   = await _fbAuthSenha(uid, senhaNova);
+    try {
+      const cred = await authInst.signInWithEmailAndPassword(email, fbSenhaAntiga);
+      await cred.user.updatePassword(fbSenhaNova);
+      console.log('[SDR Auth] Senha Firebase Auth atualizada:', uid);
+    } catch(e) {
+      if (e.code === 'auth/invalid-login-credentials' || e.code === 'auth/user-not-found') {
+        // Conta não existe ou senha antiga diverge — cria do zero com nova senha
+        await _vincularFirebaseAuth(uid, senhaNova);
+      } else {
+        throw e;
+      }
+    }
+  } catch(e) {
+    console.warn('[SDR Auth] Falha ao atualizar senha Firebase Auth (não-crítico):', uid, e.message);
+  }
 }
 
 // ════════════════════════════════════════════════════════
@@ -1251,14 +1510,27 @@ async function loginBiometria() {
       publicKey: { challenge, timeout: 60000, userVerification: 'required' }
     });
     const credId = btoa(String.fromCharCode(...new Uint8Array(assertion.rawId)));
-    // Find user with this credentialId
     const found = Object.entries(usersCache).find(([id, u]) => u.biometria?.credentialId === credId);
-    if (found) {
-      errEl.textContent = '';
-      loginSuccess(found[0]);
-    } else {
-      errEl.textContent = 'Biometria não reconhecida.';
+    if (!found) { errEl.textContent = 'Biometria não reconhecida.'; return; }
+    const [uid] = found;
+
+    // Garante sessão Firebase Auth ativa para o usuário correto
+    const fbUser = firebase.auth().currentUser;
+    if (!fbUser || fbUser.email !== _fbAuthEmail(uid)) {
+      // Tenta reautenticar usando hash em memória (definido no último login por senha)
+      const stored = _sessionBioHash;
+      if (stored && stored.startsWith(uid + ':')) {
+        const hash = stored.slice(uid.length + 1);
+        await firebase.auth().signInWithEmailAndPassword(_fbAuthEmail(uid), hash).catch(() => {});
+      } else if (!fbUser) {
+        // Sem sessão Firebase e sem hash armazenado — exige login por senha primeiro
+        errEl.textContent = 'Sessão expirada. Faça login com senha para reativar a biometria.';
+        return;
+      }
     }
+
+    errEl.textContent = '';
+    loginSuccess(uid);
   } catch(e) {
     if (e.name === 'NotAllowedError') {
       errEl.textContent = 'Biometria cancelada ou não reconhecida.';
@@ -1326,20 +1598,67 @@ async function salvarSenhaInicial() {
   errEl.textContent = '';
 
   if (!p1) { errEl.textContent = 'Digite uma senha.'; return; }
-  if (p1.length < 4) { errEl.textContent = 'Mínimo 4 caracteres.'; return; }
+  if (p1.length < 6) { errEl.textContent = 'Mínimo 6 caracteres.'; return; }
   if (p1 !== p2) { errEl.textContent = 'As senhas não coincidem.'; return; }
 
   try {
     const salt = gerarSalt();
     const hash = await hashComSalt(p1, salt);
-    await db.ref(`users/${_pendingFirstLoginUid}`).update({ passwordHash: hash, salt, firstLogin: false });
-    usersCache[_pendingFirstLoginUid] = { ...usersCache[_pendingFirstLoginUid], passwordHash: hash, salt, firstLogin: false };
+    await db.ref(`users/${_pendingFirstLoginUid}`).update({ passwordHash: hash, salt, firstLogin: false, senhaMinima: true });
+    usersCache[_pendingFirstLoginUid] = { ...usersCache[_pendingFirstLoginUid], passwordHash: hash, salt, firstLogin: false, senhaMinima: true };
     const uid = _pendingFirstLoginUid;
     _pendingFirstLoginUid = null;
+    // Primeira vez que o técnico define senha: cria conta Firebase Auth em background
+    _vincularFirebaseAuth(uid, p1); // sem await — não bloqueia o login
     loginSuccess(uid);
   } catch(e) {
     console.error(e);
     errEl.textContent = 'Erro ao salvar senha.';
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// UPGRADE OBRIGATÓRIO DE SENHA (mínimo 6 chars)
+// ════════════════════════════════════════════════════════
+let _pendingUpgradeUid = null;
+let _pendingUpgradeSenhaAtual = null;
+
+function _verificarUpgradeSenha(uid, senhaDigitada) {
+  // Retorna true se o usuário precisa trocar a senha
+  const u = usersCache[uid];
+  return !u || u.senhaMinima !== true;
+}
+
+async function salvarUpgradeSenha() {
+  if (!_pendingUpgradeUid) return;
+  const p1 = document.getElementById('us-pwd1').value;
+  const p2 = document.getElementById('us-pwd2').value;
+  const errEl = document.getElementById('upgrade-senha-err');
+  errEl.textContent = '';
+
+  if (!p1) { errEl.textContent = 'Digite a nova senha.'; return; }
+  if (p1.length < 6) { errEl.textContent = 'A senha deve ter no mínimo 6 caracteres.'; return; }
+  if (p1 !== p2) { errEl.textContent = 'As senhas não coincidem.'; return; }
+
+  const btnEl = document.querySelector('#scr-upgrade-senha .btn-login');
+  if (btnEl) btnEl.disabled = true;
+
+  try {
+    const uid = _pendingUpgradeUid;
+    const senhaAntiga = _pendingUpgradeSenhaAtual; // guarda antes de limpar
+    const salt = gerarSalt();
+    const hash = await hashComSalt(p1, salt);
+    await db.ref(`users/${uid}`).update({ passwordHash: hash, salt, senhaMinima: true });
+    usersCache[uid] = { ...usersCache[uid], passwordHash: hash, salt, senhaMinima: true };
+    _pendingUpgradeUid = null;
+    _pendingUpgradeSenhaAtual = null;
+    // Atualiza senha do Firebase Auth: usa senha antiga para autenticar, depois troca
+    _atualizarSenhaFirebaseAuth(uid, senhaAntiga, p1); // sem await — não bloqueia
+    loginSuccess(uid);
+  } catch(e) {
+    console.error('[salvarUpgradeSenha]', e);
+    errEl.textContent = 'Erro ao salvar. Tente novamente.';
+    if (btnEl) btnEl.disabled = false;
   }
 }
 
@@ -1349,11 +1668,32 @@ function populateLogin() {
   atualizarBotaoBiometria();
 }
 
+// ── Rate limiting local para doLogin() ──────────────────────────────────────
+function _mobileRateLimit() {
+  const KEY = 'sdr_mob_rl';
+  const MAX = 5, WINDOW_MS = 5 * 60 * 1000; // 5 tentativas / 5 min
+  try {
+    const raw = localStorage.getItem(KEY);
+    const rec = raw ? JSON.parse(raw) : { count: 0, since: Date.now() };
+    if (Date.now() - rec.since > WINDOW_MS) { rec.count = 0; rec.since = Date.now(); }
+    rec.count++;
+    localStorage.setItem(KEY, JSON.stringify(rec));
+    if (rec.count > MAX) {
+      const resta = Math.ceil((WINDOW_MS - (Date.now() - rec.since)) / 60000);
+      return `Muitas tentativas. Aguarde ${resta} minuto(s).`;
+    }
+  } catch(_) {} // localStorage indisponível — não bloqueia
+  return null;
+}
+
 async function doLogin() {
   const nomeDigitado = (document.getElementById('login-user').value || '').trim();
   const pass = document.getElementById('login-pass').value;
   const errEl = document.getElementById('login-err');
   errEl.textContent = '';
+
+  const rlMsg = _mobileRateLimit();
+  if (rlMsg) { errEl.textContent = rlMsg; return; }
 
   if (!nomeDigitado) { errEl.textContent = 'Digite seu nome.'; return; }
 
@@ -1375,22 +1715,129 @@ async function doLogin() {
   if (!pass) { errEl.textContent = 'Digite sua senha.'; return; }
 
   // Sem hash cadastrado (nem passwordHash nem senha legada)
+  // NOTA: passwordHash pode ter sido removido do cache por segurança após login anterior.
+  // Tenta recarregar do Firebase antes de concluir que é primeiro acesso.
   if (!u.passwordHash && !u.senha) {
-    errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
+    try {
+      const freshSnap = await db.ref('users/' + uid).once('value');
+      const fresh = freshSnap.val();
+      if (fresh && (fresh.passwordHash || fresh.senha)) {
+        usersCache[uid] = { ...usersCache[uid], passwordHash: fresh.passwordHash, salt: fresh.salt, senha: fresh.senha };
+        u.passwordHash = fresh.passwordHash;
+        u.salt = fresh.salt;
+        u.senha = fresh.senha;
+      } else {
+        errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
+        return;
+      }
+    } catch(_) {
+      errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
+      return;
+    }
+  }
+
+  // ── Wave 4: Firebase Auth como login primário ──
+  // signInWithEmailAndPassword é o guardião principal.
+  // Se falhar (rede, conta desatualizada), cai no hash local como fallback
+  // e recria a conta Firebase Auth em background.
+  const fbOk = await _loginFirebaseAuth(uid, pass);
+  if (!fbOk) {
+    // Fallback: verifica hash armazenado no banco (já em memória — sem rede)
+    // Se hash foi removido do cache por segurança, não é possível verificar offline.
+    if (!u.passwordHash && !u.senha) {
+      errEl.textContent = 'Sem conexão. Tente novamente com internet.';
+      return;
+    }
+    const hashOk = await verificarSenha(pass, u);
+    if (!hashOk) { errEl.textContent = 'Senha incorreta.'; return; }
+    // Hash local ok — recria conta Firebase Auth em background
+    _vincularFirebaseAuth(uid, pass);
+  }
+
+  // Armazena hash Firebase derivado em memória (não sessionStorage) para reautenticação biométrica
+  _fbAuthSenha(uid, pass).then(h => { _sessionBioHash = uid + ':' + h; });
+
+  // Verifica se precisa upgrade obrigatório de senha (mínimo 6 chars)
+  if (_verificarUpgradeSenha(uid)) {
+    _pendingUpgradeUid = uid;
+    _pendingUpgradeSenhaAtual = pass;
+    document.getElementById('us-pwd1').value = '';
+    document.getElementById('us-pwd2').value = '';
+    document.getElementById('upgrade-senha-err').textContent = '';
+    screen('upgrade-senha');
+    setTimeout(() => { const el = document.getElementById('us-pwd1'); if(el) el.focus(); }, 200);
     return;
   }
 
-  // Verifica senha com hash
-  const ok = await verificarSenha(pass, u);
-  if (!ok) { errEl.textContent = 'Senha incorreta.'; return; }
-
   loginSuccess(uid);
+}
+
+// Carrega OS filtradas por userId via REST query (requer .indexOn:["userId"] nas rules)
+// e a coleção descontos. Chamado imediatamente antes de renderDashboard() em cada fluxo.
+async function carregarOsDoUsuario(uid) {
+  try {
+    const fbUser = firebase.auth().currentUser;
+    const token = fbUser ? await fbUser.getIdToken() : null;
+    const base = 'https://solucaoderua-default-rtdb.firebaseio.com';
+    const qs = 'orderBy="userId"&equalTo=' + encodeURIComponent('"' + uid + '"');
+    const authQs = token ? '&auth=' + token : '';
+    const resp = await fetch(base + '/os.json?' + qs + authQs, {
+      signal: AbortSignal.timeout(30000)
+    });
+    const osRaw = resp.ok ? (await resp.json() || {}) : {};
+    allRecords = Object.entries(osRaw).map(([k, v]) => {
+      if (v.servicos) v.servicos.forEach(sv => { if (sv.tipo) sv.tipo = sv.tipo.replace(/\//g, '-'); });
+      if (v.tipo) v.tipo = v.tipo.replace(/\//g, '-');
+      return { ...v, _key: k };
+    });
+  } catch (e) {
+    console.warn('[SDR] carregarOsDoUsuario erro:', e.message);
+    allRecords = [];
+  }
+  // Empréstimos/descontos: caminho atual (config/emprestimos — 'descontos' está depreciado)
+  try {
+    const descSnap = await db.ref('config/emprestimos').once('value');
+    descontosCache = descSnap.val() || {};
+  } catch (e) {
+    console.warn('[SDR] carregarDescontos erro:', e.message);
+    descontosCache = {};
+  }
 }
 
 async function loginSuccess(uid) {
   const u = usersCache[uid];
   currentUser = { id: uid, name: u.name, nivel: u.nivel || 'V1' };
   sessionStorage.setItem('sdr_mobile_uid', uid);
+
+  // Carrega preços e cidades personalizadas (somente após autenticação)
+  try {
+    const prSnap = await db.ref('precos').once('value');
+    const raw = prSnap.val();
+    if (raw) {
+      const _normT = t => { try { return (decodeURIComponent(t)||t).replace(/\//g,'-'); } catch(_){ return (t||'').replace(/\//g,'-'); } };
+      const dec = o => { const m={}; Object.entries(o).forEach(([k,v])=>{ m[_normT(k)]=v; }); return m; };
+      if (raw.v1) precosV1map = dec(raw.v1);
+      if (raw.v2) precosV2map = dec(raw.v2);
+    }
+  } catch(_) {}
+  try {
+    const cfgSnap = await db.ref('config/profiles').once('value');
+    const cfgCid = cfgSnap.val();
+    if (cfgCid && typeof cfgCid === 'object') {
+      Object.entries(cfgCid).forEach(([k, v]) => {
+        profilesCidades[k] = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []);
+      });
+      if (!profilesCidades.FILIAL) profilesCidades.FILIAL = [...FILIAL_CIDADES];
+      if (!profilesCidades.MATRIZ) profilesCidades.MATRIZ = [...MATRIZ_CIDADES];
+    }
+  } catch(_) {}
+
+  // Remove campos sensíveis de todos os usuários no cache após login bem-sucedido
+  // Hashes de senha e dados biométricos não são necessários após a autenticação
+  const _SENSITIVE = ['passwordHash','salt','senha','biometria','emp-banco','emp-agencia','emp-conta','emp-pix','emp-resp-cpf','emp-resp-rg'];
+  Object.keys(usersCache).forEach(k => {
+    _SENSITIVE.forEach(f => { delete usersCache[k][f]; });
+  });
 
   // Header
   document.getElementById('hdr-avatar').textContent = (u.name||'T')[0];
@@ -1405,6 +1852,7 @@ async function loginSuccess(uid) {
   try {
     if (_impersonating) {
       // Master impersonando: vai direto para o app sem bloqueios
+      await carregarOsDoUsuario(uid);
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById('app').style.display = 'flex';
       _aplicarVisibilidadeAbas(u);
@@ -1434,20 +1882,29 @@ async function loginSuccess(uid) {
       return;
     }
 
-    // 3. Verifica termos de abatimento pendentes
-    if (await verificarTermosPendentes(uid)) {
-      await renderAbatimento();
-      screen('abatimento');
-      return;
-    }
+    // 3. Verifica termos de abatimento pendentes (NÃO bloqueia — apenas detecta para banner)
+    try { _termosPendentesInfo = await verificarTermosPendentes(uid); } catch(_) { _termosPendentesInfo = false; }
 
-    // 3.5. Detecta Contratos de Venda a Prazo assinados sem gov.br (não bloqueia)
+    // 3.5. Contratos de Venda a Prazo pendentes — bloqueia se prazo de 3 dias expirou
     try {
-      let _snap = await db.ref('config/descontos').once('value');
-      const _desc = _snap.val() || {};
-      _vendaPrazoSemGovBr = Object.values(_desc).some(d =>
-        d.uid === uid && d.termoAssinado === true && (!d.termoAssinadoVia || d.termoAssinadoVia !== 'govbr-tec')
-      );
+      if (!_descontosVpCache) {
+        const _snap = await db.ref('config/descontos').once('value');
+        _descontosVpCache = _snap.val() || {};
+      }
+      const _desc = _descontosVpCache;
+      const _agora = Date.now();
+      const _PRAZO_ASSINAR_MS = 3 * 24 * 60 * 60 * 1000; // 3 dias corridos
+      _vendaPrazoSemGovBr = false;
+      for (const _d of Object.values(_desc)) {
+        if (_d.uid !== uid || _d.termoAssinado !== false || _d.termoAceitoTec === true) continue;
+        _vendaPrazoSemGovBr = true;
+        // Prazo expirado → bloqueia acesso e exibe tela de assinatura
+        if (_d.criado_em && (_agora - new Date(_d.criado_em).getTime()) > _PRAZO_ASSINAR_MS) {
+          await renderAbatimento();
+          screen('abatimento');
+          return;
+        }
+      }
     } catch(_) { _vendaPrazoSemGovBr = false; }
 
     // 4. Check-in: marca documentos vencidos no Firebase
@@ -1498,6 +1955,7 @@ async function loginSuccess(uid) {
     }
 
     // Tudo OK, mostra app
+    await carregarOsDoUsuario(uid);
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('app').style.display = 'flex';
 
@@ -2347,6 +2805,7 @@ let _contratoAlerta = null;
 // Variável para contrato assinado sem autenticação gov.br (solicita re-assinatura)
 let _contratoSemGovBr = null;
 let _vendaPrazoSemGovBr = false; // flag: tem Contrato de Venda a Prazo assinado sem gov.br
+let _termosPendentesInfo = false; // flag: tem Venda a Prazo pendente (não bloqueia, só banner)
 // Variável para o aviso severo de EPI (incompleta ou validade próxima)
 let _avisoEpi = null;
 
@@ -2483,9 +2942,8 @@ async function carregarMeuContrato() {
     const data = snap.val();
     if (!data) {
       if (['V0','V1','V2'].includes(nivel)) {
-        // Verifica se a ficha cadastral está preenchida
-        const empSnap = await db.ref(`users/${currentUser.id}/empresa`).once('value');
-        const emp = empSnap.val();
+        // Verifica se a ficha cadastral está preenchida (usa usersCache)
+        const emp = usersCache[currentUser.id]?.empresa || null;
         if (emp?.razaoSocial) {
           el.innerHTML = `
             <p style="color:var(--muted);font-size:.85rem;margin:0 0 10px">Nenhum contrato gerado ainda.</p>
@@ -2752,10 +3210,18 @@ function doLogout() {
   clearTimeout(_sessionTimer);
   sessionStorage.removeItem('sdr_mobile_uid');
   sessionStorage.removeItem('sdr_impersonate');
+  sessionStorage.removeItem('sdr_impersonate_by');
+  _sessionBioHash = null; // limpa hash Firebase da memória
   _impersonating = false;
   currentUser = null;
+  // Limpa session caches ao trocar de usuário
+  _alertasVencCache = null; _alertasVencCacheTs = 0;
+  _descontosVpCache = null; _assinaturaMasterCache = null;
+  window._admEmpresa = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-pass').value = '';
+  // Encerra sessão Firebase Auth para que o próximo usuário não herde o token
+  firebase.auth().signOut().catch(() => {});
   screen('login');
 }
 
@@ -2775,8 +3241,8 @@ function atualizarDados() {
 // 1. CADASTRO EMPRESA
 async function _precisaCadastroEmpresa(uid) {
   try {
-    const snap = await db.ref(`users/${uid}/empresa`).once('value');
-    const empresa = snap.val();
+    // empresa já está no usersCache (carregado em initFirebase via db.ref('users'))
+    const empresa = usersCache[uid]?.empresa || null;
     // Se admin dispensou o cadastro empresa, não precisa
     if (empresa && empresa.dispensado) return false;
     // Precisa de cadastro se não existe ou está incompleto
@@ -2793,8 +3259,8 @@ async function _precisaCadastroEmpresa(uid) {
 async function loadEmpresaScreen() {
   const uid = currentUser.id;
   try {
-    const snap = await db.ref(`users/${uid}/empresa`).once('value');
-    const empresa = snap.val();
+    // empresa já está no usersCache — usa diretamente sem read ao Firebase
+    const empresa = usersCache[uid]?.empresa || null;
 
     if (empresa) {
       // Pre-preenche formulário
@@ -2845,10 +3311,9 @@ async function abrirEditarFicha() {
   setupEditMask('edit-telefone', _formataPhone);
   setupEditMask('edit-resp-cpf', _formataCPF);
 
-  // Load current data
+  // Load current data — usa usersCache (já carregado no initFirebase)
   try {
-    const snap = await db.ref(`users/${currentUser.id}/empresa`).once('value');
-    const emp = snap.val();
+    const emp = usersCache[currentUser.id]?.empresa || null;
     if (emp) {
       document.getElementById('edit-razao-social').value = emp.razaoSocial || '';
       document.getElementById('edit-nome-fantasia').value = emp.nomeFantasia || '';
@@ -3043,6 +3508,7 @@ async function salvarEmpresa() {
     }
 
     // Mostra app
+    await carregarOsDoUsuario(currentUser.id);
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
     document.getElementById('app').style.display = 'flex';
     renderDashboard();
@@ -3150,20 +3616,23 @@ async function uploadRescisaoPDF() {
 // 3. TERMO ABATIMENTO
 async function verificarTermosPendentes(uid) {
   try {
-    // Tenta config/descontos primeiro, depois descontos
-    let snap = await db.ref('config/descontos').once('value');
-    let descontos = snap.val();
-    if (!descontos) {
-      snap = await db.ref('descontos').once('value');
-      descontos = snap.val() || {};
+    // Usa cache de sessão — evita read repetido (já lido em loginSuccess 3.5)
+    if (!_descontosVpCache) {
+      let snap = await db.ref('config/descontos').once('value');
+      let descontos = snap.val();
+      if (!descontos) {
+        snap = await db.ref('descontos').once('value');
+        descontos = snap.val() || {};
+      }
+      _descontosVpCache = descontos;
     }
+    let descontos = _descontosVpCache;
 
     const temPendente = Object.entries(descontos).some(([key, d]) => {
       if (d.uid !== uid) return false;
-      // Caso 1: termo ainda não assinado
+      // Bloqueia apenas se ainda NÃO assinou de forma alguma
       if (d.termoAssinado === false && d.termoAceitoTec !== true) return true;
-      // Caso 2: termo assinado SEM gov.br — precisa reassinar via gov.br
-      if (d.termoAssinado === true && d.termoAssinadoVia !== 'govbr-tec') return true;
+      // Se termoAssinado === true (qualquer canal, inclusive admin OTDR) → libera
       return false;
     });
 
@@ -3476,7 +3945,13 @@ async function gerarTermoAbatimento(desconto) {
   const u       = usersCache[desconto.uid] || {};
   const _empresa = u.empresa || {};
   let _contratante = {};
-  try { const s = await db.ref('config/assinatura_master').once('value'); _contratante = s.val() || {}; } catch(_){}
+  try {
+    if (!_assinaturaMasterCache) {
+      const s = await db.ref('config/assinatura_master').once('value');
+      _assinaturaMasterCache = s.val() || {};
+    }
+    _contratante = _assinaturaMasterCache;
+  } catch(_){}
   const fmtV    = v => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
   const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const [y, m]  = (desconto.parcelaInicio || desconto.mesAno || '').split('-').map(Number);
@@ -3534,6 +4009,14 @@ async function gerarTermoAbatimento(desconto) {
     [contenteditable]{background:transparent !important;border-bottom:1px dotted #999 !important}
     .govbr-box{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   }
+
+/* SDR Mobile Map Markers */
+.cto-marker{display:flex;flex-direction:column;align-items:center;gap:1px;font-family:'Segoe UI',system-ui,sans-serif;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));transition:transform .15s ease}
+.cto-marker .cto-box{display:flex;align-items:center;gap:3px;padding:2px 5px;border-radius:4px;border:1.5px solid rgba(255,255,255,.9);font-size:10px;font-weight:700;line-height:1.1;white-space:nowrap;color:#fff;min-width:28px;justify-content:center}
+.cto-marker .cto-box i{font-size:9px;opacity:.9}
+.cto-marker .cto-name{font-size:8px;font-weight:600;color:#1e293b;background:rgba(255,255,255,.92);padding:0 3px;border-radius:2px;max-width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3}
+.cto-marker .cto-bar{width:100%;height:3px;border-radius:1.5px;background:rgba(255,255,255,.4);overflow:hidden;margin-top:1px}
+.cto-marker .cto-bar-fill{height:100%;border-radius:1.5px}
 </style>
 </head>
 <body>
@@ -3684,13 +4167,18 @@ let _descontosLocal = {};
 async function renderAbatimento() {
   const uid = currentUser.id;
   try {
-    let snap = await db.ref('config/descontos').once('value');
-    let descontos = snap.val();
-    if (!descontos) {
-      snap = await db.ref('descontos').once('value');
-      descontos = snap.val() || {};
+    // Usa cache de sessão — evita read repetido de config/descontos
+    if (!_descontosVpCache) {
+      let snap = await db.ref('config/descontos').once('value');
+      let descontos = snap.val();
+      if (!descontos) {
+        snap = await db.ref('descontos').once('value');
+        descontos = snap.val() || {};
+      }
+      _descontosVpCache = descontos;
     }
-    _descontosLocal = descontos;
+    _descontosLocal = _descontosVpCache;
+    const descontos = _descontosVpCache;
 
     const pendentes = Object.entries(descontos)
       .filter(([key, d]) => d.uid === uid && (
@@ -3930,6 +4418,7 @@ async function _continuarParaApp(uid) {
   }
 
   // Tudo OK, mostra app
+  await carregarOsDoUsuario(uid);
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('app').style.display = 'flex';
   _aplicarVisibilidadeAbas(u);
@@ -3972,7 +4461,7 @@ function _aplicarVisibilidadeAbas(u) {
   // Fiscal (V0): Dashboard, Inventário, Veículo, Docs  (sem Ficha EPI)
   //   → NÃO vê: Lançar OS, Registros, Financeiro, Preços, Exportar, Ficha EPI
   // Técnico (V1/V2/V3): todas as abas
-  const FISCAL_PAGES = ['pg-dash','pg-inventario','pg-veiculo','pg-meus-docs'];
+  const FISCAL_PAGES = ['pg-dash','pg-inventario','pg-veiculo','pg-meus-docs','pg-mapa'];
   const isFiscal = nivel === 'V0';
 
   document.querySelectorAll('.nav-item').forEach(item => {
@@ -4037,6 +4526,9 @@ function navTo(pageId) {
   if (pageId === 'pg-ficha-epi') {
     renderFichaEpi();
   }
+  if (pageId === 'pg-mapa') {
+    _mobMapaInit();
+  }
   if (pageId === 'pg-veiculo') {
     renderVeiculoPage();
   }
@@ -4050,6 +4542,11 @@ function navTo(pageId) {
 // ════════════════════════════════════════════════════════
 // ── Alertas de vencimento estruturados (retorna objetos com tipo, texto, página destino) ──
 async function _obterAlertasVencimento(uid) {
+  // Cache com TTL de 10 minutos — evita 4-5 reads ao Firebase por render de dashboard
+  const _CACHE_TTL = 10 * 60 * 1000;
+  if (_alertasVencCache !== null && (Date.now() - _alertasVencCacheTs) < _CACHE_TTL) {
+    return _alertasVencCache;
+  }
   const alertas = [];
   // Documentos (CNH, ASO, LTCAT, PCMSO, PGR, Seguros, CRLV)
   try {
@@ -4157,6 +4654,9 @@ async function _obterAlertasVencimento(uid) {
 
   // Ordena: vencidos primeiro, depois vencendo
   alertas.sort((a, b) => (a.status === 'vencido' ? 0 : 1) - (b.status === 'vencido' ? 0 : 1));
+  // Salva no cache de sessão com timestamp
+  _alertasVencCache = alertas;
+  _alertasVencCacheTs = Date.now();
   return alertas;
 }
 
@@ -6906,18 +7406,42 @@ async function _enviarRelatorioAssinado() {
       }
     }
 
-    // 3. Converte para base64 e salva
-    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando relatorio assinado...';
-    const base64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    // 3. Faz upload para Firebase Storage (evita base64 no Realtime Database)
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando PDF para o servidor...';
+    let pdfStorageUrl = null;
+    try {
+      const storageFilename = codigo + '-' + Date.now() + '.pdf';
+      const storageRef = storage.ref('relatorios-assinados/' + storageFilename);
+      await storageRef.put(file, { contentType: 'application/pdf' });
+      pdfStorageUrl = await storageRef.getDownloadURL();
+    } catch(storageErr) {
+      console.warn('[relatorio] Falha no Storage, usando fallback base64:', storageErr);
+    }
 
-    await db.ref('relatorios/' + codigo).update({
-      status: 'assinado',
-      pdfAssinado: base64,
-      nomeArquivoAssinado: file.name,
-      recebidoEm: new Date().toISOString(),
-      assinaturaScore: score,
-      assinaturaDetalhes: { temSig, temByte, temCert }
-    });
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando relatorio assinado...';
+
+    if (pdfStorageUrl) {
+      // Caminho preferido: salva apenas a URL no DB (sem base64)
+      await db.ref('relatorios/' + codigo).update({
+        status: 'assinado',
+        pdfAssinadoUrl: pdfStorageUrl,
+        nomeArquivoAssinado: file.name,
+        recebidoEm: new Date().toISOString(),
+        assinaturaScore: score,
+        assinaturaDetalhes: { temSig, temByte, temCert }
+      });
+    } else {
+      // Fallback: base64 (Storage indisponível)
+      const base64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+      await db.ref('relatorios/' + codigo).update({
+        status: 'assinado',
+        pdfAssinado: base64,
+        nomeArquivoAssinado: file.name,
+        recebidoEm: new Date().toISOString(),
+        assinaturaScore: score,
+        assinaturaDetalhes: { temSig, temByte, temCert }
+      });
+    }
 
     statusDiv.innerHTML = '<div style="background:#d1fae5;color:#065f46;padding:12px;border-radius:10px;font-weight:700"><i class="fas fa-check-circle" style="margin-right:6px"></i>Relatorio assinado enviado com sucesso!<br><span style="font-weight:400;font-size:.8rem">Aguardando aprovacao do gestor.</span></div>';
     document.getElementById('rel-upload-file').style.display = 'none';
@@ -7497,6 +8021,183 @@ if ('serviceWorker' in navigator) {
 }
 
 initFirebase();
+// Mapa de Rede read-only para mobile
+var _mobMap = null;
+var _mobMapReady = false;
+
+var MOB_CABLE_RENDER = {
+  backbone:     { color:'#1d4ed8', weight:5 },
+  distribuicao: { color:'#16a34a', weight:4 },
+  drop:         { color:'#f59e0b', weight:3 },
+  projeto:      { color:'#06b6d4', weight:3 },
+  unknown:      { color:'#8b5cf6', weight:3 }
+};
+var MOB_FIBER_COLOR = {
+  6:   { color:'#2563eb', weight:3 },
+  12:  { color:'#16a34a', weight:4 },
+  24:  { color:'#eab308', weight:4 },
+  36:  { color:'#f97316', weight:5 },
+  48:  { color:'#ec4899', weight:5 },
+  72:  { color:'#dc2626', weight:5 },
+  144: { color:'#8b5cf6', weight:6 }
+};
+var MOB_CABLE_COLOR_MAP = [
+  { hex:['#00ff00','#008000','#00aa00','#00cc00','#006400','#22c55e'], cabo:'distribuicao', fibers:12 },
+  { hex:['#0000ff','#0000cc','#0000aa','#1e40af','#1d4ed8','#3b82f6'], cabo:'distribuicao', fibers:6  },
+  { hex:['#ffff00','#ffd700','#f0e000','#ffe000','#eab308'],           cabo:'distribuicao', fibers:24 },
+  { hex:['#ff8000','#ff7f00','#ff6600','#ff4500','#f97316'],           cabo:'backbone',     fibers:36 },
+  { hex:['#ff69b4','#ff1493','#ff00ff','#ee00cc','#ec4899'],           cabo:'backbone',     fibers:48 },
+  { hex:['#ff0000','#cc0000','#dd0000','#ee0000','#ef4444'],           cabo:'backbone',     fibers:72 },
+  { hex:['#9400d3','#8b008b','#7b00c3','#aa00dd','#a855f7'],           cabo:'backbone',     fibers:144},
+  { hex:['#00ffff','#00cccc','#00aaaa','#22d3ee','#06b6d4'],           cabo:'projeto',      fibers:0  }
+];
+var MOB_CTO_ICONS = {
+  '1/16':          { bg:'#000000', label:'1:16', icon:'fa-box' },
+  '1/8':           { bg:'#1e40af', label:'1:8',  icon:'fa-box' },
+  '1/4':           { bg:'#7c3aed', label:'1:4',  icon:'fa-box' },
+  'splitter':      { bg:'#0891b2', label:'SPL',  icon:'fa-code-branch' },
+  'nao_instalada': { bg:'#ef4444', label:'N/I',  icon:'fa-times-circle' },
+  'emenda':        { bg:'#f97316', label:'EMD',  icon:'fa-link' },
+  'ceo':           { bg:'#2563eb', label:'CEO',  icon:'fa-project-diagram' },
+  'rt':            { bg:'#10b981', label:'RT',   icon:'fa-exchange-alt' },
+  'default':       { bg:'#2563eb', label:'CTO',  icon:'fa-box' }
+};
+var MOB_CTO_COLOR_MAP = [
+  { hex:['#000000','#111111','#0a0a0a','#1a1a1a'], cto_type:'1/16' },
+  { hex:['#ffffff','#eeeeee','#f0f0f0','#dddddd'], cto_type:'1/8' },
+  { hex:['#8b4513','#6b3410','#7b3d1e','#a0522d'], cto_type:'1/4' },
+  { hex:['#ffff00','#ffd700','#f0e000','#eab308'], cto_type:'splitter' },
+  { hex:['#ff0000','#cc0000','#dd0000','#ef4444'], cto_type:'nao_instalada' },
+  { hex:['#ff8000','#ff7f00','#ff6600','#f97316'], cto_type:'emenda' },
+  { hex:['#0000ff','#0000cc','#1d4ed8','#2563eb','#3b82f6'], cto_type:'ceo' },
+  { hex:['#00ff00','#00cc00','#22c55e','#10b981','#16a34a'], cto_type:'rt' }
+];
+
+function _mobMatchColor(hexColor, colorMap) {
+  if (!hexColor || hexColor.length < 7) return null;
+  var r1=parseInt(hexColor.slice(1,3),16), g1=parseInt(hexColor.slice(3,5),16), b1=parseInt(hexColor.slice(5,7),16);
+  var best=null, bestDist=9999999;
+  colorMap.forEach(function(entry) {
+    entry.hex.forEach(function(ref) {
+      var r2=parseInt(ref.slice(1,3),16), g2=parseInt(ref.slice(3,5),16), b2=parseInt(ref.slice(5,7),16);
+      var d=(r1-r2)*(r1-r2)+(g1-g2)*(g1-g2)+(b1-b2)*(b1-b2);
+      if (d<bestDist) { bestDist=d; best=entry; }
+    });
+  });
+  return best;
+}
+
+function _mobCTOMarkerHTML(item, subtype) {
+  var ico = MOB_CTO_ICONS[subtype] || MOB_CTO_ICONS['default'];
+  var cap = item.total_ports || 0, used = item.used_ports || 0;
+  var pct = cap > 0 ? Math.round((used/cap)*100) : 0;
+  var bgColor = pct>=90 ? '#dc2626' : pct>=60 ? '#d97706' : ico.bg;
+  var barColor = pct>=90 ? '#dc2626' : pct>=60 ? '#d97706' : '#22c55e';
+  var rawName = item.name || item.code || '';
+  var shortName = rawName.replace(/^(CTO|CEO|RT|EMD|SPL)\s*/i,'').substring(0,18);
+  var h = '<div class="cto-marker">';
+  h += '<div class="cto-box" style="background:'+bgColor+'">';
+  h += '<i class="fas '+ico.icon+'"></i><span>'+ico.label+'</span>';
+  if (cap>0) h += '<span style="font-size:8px;opacity:.85;margin-left:1px">'+used+'/'+cap+'</span>';
+  h += '</div>';
+  if (shortName) h += '<div class="cto-name">'+shortName+'</div>';
+  if (cap>0) h += '<div class="cto-bar"><div class="cto-bar-fill" style="width:'+pct+'%;background:'+barColor+'"></div></div>';
+  h += '</div>';
+  return h;
+}
+
+function _mobMapaInit() {
+  if (_mobMapReady && _mobMap) {
+    setTimeout(function() { _mobMap.invalidateSize(); }, 150);
+    return;
+  }
+  if (typeof L === 'undefined') { setTimeout(_mobMapaInit, 500); return; }
+  _mobMapReady = true;
+  setTimeout(function() {
+    _mobMap = L.map('mob-sdr-map', {
+      center: [-23.1862, -46.8842], zoom: 13,
+      zoomControl: true, attributionControl: false, preferCanvas: false
+    });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(_mobMap);
+    var ctoCluster = (typeof L.markerClusterGroup === 'function')
+      ? L.markerClusterGroup({
+          maxClusterRadius: 40, spiderfyOnMaxZoom: true,
+          showCoverageOnHover: false, disableClusteringAtZoom: 17,
+          iconCreateFunction: function(cluster) {
+            var count = cluster.getChildCount();
+            var size = count < 10 ? 28 : count < 100 ? 34 : 40;
+            return L.divIcon({
+              html: '<div style="width:'+size+'px;height:'+size+'px;border-radius:50%;background:#1e40af;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)">'+count+'</div>',
+              className: '', iconSize: [size, size]
+            });
+          }
+        })
+      : L.layerGroup();
+    ctoCluster.addTo(_mobMap);
+    var renderer = L.canvas({ padding: 0.5 });
+    db.ref('sdr_comercial/default_tenant/infrastructure').once('value', function(snap) {
+      var infra = snap.val() || {};
+      Object.values(infra).forEach(function(item) {
+        if (!item) return;
+
+        // CABOS — mesma logica do admin: kmz_color -> fibra -> tipo
+        if (item.type === 'cable') {
+          var route = item.route || item.coords;
+          if (!Array.isArray(route) || route.length < 2) return;
+          var latlngs = route.map(function(p) { return Array.isArray(p) ? p : [p.lat, p.lng]; });
+          var ctype = item.cable_type || 'unknown';
+          var fibers = item.fiber_count || 0;
+          if (item.kmz_color) {
+            var mc = _mobMatchColor(item.kmz_color, MOB_CABLE_COLOR_MAP);
+            if (mc) { ctype = mc.cabo; if (!fibers) fibers = mc.fibers; }
+          }
+          var fiberSty = fibers && MOB_FIBER_COLOR[fibers];
+          var typeSty  = MOB_CABLE_RENDER[ctype] || MOB_CABLE_RENDER.unknown;
+          var color  = ctype === 'projeto' ? '#06b6d4' : (fiberSty ? fiberSty.color : typeSty.color);
+          var weight = fiberSty ? fiberSty.weight : typeSty.weight;
+          L.polyline(latlngs, { color: color, weight: weight, opacity: 0.9 }).addTo(_mobMap);
+          return;
+        }
+
+        if (!item.lat || !item.lng) return;
+
+        // POSTES
+        if (item.type === 'pole') {
+          L.circleMarker([item.lat, item.lng], {
+            radius: 3, color: '#d97706', fillColor: '#d97706',
+            fillOpacity: 0.8, weight: 1, renderer: renderer
+          }).addTo(_mobMap);
+          return;
+        }
+
+        // OLT
+        if (item.type === 'olt') {
+          L.divIcon({ className: '', html: '<div style="width:28px;height:28px;border-radius:6px;background:#dc2626;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"><i class="fas fa-server" style="font-size:12px"></i></div>', iconSize:[28,28], iconAnchor:[14,14] });
+          L.marker([item.lat, item.lng], { icon: L.divIcon({ className:'', html:'<div style="width:28px;height:28px;border-radius:6px;background:#dc2626;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #fff"><i class="fas fa-server" style="font-size:12px"></i></div>', iconSize:[28,28], iconAnchor:[14,14] }) })
+            .bindTooltip(item.name || 'OLT', { direction:'top' }).addTo(_mobMap);
+          return;
+        }
+
+        // CTOs, splitters, CEO, emenda, RT — mesma logica do admin
+        if (item.type === 'cto' || item.type === 'splitter') {
+          var subtype = item.cto_type || 'default';
+          if (!item.cto_type && item.kmz_color) {
+            var mt = _mobMatchColor(item.kmz_color, MOB_CTO_COLOR_MAP);
+            if (mt) subtype = mt.cto_type;
+          }
+          var markerHTML = _mobCTOMarkerHTML(item, subtype);
+          var ico2 = MOB_CTO_ICONS[subtype] || MOB_CTO_ICONS['default'];
+          var mk = L.marker([item.lat, item.lng], {
+            icon: L.divIcon({ className:'', html: markerHTML, iconSize:[50,32], iconAnchor:[25,32] })
+          });
+          mk.bindTooltip((item.name || 'CTO') + ' - ' + ico2.label, { direction:'top', offset:[0,-5] });
+          mk.addTo(ctoCluster);
+        }
+      });
+    });
+  }, 150);
+}
 </script>
+
 </body>
 </html>

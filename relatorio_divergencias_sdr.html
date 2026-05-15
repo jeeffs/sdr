@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>SDR — Relatório de Divergências de Preços</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#f0f2f5;color:#333;font-size:14px}
+.header{background:linear-gradient(135deg,#1a3c5e,#2563eb);color:#fff;padding:26px 36px}
+.header h1{font-size:22px;font-weight:700}
+.header p{font-size:12px;opacity:.8;margin-top:5px}
+.cards{display:flex;gap:14px;padding:22px 36px 0;flex-wrap:wrap}
+.card{background:#fff;border-radius:10px;padding:16px 20px;flex:1;min-width:160px;
+      box-shadow:0 2px 6px rgba(0,0,0,.08);border-left:4px solid #ccc}
+.card.blue{border-color:#2563eb}.card.red{border-color:#ef4444}
+.card.orange{border-color:#f59e0b}.card.green{border-color:#22c55e}
+.card .lbl{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.4px}
+.card .val{font-size:28px;font-weight:700;margin-top:3px}
+.card.blue .val{color:#2563eb}.card.red .val{color:#ef4444}
+.card.orange .val{color:#f59e0b}.card.green .val{color:#22c55e}
+.tabs{display:flex;gap:4px;padding:22px 36px 0}
+.tab{padding:9px 20px;border-radius:8px 8px 0 0;cursor:pointer;font-size:13px;font-weight:600;
+     background:#dde3ec;color:#555;border:2px solid transparent;border-bottom:none;transition:.15s}
+.tab.active{background:#fff;color:#1a3c5e;border-color:#c9d4e8}
+.tab:hover:not(.active){background:#cdd4e0}
+.content{background:#fff;margin:0 36px 36px;border-radius:0 12px 12px 12px;
+         box-shadow:0 2px 8px rgba(0,0,0,.08);border:2px solid #c9d4e8;min-height:200px}
+.panel{display:none;padding:24px}.panel.active{display:block}
+.legend{display:flex;gap:18px;padding:0 0 18px;flex-wrap:wrap}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:#555}
+.ldot{width:12px;height:12px;border-radius:3px}
+.mes-bloco{border:1px solid #e5e7eb;border-radius:8px;margin-bottom:8px;overflow:hidden}
+.mes-hdr{display:flex;align-items:center;gap:10px;padding:11px 14px;
+         background:#f8fafc;cursor:pointer;user-select:none;border-bottom:1px solid #e5e7eb}
+.mes-hdr:hover{background:#f1f5f9}
+.mes-hdr h3{font-size:14px;font-weight:700;color:#1a3c5e;flex:1}
+.mes-hdr .cnt{color:#94a3b8;font-size:11px}
+.badge{padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.b-ok{background:#dcfce7;color:#16a34a}
+.b-warn{background:#fef3c7;color:#d97706}
+.b-err{background:#fee2e2;color:#dc2626}
+.b-fix{background:#dbeafe;color:#1d4ed8}
+.mes-body{padding:14px;display:none}
+.arrow{font-size:11px;color:#94a3b8;transition:transform .2s;display:inline-block}
+.open .arrow{transform:rotate(90deg)}
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+th{background:#f1f5f9;padding:7px 10px;text-align:left;font-weight:600;
+   color:#475569;border-bottom:2px solid #e2e8f0;white-space:nowrap}
+td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafbff}
+.nb{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700}
+.nv1{background:#dbeafe;color:#1d4ed8}.nv2{background:#ede9fe;color:#7c3aed}
+.nv3{background:#d1fae5;color:#065f46}
+.tec{display:inline-block;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:3px;
+     padding:1px 5px;font-size:11px;margin:1px;color:#475569}
+.tec.hi{background:#fee2e2;border-color:#fca5a5;color:#b91c1c;font-weight:700}
+.tec.ok{background:#dcfce7;border-color:#86efac;color:#15803d}
+.tec.fix{background:#dbeafe;border-color:#93c5fd;color:#1d4ed8}
+.diff{color:#dc2626;font-weight:700}
+.ref{color:#16a34a;font-weight:600}
+.empty{color:#16a34a;font-size:12px;padding:6px 0;font-weight:600}
+.nota{background:#fffbeb;border:1px solid #fcd34d;border-radius:6px;padding:10px 14px;
+      font-size:12px;color:#92400e;margin-bottom:16px;line-height:1.6}
+.nota.green{background:#f0fdf4;border-color:#86efac;color:#166534}
+.nota.blue{background:#eff6ff;border-color:#93c5fd;color:#1e40af}
+.secao{font-size:11px;color:#888;font-weight:600;text-transform:uppercase;letter-spacing:.4px;
+       margin:14px 0 8px;padding-bottom:4px;border-bottom:1px solid #e5e7eb}
+.corr-box{background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px 14px;
+          font-size:12px;color:#166534;margin-top:8px;line-height:1.7}
+.banner-ok{background:linear-gradient(135deg,#dcfce7,#bbf7d0);border:2px solid #22c55e;
+           border-radius:10px;padding:18px 22px;margin-bottom:20px;display:flex;align-items:center;gap:14px}
+.banner-ok .icon{font-size:36px}
+.banner-ok .txt h2{font-size:16px;font-weight:700;color:#14532d}
+.banner-ok .txt p{font-size:12px;color:#166534;margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>📊 SDR — Relatório de Divergências de Preços</h1>
+  <p>Jan/2025 → Mai/2026 · 17 meses · 12.139 OS · Gerado 12/05/2026 · <b>✅ Atualizado após correções Firebase 12/05/2026</b></p>
+</div>
+
+<div class="cards">
+  <div class="card blue"><div class="lbl">Total OS analisadas</div><div class="val">12.139</div></div>
+  <div class="card blue"><div class="lbl">Meses analisados</div><div class="val">17</div></div>
+  <div class="card green"><div class="lbl">Divergências entre técnicos</div><div class="val">0</div></div>
+  <div class="card green"><div class="lbl">Meses 100% OK entre técnicos</div><div class="val">17</div></div>
+  <div class="card orange"><div class="lbl">Correções aplicadas no Firebase</div><div class="val">53</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="show('fb')">🔵 Comparação 1 — Entre Técnicos (Firebase)</div>
+  <div class="tab" onclick="show('tb')">🟡 Comparação 2 — vs Tabela Oficial (Navegador)</div>
+  <div class="tab" onclick="show('hist')">🟢 Histórico de Correções</div>
+</div>
+
+<div class="content">
+
+<!-- PAINEL FIREBASE -->
+<div class="panel active" id="panel-fb">
+
+  <div class="banner-ok">
+    <div class="icon">✅</div>
+    <div class="txt">
+      <h2>Firebase 100% consistente — Zero divergências em todos os 17 meses</h2>
+      <p>Verificado em 12/05/2026 · V1, V2 e V3 analisados · 12.139 OS · Técnicos: Ewerton, Caio, Loran, Lucas, Orlando, Juliano · Jefferson (V3 admin) com estrutura correta</p>
+    </div>
+  </div>
+
+  <div class="nota">
+    <b>Como ler:</b> Para cada mês, cada serviço deve ter o mesmo preço unitário em todos os técnicos do mesmo nível (V1/V2/V3).
+    Todos os meses estão agora com preços idênticos entre os técnicos.
+  </div>
+
+  <!-- JAN/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Janeiro/2025</h3><span class="cnt">731 OS</span>
+      <span class="badge b-ok">✅ OK — sem divergências</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos em Jan/2025</div></div>
+  </div>
+
+  <!-- FEV/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Fevereiro/2025</h3><span class="cnt">808 OS</span>
+      <span class="badge b-ok">✅ OK — corrigido</span></div>
+    <div class="mes-body">
+      <div class="corr-box">
+        <b>🔧 Correções aplicadas em Fev/2025:</b><br>
+        <b>Loran</b> — 42 OS corrigidas (planilha importada com tabela V2 aplicada onde deveria ser V1).
+        Serviços afetados: MANUTENÇÃO EM CTO, FUSÃO, INSERÇÃO DE CABO, INSTALAÇÃO DE SPLITER, RETIRA DE SPLITER, ACOMPANHAMENTO CPFL, EQUIPAGEM DE POSTE, MANUTENÇÃO EM CEO, REPUXE.<br>
+        <b>Jefferson</b> — 2 OS com valores V3 anômalos corrigidos (R$66,67 → R$40).<br>
+        <b>Orlando</b> — 1 OS com valor V3 anômalo corrigido (R$6,33 → R$11).<br>
+        Preços unitários atuais: FUSÃO R$8 · MANUTENÇÃO EM CTO R$34 · INSERÇÃO DE CABO R$7 · LANÇAMENTO DE CABO R$0,50 · REPUXE R$0,35
+      </div>
+    </div>
+  </div>
+
+  <!-- MAR/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Março/2025</h3><span class="cnt">703 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- ABR/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Abril/2025</h3><span class="cnt">679 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- MAI/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Maio/2025</h3><span class="cnt">700 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- JUN/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Junho/2025</h3><span class="cnt">766 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- JUL/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Julho/2025</h3><span class="cnt">843 OS</span>
+      <span class="badge b-ok">✅ OK — corrigido</span></div>
+    <div class="mes-body">
+      <div class="corr-box">
+        <b>🔧 Correção aplicada em Jul/2025:</b><br>
+        <b>Jefferson</b> — 1 OS com ACOMPANHAMENTO CPFL V3 anômalo corrigido (R$71,50 → R$49).
+      </div>
+    </div>
+  </div>
+
+  <!-- AGO/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Agosto/2025</h3><span class="cnt">794 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- SET/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Setembro/2025</h3><span class="cnt">897 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- OUT/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Outubro/2025</h3><span class="cnt">825 OS</span>
+      <span class="badge b-ok">✅ OK — corrigido</span></div>
+    <div class="mes-body">
+      <div class="corr-box">
+        <b>🔧 Correção aplicada em Out/2025:</b><br>
+        <b>Juliano</b> — 4 OS com FUSÃO V3 com valores mistos (R$11,50 / R$13,60) corrigidos para R$14.
+      </div>
+    </div>
+  </div>
+
+  <!-- NOV/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Novembro/2025</h3><span class="cnt">742 OS</span>
+      <span class="badge b-ok">✅ OK — corrigido</span></div>
+    <div class="mes-body">
+      <div class="corr-box">
+        <b>🔧 Correção aplicada em Nov/2025:</b><br>
+        <b>Lucas</b> — 1 OS com FUSÃO V3 anômalo corrigido (R$41,63 → R$14).
+      </div>
+    </div>
+  </div>
+
+  <!-- DEZ/2025 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Dezembro/2025</h3><span class="cnt">723 OS</span>
+      <span class="badge b-ok">✅ OK — corrigido</span></div>
+    <div class="mes-body">
+      <div class="corr-box">
+        <b>🔧 Correção aplicada em Dez/2025:</b><br>
+        <b>Caio</b> — 3 OS com FUSÃO V3 anômalo corrigido (R$19,31 → R$14).
+      </div>
+    </div>
+  </div>
+
+  <!-- JAN/2026 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Janeiro/2026</h3><span class="cnt">806 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- FEV/2026 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Fevereiro/2026</h3><span class="cnt">705 OS</span>
+      <span class="badge b-ok">✅ OK — corrigido</span></div>
+    <div class="mes-body">
+      <div class="corr-box">
+        <b>🔧 Correções aplicadas em Fev/2026:</b><br>
+        <b>Juliano</b> — OS com ACOMPANHAMENTO CPFL V3 (R$31,67 → R$49) e REPUXE V3 (R$0,93 → R$1,10) corrigidos.<br>
+        <b>Caio</b> — OS com FUSÃO V3 (R$13,46 → R$14) corrigido.
+      </div>
+    </div>
+  </div>
+
+  <!-- MAR/2026 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Março/2026</h3><span class="cnt">634 OS</span>
+      <span class="badge b-ok">✅ OK — verificado</span></div>
+    <div class="mes-body">
+      <div class="corr-box">
+        <b>ℹ️ Março/2026 — Juliano:</b><br>
+        Verificado em 12/05/2026: todos os preços V1 e V2 de Juliano estão alinhados com os demais técnicos.
+        Lembrete de regra: Juliano usa tabela V1 como todos os técnicos e recebe a diferença (V2−V1) como supervisor — isso está corretamente refletido nos campos valorV1 e valorV2 de cada OS.
+      </div>
+    </div>
+  </div>
+
+  <!-- ABR/2026 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Abril/2026</h3><span class="cnt">587 OS</span><span class="badge b-ok">✅ OK</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos</div></div>
+  </div>
+
+  <!-- MAI/2026 -->
+  <div class="mes-bloco">
+    <div class="mes-hdr" onclick="tog(this)"><span class="arrow">▶</span>
+      <h3>Maio/2026</h3><span class="cnt">196 OS</span><span class="badge b-ok">✅ OK — mês em andamento</span></div>
+    <div class="mes-body"><div class="empty">✅ Todos os técnicos com preços idênticos (mês em andamento)</div></div>
+  </div>
+
+</div><!-- fim panel-fb -->
+
+<!-- PAINEL TABELA OFICIAL -->
+<div class="panel" id="panel-tb">
+  <div class="nota">
+    <b>Como ler:</b> Mostra os serviços cujo preço histórico nas OS difere da tabela atual do sistema.
+    Isso é <b>esperado e correto</b> para meses anteriores ao reajuste — os preços históricos devem ser preservados.
+    Atenção apenas para os meses em que um ou mais técnicos usam preços diferentes dos demais no mesmo mês (nenhum caso pendente).
+  </div>
+  <div class="legend">
+    <div class="legend-item"><div class="ldot" style="background:#fef3c7;border:1px solid #d97706"></div>Preço histórico (anterior ao reajuste) — correto para o período</div>
+    <div class="legend-item"><div class="ldot" style="background:#dcfce7;border:1px solid #22c55e"></div>Preço consistente — sem erros pendentes</div>
+  </div>
+
+  <table style="margin-bottom:20px"><thead>
+    <tr><th>Serviço</th><th>Nível</th><th>Preço nas OS</th><th>Tabela Atual</th><th>Período com preço antigo</th></tr>
+  </thead><tbody>
+    <tr><td><b>LANÇAMENTO DE CABO</b></td><td><span class="nb nv1">V1</span></td>
+        <td class="diff">R$0,50/m</td><td class="ref">R$0,65/m</td><td>Jan/2025 → Set/2025 (reajuste em Out/2025)</td></tr>
+    <tr><td><b>REPUXE</b></td><td><span class="nb nv1">V1</span></td>
+        <td class="diff">R$0,35/m</td><td class="ref">R$0,40/m</td><td>Jan/2025 → Set/2025 (reajuste em Out/2025)</td></tr>
+    <tr><td><b>LANÇAMENTO DE CABO</b></td><td><span class="nb nv2">V2</span></td>
+        <td class="diff">R$0,65/m</td><td class="ref">R$0,80/m</td><td>Jan/2025 → Fev/2026</td></tr>
+    <tr><td><b>REPUXE</b></td><td><span class="nb nv2">V2</span></td>
+        <td class="diff">R$0,40/m</td><td class="ref">R$0,45/m</td><td>Jan/2025 → Fev/2026</td></tr>
+    <tr><td><b>LANÇAMENTO DE CABO</b></td><td><span class="nb nv3">V3</span></td>
+        <td class="diff">R$1,20/m</td><td class="ref">R$1,30/m</td><td>Jan/2025 → período de transição</td></tr>
+    <tr><td><b>FUSÃO</b></td><td><span class="nb nv3">V3</span></td>
+        <td class="diff">R$11 → R$14</td><td class="ref">R$14</td><td>R$11 em Jan–Jun/2025 · R$14 após Jul/2025</td></tr>
+    <tr><td><b>INSTALAÇÃO DE CEO/CTO</b></td><td><span class="nb nv3">V3</span></td>
+        <td class="diff">R$87</td><td class="ref">R$106</td><td>Jan/2025 → reajuste posterior</td></tr>
+    <tr><td><b>ACOMPANHAMENTO CPFL</b></td><td><span class="nb nv3">V3</span></td>
+        <td class="diff">R$40 → R$49</td><td class="ref">R$49</td><td>R$40 em Jan–Jun/2025 · R$49 após Jul/2025</td></tr>
+    <tr><td><b>KM RODADO</b></td><td><span class="nb nv3">V3</span></td>
+        <td class="diff">R$1,00</td><td class="ref">R$1,20</td><td>Jan–Jun/2025 · após reajuste R$1,20</td></tr>
+    <tr><td colspan="5" style="background:#f8fafc;color:#64748b;font-size:11px;padding:8px 10px">
+      ℹ️ Os demais serviços seguem o mesmo padrão: preço histórico correto para o período, reajuste aplicado conforme tabela. Total de 38 combinações serviço/nível com preço histórico identificadas.</td></tr>
+  </tbody></table>
+
+  <div class="nota green">
+    <b>✅ Conclusão Comparação 2:</b> Não há erros de preço vs tabela nos meses corretos.
+    Todos os preços históricos são <b>consistentes entre os técnicos para o mesmo período</b>.
+    Os reajustes de tabela foram aplicados de forma uniforme: LANÇAMENTO DE CABO e REPUXE tiveram reajuste V1 em Out/2025;
+    FUSÃO, CEO, CTO, ACOMPANHAMENTO CPFL e outros tiveram reajuste V3 em Jul/2025.
+  </div>
+</div><!-- fim panel-tb -->
+
+<!-- PAINEL HISTÓRICO DE CORREÇÕES -->
+<div class="panel" id="panel-hist">
+  <div class="nota blue">
+    <b>ℹ️ Correções realizadas em 12/05/2026 via Firebase (autenticação anônima)</b><br>
+    53 registros corrigidos diretamente na base de dados. Cada correção atualizou os campos <code>servicos</code> e <code>total</code> de cada OS.
+    Verificação pós-correção confirmou consistência total (V1+V2+V3) em todos os 17 meses.
+  </div>
+
+  <table><thead>
+    <tr><th>Técnico</th><th>Período</th><th>OS Corrigidas</th><th>Problema</th><th>Correção</th></tr>
+  </thead><tbody>
+    <tr>
+      <td><b>Loran</b></td>
+      <td>Fev/2025</td>
+      <td style="text-align:center"><b>42</b></td>
+      <td>Planilha importada com tabela V2 aplicada onde deveria ser V1. Preços V1 estavam ~4–5% acima do correto em 9+ tipos de serviço.</td>
+      <td>valorV1 recalculado com tabela V1 correta. Total de cada OS atualizado.</td>
+    </tr>
+    <tr>
+      <td><b>Jefferson</b></td>
+      <td>Fev/2025 · Jul/2025</td>
+      <td style="text-align:center"><b>3</b></td>
+      <td>OS isoladas com valor V3 anômalo: R$66,67 (ACOMPANHAMENTO CPFL) e R$71,50 — frações não inteiras indicando erro de qtd na importação.</td>
+      <td>valorV3 corrigido para R$40 e R$49 respectivamente.</td>
+    </tr>
+    <tr>
+      <td><b>Orlando</b></td>
+      <td>Fev/2025</td>
+      <td style="text-align:center"><b>1</b></td>
+      <td>OS isolada com FUSÃO V3 = R$6,33 (deveria ser R$11).</td>
+      <td>valorV3 corrigido para R$11.</td>
+    </tr>
+    <tr>
+      <td><b>Juliano</b></td>
+      <td>Out/2025 · Fev/2026</td>
+      <td style="text-align:center"><b>4</b></td>
+      <td>FUSÃO V3 com valores mistos (R$11,50 / R$13,60) e ACOMPANHAMENTO CPFL/REPUXE V3 com frações (R$31,67 · R$0,93).</td>
+      <td>Valores corrigidos para R$14, R$49 e R$1,10 respectivamente.</td>
+    </tr>
+    <tr>
+      <td><b>Lucas</b></td>
+      <td>Nov/2025</td>
+      <td style="text-align:center"><b>1</b></td>
+      <td>FUSÃO V3 = R$41,63 — valor claramente errado.</td>
+      <td>valorV3 corrigido para R$14.</td>
+    </tr>
+    <tr>
+      <td><b>Caio</b></td>
+      <td>Dez/2025 · Fev/2026</td>
+      <td style="text-align:center"><b>3</b></td>
+      <td>FUSÃO V3 = R$19,31 (Dez/2025) e R$13,46 (Fev/2026) — frações indicando erro de qtd.</td>
+      <td>valorV3 corrigido para R$14 em ambos os casos.</td>
+    </tr>
+    <tr style="background:#f0fdf4;font-weight:700">
+      <td colspan="2">TOTAL</td>
+      <td style="text-align:center;color:#16a34a">53</td>
+      <td colspan="2" style="color:#16a34a">Todas as correções confirmadas · Firebase 100% consistente em 12/05/2026</td>
+    </tr>
+  </tbody></table>
+
+  <div class="nota green" style="margin-top:16px">
+    <b>📋 Regras de negócio confirmadas:</b><br>
+    • <b>V1</b> = valor pago ao prestador (Ewerton, Caio, Loran, Lucas, Orlando, Juliano)<br>
+    • <b>V2</b> = valor do supervisor (Juliano recebe V2−V1 como diferencial de supervisão)<br>
+    • <b>V3</b> = valor de faturamento da JA Logística (Jefferson — nível administrativo com estrutura própria)<br>
+    • Preços históricos são imutáveis — cada mês tem tabela própria, uniforme entre todos os técnicos<br>
+    • Importados: valorV1/V2/V3 = TOTAL da linha (unit = valor ÷ qtd) · Lançados: valor = unitário (V1)
+  </div>
+</div><!-- fim panel-hist -->
+
+</div><!-- content -->
+
+<script>
+function show(name){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('panel-'+name).classList.add('active');
+  const idx = {'fb':0,'tb':1,'hist':2}[name];
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+}
+function tog(hdr){
+  const bloco = hdr.parentElement;
+  bloco.classList.toggle('open');
+  hdr.nextElementSibling.style.display = bloco.classList.contains('open') ? 'block' : 'none';
+}
+</script>
+</body>
+</html>

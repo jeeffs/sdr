@@ -16,6 +16,21 @@ export default defineConfig({
     outDir: 'public',
     // CRÍTICO: não apagar os arquivos existentes em public/
     emptyOutDir: false,
+    // Remove console.log e console.warn do bundle em produção
+    // console.error é mantido (erros reais continuam visíveis)
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        pure_funcs: ['console.log', 'console.warn'],
+        drop_debugger: true,
+        passes: 1
+      },
+      mangle: false,       // mantém nomes legíveis
+      format: {
+        beautify: true,    // mantém código formatado
+        comments: 'all'    // mantém comentários
+      }
+    },
     rollupOptions: {
       output: {
         // Bibliotecas CDN já carregadas no HTML — não incluir no bundle

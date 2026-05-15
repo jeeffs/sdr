@@ -413,42 +413,72 @@ async function exportarMesNivel(nivel) {
 }
 
 async function enviarRelatorioWhatsApp(uid, mesAno) {
-  // Gera o relatorio com paraWhatsApp=true (salva no Firebase + QR Code)
-  await exportarCardTecnico(uid, mesAno, true);
-
-  // Prepara mensagem WhatsApp com resumo + link de upload
+  // Gera e envia WhatsApp SEM abrir janela de relatorio
+  // Calcula tudo inline (evita popup do exportarCardTecnico)
   const u = usersCache[uid] || {};
   const nome = u.name || uid;
   const MESES_PT = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const [y, m] = mesAno.split('-').map(Number);
   const mesLabel = `${MESES_PT[m-1]} ${y}`;
-  const pm = precosV1map;
-
-  const recs = allRecords.filter(r =>
-    r.userId === uid && (r.data||'').startsWith(mesAno) &&
-    !(r.importado && (r.nivelImp||'V1')==='V3')
-  );
-  const totalOS = recs.length;
-  const totalValor = recs.reduce((s,r) => s + (r.servicos||[]).reduce((ss,sv) => ss + (Number(sv.qtd)||0) * (pm[sv.tipo]||Number(sv.valor)||0), 0), 0);
   const fmtV = v => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
 
-  // Busca o codigo do relatorio salvo (o mais recente deste uid+mesAno)
-  let codigoRel = '';
-  try {
-    const snap = await db.ref('relatorios').orderByChild('uid').equalTo(uid).limitToLast(5).once('value');
-    const rels = snap.val() || {};
-    const match = Object.values(rels).filter(r => r.mesAno === mesAno && r.status === 'enviado').sort((a,b) => (b.geradoEm||'').localeCompare(a.geradoEm||''))[0];
-    if (match) codigoRel = match.codigo;
-  } catch(_e) { console.warn('[enviarRelatorioWhatsApp]', _e.message); }
+  // ── Detecta fiscal (V0) e calcula totais ──────────────────────────────────
+  const _isFiscalUser = _isFiscal(u);
 
-  const linkUpload = codigoRel ? `https://solucaoderua.web.app?relatorio=${codigoRel}` : 'https://solucaoderua.web.app';
+  // Registros do mes (apenas para tecnicos; fiscal nao tem OS)
+  const recs = _isFiscalUser ? [] : allRecords.filter(r =>
+    r.userId === uid &&
+    (r.data||'').startsWith(mesAno) &&
+    !(r.importado && (r.nivelImp||'V1')==='V3')
+  );
+
+  let totalBruto;
+  if (_isFiscalUser) {
+    totalBruto = window.SALARIO_V0 || 3000;
+  } else {
+    totalBruto = recs.reduce((s,r) => s + (r.total || 0), 0);
+  }
+
+  // Descontos ativos no mes (igual logica de exportarCardTecnico)
+  const descontosMes = Object.values(descontosCache).filter(d => {
+    if (d.uid !== uid) return false;
+    const tot = Number(d.parcelas)||1;
+    const [yi,mi] = (d.parcelaInicio||d.mesAno||'').split('-').map(Number);
+    if (!yi) return false;
+    const [ya,ma] = mesAno.split('-').map(Number);
+    const diff = (ya-yi)*12+(ma-mi)+1;
+    return diff >= 1 && diff <= tot;
+  });
+  const totalDesc = descontosMes.reduce((s,d) => s + +(d.valor/((Number(d.parcelas)||1))).toFixed(2), 0);
+  const totalLiq  = totalBruto - totalDesc;
+
+  // ── Gera codigo do relatorio e salva no Firebase ──────────────────────────
+  const _rndHex = () => Math.random().toString(16).slice(2, 6).toUpperCase();
+  const codigoRel = `RSP-${mesAno}-${(nome||'X').slice(0,3).toUpperCase()}-${_rndHex()}`;
+  const linkUpload = `https://solucaoderua.web.app?relatorio=${codigoRel}`;
+  try {
+    await _dbSet('relatorios/' + codigoRel, {
+      codigo: codigoRel, uid, nomePrestador: nome, mesAno,
+      valorTotal: totalBruto, totalDescontos: totalDesc, valorLiquido: totalLiq,
+      totalOS: recs.length,
+      geradoEm: new Date().toISOString(),
+      geradoPor: currentUser?.id||'master', geradoPorNome: currentUser?.name||'Master',
+      status: 'enviado', linkUpload
+    });
+  } catch(e) { console.warn('[enviarRelatorioWhatsApp] Firebase:', e.message); }
+
+  // ── Monta mensagem WhatsApp ───────────────────────────────────────────────
+  const titulo = _isFiscalUser ? 'Honorarios de Gestao' : 'Relatorio de Servicos Prestados';
+  const linhaValor = _isFiscalUser
+    ? `Honorarios brutos: ${fmtV(totalBruto)}`
+    : `Total bruto: ${fmtV(totalBruto)}\nOS executadas: ${recs.length}`;
+  const linhaLiq = totalDesc > 0 ? `\nDescontos: -${fmtV(totalDesc)}\nValor liquido: ${fmtV(totalLiq)}` : '';
+
+  const msg = `*${titulo}*\n\nPrestador: ${nome}\nPeriodo: ${mesLabel}\n${linhaValor}${linhaLiq}\n\n*Instrucoes:*\n1. Confira o PDF anexado\n2. Assine via assinador.iti.br (Gov.br Prata/Ouro)\n3. Clique no link abaixo para enviar o PDF assinado:\n${linkUpload}\nCodigo: ${codigoRel}\n\nSolucao de Rua`;
 
   const tel = _getTelefone(uid);
-  const msg = `*Relatorio de Servicos Prestados*\n\nPrestador: ${nome}\nPeriodo: ${mesLabel}\nTotal: ${fmtV(totalValor)}\nOS executadas: ${totalOS}\n\n*Instrucoes:*\n1. Confira o PDF anexado\n2. Assine via assinador.iti.br (Gov.br Prata/Ouro)\n3. Clique no link abaixo para enviar o PDF assinado:\n${linkUpload}\n${codigoRel ? '\nCodigo: ' + codigoRel : ''}\n\nSolucao de Rua`;
-
-  setTimeout(() => {
-    window.open(tel ? _whatsUrl(tel, msg) : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-  }, 2000);
+  // window.open direto — sem setTimeout para evitar bloqueio pelo navegador
+  window.open(tel ? _whatsUrl(tel, msg) : `https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 function renderBotoesTecnicos() {

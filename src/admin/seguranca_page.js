@@ -267,15 +267,25 @@ async function renderSegurancaPage() {
     const corBorda = tecVencido > 0 ? '#dc2626' : tecVencendo > 0 ? '#d97706' : '#059669';
     const invStatus = inv ? `<span style="color:#059669"><i class="fas fa-check"></i> Feito em ${new Date(inv.data).toLocaleDateString('pt-BR')}</span>` : `<span style="color:#d97706"><i class="fas fa-clock"></i> Pendente</span>`;
 
-    // Pendências de inventário
+    // Pendências de inventário (arrastadas vs novas)
     let pendInvHtml = '';
     if (inv && inv.pendencias && Object.keys(inv.pendencias).length > 0) {
+      const mesAtualSeg = _segMesAtual();
       const pends = Object.entries(inv.pendencias).filter(([,p]) => !p.resolvido);
       if (pends.length > 0) {
-        pendInvHtml = `<div style="margin-top:8px;padding:8px 10px;background:#fee2e2;border-radius:8px;font-size:.78rem;color:#991b1b">
-          <strong><i class="fas fa-exclamation-circle"></i> ${pends.length} pendência(s) de inventário:</strong>
-          ${pends.map(([item,p]) => `<div style="margin-top:3px">• ${item}: ${p.obs||'sem observação'}</div>`).join('')}
-        </div>`;
+        const arrastadas = pends.filter(([,p]) => p.criadoEm && p.criadoEm.substring(0,7) !== mesAtualSeg);
+        const novas = pends.filter(([,p]) => !p.criadoEm || p.criadoEm.substring(0,7) === mesAtualSeg);
+        let pendRows = '';
+        if (arrastadas.length > 0) {
+          const rowsArr = arrastadas.map(([item,p]) => '<div style="margin-top:2px;margin-left:10px"><i class="fas fa-exclamation-triangle"></i> <strong>' + item + '</strong> (desde ' + (p.criadoEm ? new Date(p.criadoEm).toLocaleDateString('pt-BR') : '') + ')' + (p.obs ? ': '+p.obs : '') + '</div>').join('');
+          pendRows += '<div style="margin-bottom:4px"><strong style="color:#7f1d1d"><i class="fas fa-lock"></i> BLOQUEANTE — arrastada(s) de mês anterior:</strong>' + rowsArr + '</div>';
+        }
+        if (novas.length > 0) {
+          const rowsNov = novas.map(([item,p]) => '<div style="margin-top:2px;margin-left:10px">• <strong>' + item + '</strong>' + (p.criadoEm ? ' (desde ' + new Date(p.criadoEm).toLocaleDateString('pt-BR') + ')' : '') + (p.obs ? ': '+p.obs : '') + '</div>').join('');
+          pendRows += '<div><strong style="color:#92400e"><i class="fas fa-exclamation-circle"></i> Nova(s) — prazo em aberto:</strong>' + rowsNov + '</div>';
+        }
+        const bgColor = arrastadas.length > 0 ? '#fee2e2' : '#fef3c7';
+        pendInvHtml = '<div style="margin-top:8px;padding:8px 10px;background:' + bgColor + ';border-radius:8px;font-size:.78rem;color:#1e293b">' + pendRows + '</div>';
       }
     }
 
@@ -848,8 +858,38 @@ async function segAbrirInventario(uid, mesOverride) {
     </div>`;
   });
 
+  // ── Pendências legadas: itens pendentes com nomes antigos não presentes no template atual ──
+  const todosItensTemplate = new Set([...SEG_VEICULO_ITENS, ...SEG_FERRAMENTAL_ITENS, ...SEG_EPI_ITENS]);
+  const pendsLegadas = inv?.pendencias
+    ? Object.entries(inv.pendencias).filter(([item, p]) => !p.resolvido && !todosItensTemplate.has(item))
+    : [];
+
+  if (pendsLegadas.length > 0) {
+    html += `<div style="margin-top:18px;padding:12px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:10px">
+      <div style="font-weight:800;font-size:.88rem;color:#92400e;margin-bottom:8px">
+        <i class="fas fa-exclamation-triangle" style="margin-right:6px"></i>Pendências legadas — itens renomeados
+      </div>
+      <div style="font-size:.78rem;color:#78350f;margin-bottom:10px">
+        Estes itens estavam pendentes mas os nomes foram alterados no template. Marque para resolver.
+      </div>`;
+    pendsLegadas.forEach(([item, p]) => {
+      const desde = p.criadoEm ? new Date(p.criadoEm).toLocaleDateString('pt-BR') : '';
+      const obs = p.obs || '';
+      // Hidden input carrega dados do item legado — evita chamada extra ao Firebase no save
+      const jsonSafe = encodeURIComponent(JSON.stringify(p));
+      html += `<input type="hidden" class="seg-inv-legacy-data" data-item="${item}" value="${jsonSafe}">`;
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:.84rem">
+        <label style="display:flex;align-items:center;gap:6px;flex:1;cursor:pointer">
+          <input type="checkbox" class="seg-inv-legacy-resolve" data-item="${item}" style="width:18px;height:18px;accent-color:#059669">
+          <span><strong>${item}</strong>${desde ? ` <span style="color:#92400e;font-size:.75rem">(desde ${desde})</span>` : ''}${obs ? ` — ${obs}` : ''}</span>
+        </label>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
   html += `<div style="margin-top:20px;display:flex;gap:10px">
-    <button class="btn btn-success" onclick="segSalvarInventario('${uid}')"><i class="fas fa-save"></i> Salvar Inventário</button>
+    <button class="btn btn-success" onclick="segSalvarInventario('${uid}','${mes}')"><i class="fas fa-save"></i> Salvar Inventário</button>
     <button class="btn" onclick="document.getElementById('modal-seg-inv').style.display='none'" style="background:#e2e8f0"><i class="fas fa-times"></i> Fechar</button>
   </div>`;
 
@@ -857,8 +897,8 @@ async function segAbrirInventario(uid, mesOverride) {
   document.getElementById('modal-seg-inv').style.display = 'block';
 }
 
-async function segSalvarInventario(uid) {
-  const mes = _segMesAtual();
+async function segSalvarInventario(uid, mesOverride) {
+  const mes = mesOverride || _segMesAtual();
   const data = {data: new Date().toISOString(), fiscalId: currentUser.id, fiscalNome: currentUser.name};
 
   // Coleta dados
@@ -889,19 +929,58 @@ async function segSalvarInventario(uid) {
   data.veiculo = veiculo;
   data.ferramental = ferramental;
   data.epiEpc = epiEpc;
+
+  // ── Preserva criadoEm original para pendências que já existiam em meses anteriores ──
+  // Mesma pendência não reinicia o relógio de 30 dias ao ser reencontrada no mês seguinte.
+  if (Object.keys(pendencias).length > 0) {
+    const hoje2 = new Date();
+    for (let i = 1; i <= 3; i++) {
+      const d = new Date(hoje2.getFullYear(), hoje2.getMonth() - i, 1);
+      const prevKey = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      try {
+        const prevSnap = await db.ref(`seguranca/${uid}/inventarios/${prevKey}/pendencias`).once('value');
+        const prevPends = prevSnap.val() || {};
+        for (const [item] of Object.entries(pendencias)) {
+          if (prevPends[item] && !prevPends[item].resolvido && prevPends[item].criadoEm) {
+            // Mesma pendência já existia e não foi resolvida — mantém criadoEm original
+            pendencias[item].criadoEm = prevPends[item].criadoEm;
+          }
+        }
+      } catch(_) {}
+    }
+  }
+
+  // ── Processa itens legados via hidden inputs (sem chamada extra ao Firebase) ──
+  document.querySelectorAll('.seg-inv-legacy-data').forEach(input => {
+    const item = input.dataset.item;
+    try {
+      const p = JSON.parse(decodeURIComponent(input.value));
+      const legacyChk = document.querySelector(`.seg-inv-legacy-resolve[data-item="${item}"]`);
+      if (legacyChk?.checked) {
+        pendencias[item] = { ...p, resolvido: true, resolvidoEm: new Date().toISOString(), resolvidoPor: currentUser.name || currentUser.id };
+      } else {
+        pendencias[item] = p; // mantém como estava
+      }
+    } catch(_) { console.warn('[segSalvarInventario] legacy parse error:', item); }
+  });
+
   data.pendencias = pendencias;
 
   try {
     await db.ref(`seguranca/${uid}/inventarios/${mes}`).set(data);
-    document.getElementById('modal-seg-inv').style.display = 'none';
-    toast(`Inventário ${mes.split('-').reverse().join('/')} salvo!`, 'success');
-    renderSegurancaPage();
-    // Atualiza página de inventário se estiver visível
-    if (document.getElementById('page-inventario')?.classList.contains('active')) renderInventarioFiscal();
   } catch(e) {
-    console.error('[segSalvarInventario]', e);
+    console.error('[segSalvarInventario] Erro no set:', e);
     toast('Erro ao salvar inventário.', 'error');
+    return;
   }
+
+  // ── Pós-save: fora do try-catch para erros de render não obscurecerem o sucesso ──
+  document.getElementById('modal-seg-inv').style.display = 'none';
+  toast(`Inventário ${mes.split('-').reverse().join('/')} salvo!`, 'success');
+  try { renderSegurancaPage(); } catch(e) { console.error('[segSalvarInventario] renderSegurancaPage:', e); }
+  try {
+    if (document.getElementById('page-inventario')?.classList.contains('active')) renderInventarioFiscal();
+  } catch(e) { console.error('[segSalvarInventario] renderInventarioFiscal:', e); }
 }
 
 async function segLiberarBloqueio(uid) {
@@ -1027,19 +1106,31 @@ async function verificarBloqueioSeguranca(uid) {
     if (vencidos.length > 0) return {bloqueado:true, motivo:`Documento(s) vencido(s): ${vencidos.join(', ')}. Envie documentos atualizados.`};
   } catch(_){}
 
-  // 3. Verifica pendências de inventário (dia > 2 do mês, pendência do mês anterior sem resolução)
+  // 3. Verifica pendências de inventário — bloqueia quando o fiscal faz o inventário
+  //    do mês atual com item que já estava pendente em mês anterior (criadoEm < mês atual).
+  //    Enquanto o fiscal não fizer o inventário deste mês, não há bloqueio.
   const hoje = new Date();
-  if (hoje.getDate() > 2) {
-    const mesAnt = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
-    const mesAntKey = `${mesAnt.getFullYear()}-${String(mesAnt.getMonth()+1).padStart(2,'0')}`;
+  {
+    const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
     try {
-      const snapInv = await db.ref(`seguranca/${uid}/inventarios/${mesAntKey}/pendencias`).once('value');
-      const pends = snapInv.val() || {};
-      const naoResolvidas = Object.entries(pends).filter(([,p]) => !p.resolvido);
-      if (naoResolvidas.length > 0) {
-        return {bloqueado:true, motivo:`Pendência(s) de inventário ${mesAntKey.split('-').reverse().join('/')} não resolvida(s): ${naoResolvidas.map(([item])=>item).join(', ')}. Procure o fiscal.`};
+      const snapInv = await db.ref(`seguranca/${uid}/inventarios/${mesAtual}`).once('value');
+      const invAtual = snapInv.val();
+      if (invAtual && invAtual.pendencias) {
+        const arrastados = Object.entries(invAtual.pendencias).filter(([, p]) =>
+          !p.resolvido && p.criadoEm && p.criadoEm.substring(0, 7) !== mesAtual
+        );
+        if (arrastados.length > 0) {
+          const itensFmt = arrastados.map(([item, p]) => {
+            const dtFmt = new Date(p.criadoEm).toLocaleDateString('pt-BR');
+            return `${item} (desde ${dtFmt})`;
+          }).join(', ');
+          return { bloqueado: true, motivo: `Pendência(s) de inventário não resolvida(s): ${itensFmt}. Procure o fiscal para regularizar.` };
+        }
       }
-    } catch(_){}
+    } catch(e) {
+      console.error('[SDR] Erro ao verificar inventário pendente:', uid, e.message);
+      try { db.ref('config/erros_sistema').push({ tipo: 'inventario_check', uid, erro: e.message, ts: new Date().toISOString() }); } catch(_) {}
+    }
   }
 
   // 4. Verifica Ficha de EPI (dia > 2 do mês, EPI não preenchido, respeitando dispensas)
@@ -1061,10 +1152,17 @@ async function verificarBloqueioSeguranca(uid) {
           }
         });
         if (itensFaltantes.length > 0) {
-          const motivo = itensRejeitados.length > 0
-            ? `Ficha de EPI: ${itensRejeitados.join(', ')} rejeitado(s) pela Gestão. Corrija e reenvie.`
-            : `Ficha de EPI incompleta: ${itensFaltantes.join(', ')}. Preencha os itens obrigatórios.`;
-          return {bloqueado:true, motivo};
+          if (itensRejeitados.length > 0) {
+            return {bloqueado:true, motivo:`Ficha de EPI: ${itensRejeitados.join(', ')} rejeitado(s) pela Gestão. Corrija e reenvie.`};
+          }
+          // Aviso até 15/05/2026, bloqueia a partir de 16/05/2026
+          const EPI_INICIO = new Date('2026-05-16T00:00:00');
+          if (hoje >= EPI_INICIO) {
+            return {bloqueado:true, motivo:`Ficha de EPI incompleta: ${itensFaltantes.join(', ')}. Preencha os itens obrigatórios.`};
+          }
+          const diasRestantes = Math.ceil((EPI_INICIO - hoje) / 86400000);
+          const totalObrig = Object.keys(templateItems).filter(id => !dispensas[id]).length;
+          return {bloqueado:false, avisoEpi:{tipo:'prazo', diasRestantes, dataLimite:'16/05/2026', preenchidos: totalObrig - itensFaltantes.length, total: totalObrig}};
         }
       }
     } catch(_){}

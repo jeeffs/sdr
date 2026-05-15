@@ -430,25 +430,43 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
 <!-- ═══ PRIMEIRO ACESSO - CRIAR SENHA ═══ -->
 <!-- Tela: Upload de Relatorio Assinado (via link ?relatorio=CODIGO) -->
 <div class="screen" id="scr-upload-relatorio">
-  <div style="flex:1;overflow-y:auto;width:100%;max-width:500px;padding:24px 18px;display:flex;flex-direction:column;justify-content:center">
-    <div style="text-align:center;margin-bottom:20px">
-      <i class="fas fa-file-signature" style="font-size:2.5rem;color:#25d366;margin-bottom:10px"></i>
-      <h1 style="color:#fff;font-size:1.2rem;margin-bottom:6px">Enviar Relatorio Assinado</h1>
+  <div style="flex:1;overflow-y:auto;width:100%;max-width:600px;padding:16px 14px">
+
+    <!-- Cabecalho -->
+    <div style="text-align:center;margin-bottom:14px">
+      <i class="fas fa-file-signature" style="font-size:2rem;color:#25d366;margin-bottom:8px"></i>
+      <h1 style="color:#fff;font-size:1.1rem;margin-bottom:4px">Relatorio de Servicos</h1>
       <div id="rel-upload-info" style="color:#94a3b8;font-size:.82rem"></div>
     </div>
-    <div class="login-box" style="padding:20px">
+
+    <!-- Iframe com o relatorio (aparece quando htmlContent existe) -->
+    <div id="rel-html-wrap" style="display:none;margin-bottom:14px;border-radius:10px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.3)">
+      <div style="background:#1f4e79;color:#fff;padding:8px 14px;font-size:.78rem;font-weight:700;display:flex;justify-content:space-between;align-items:center">
+        <span><i class="fas fa-file-alt" style="margin-right:6px"></i>Seu Relatorio</span>
+        <button id="rel-btn-imprimir" style="background:#25d366;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:.75rem;font-weight:700;cursor:pointer">
+          <i class="fas fa-print" style="margin-right:4px"></i>Salvar como PDF
+        </button>
+      </div>
+      <iframe id="rel-html-frame" style="width:100%;height:520px;border:none;background:#fff" sandbox="allow-same-origin allow-popups"></iframe>
+    </div>
+
+    <!-- Box de upload -->
+    <div class="login-box" style="padding:18px">
       <div id="rel-upload-err" style="color:#dc2626;font-size:.82rem;margin-bottom:10px;display:none"></div>
-      <div style="background:#dbeafe;border-radius:10px;padding:12px;margin-bottom:14px;font-size:.8rem;color:#1e40af">
+
+      <div style="background:#dbeafe;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:.78rem;color:#1e40af">
         <i class="fas fa-info-circle" style="margin-right:4px"></i>
         <strong>Instrucoes:</strong><br>
-        1. Assine o PDF via <a href="https://assinador.iti.br" target="_blank" style="color:#1d4ed8;font-weight:700">assinador.iti.br</a> (Gov.br Prata/Ouro)<br>
-        2. Selecione o PDF assinado abaixo<br>
-        3. Clique "Enviar"
+        1. Visualize o relatorio acima e salve como PDF<br>
+        2. Assine o PDF via <a href="https://assinador.iti.br" target="_blank" style="color:#1d4ed8;font-weight:700">assinador.iti.br</a> (Gov.br Prata/Ouro)<br>
+        3. Selecione o PDF assinado abaixo e envie
       </div>
+
       <div id="rel-upload-codigo" style="background:#f0f4ff;border-radius:8px;padding:8px 12px;margin-bottom:14px;text-align:center">
         <div style="font-size:.68rem;color:#64748b">CODIGO DO RELATORIO</div>
         <div id="rel-codigo-display" style="font-family:monospace;font-size:1rem;font-weight:800;color:#1f4e79;letter-spacing:.05em"></div>
       </div>
+
       <label style="font-size:.82rem;font-weight:600;margin-bottom:6px;display:block">PDF Assinado via Gov.br *</label>
       <input type="file" id="rel-upload-file" accept=".pdf" style="width:100%;margin-bottom:14px;font-size:.85rem">
       <button onclick="_enviarRelatorioAssinado()" style="width:100%;background:#25d366;color:#fff;border:none;border-radius:10px;padding:14px;font-size:.92rem;font-weight:700;cursor:pointer">
@@ -933,6 +951,7 @@ select.form-input{appearance:none;background-image:url("data:image/svg+xml,%3Csv
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
 
 <!-- SheetJS for CSV / ExcelJS for XLSX export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1063,6 +1082,7 @@ let matCount = 0;
 // STATE
 // ════════════════════════════════════════════════════════
 let db = null;
+let storage = null;
 let currentUser = null;
 let usersCache = {};
 let allRecords = [];
@@ -1074,6 +1094,12 @@ let descontosCache = {};
 let profilesCidades = { FILIAL: [...FILIAL_CIDADES], MATRIZ: [...MATRIZ_CIDADES] };
 let svcCount = 0;
 let _editKey = null;
+
+// ── Session caches — evitam reads repetidos ao Firebase na mesma sessão ──────
+let _alertasVencCache    = null;  // resultado de _obterAlertasVencimento (TTL 10min)
+let _alertasVencCacheTs  = 0;
+let _descontosVpCache    = null;  // config/descontos (termos antigos)
+let _assinaturaMasterCache = null; // config/assinatura_master
 
 // ════════════════════════════════════════════════════════
 // UTILS
@@ -1101,6 +1127,7 @@ async function initFirebase() {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     db = firebase.database();
+    storage = firebase.storage();
 
     // Autenticação anônima (necessária pelas regras do Firebase)
     const auth = firebase.auth();
@@ -1129,9 +1156,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).once(evt);
-            const res = await fetch(`${_base}/${_p(path)}.json`, {
-              headers:{'Authorization':'Bearer ' + tok},
-              signal:AbortSignal.timeout(10000)
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              signal:AbortSignal.timeout(30000)
             });
             const val = res.ok ? await res.json() : null;
             return { val:()=>val, exists:()=>val!==null, key:_p(path).split('/').pop()||'',
@@ -1148,8 +1174,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).set(value);
-            const res = await fetch(`${_base}/${_p(path)}.json`, {
-              method:'PUT', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + tok},
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'PUT', headers:{'Content-Type':'application/json'},
               body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1164,8 +1190,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).update(value);
-            const res = await fetch(`${_base}/${_p(path)}.json`, {
-              method:'PATCH', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + tok},
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'PATCH', headers:{'Content-Type':'application/json'},
               body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1180,8 +1206,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).remove();
-            const res = await fetch(`${_base}/${_p(path)}.json`, {
-              method:'DELETE', headers:{'Authorization':'Bearer ' + tok},
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'DELETE',
               signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1196,8 +1222,8 @@ async function initFirebase() {
           try {
             const tok = await _tk();
             if (!tok) return _origRef(path).push(value);
-            const res = await fetch(`${_base}/${_p(path)}.json`, {
-              method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + tok},
+            const res = await fetch(`${_base}/${_p(path)}.json?auth=${tok}`, {
+              method:'POST', headers:{'Content-Type':'application/json'},
               body:JSON.stringify(value), signal:AbortSignal.timeout(10000)
             });
             if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1217,27 +1243,7 @@ async function initFirebase() {
     const usSnap = await db.ref('users').once('value');
     usersCache = usSnap.val() || {};
 
-    // Carrega preços personalizados
-    const prSnap = await db.ref('precos').once('value');
-    const raw = prSnap.val();
-    if (raw) {
-      const _normT = t => { try { return (decodeURIComponent(t)||t).replace(/\//g,'-'); } catch(_){ return (t||'').replace(/\//g,'-'); } };
-      const dec = o => { const m={}; Object.entries(o).forEach(([k,v])=>{ m[_normT(k)]=v; }); return m; };
-      if (raw.v1) precosV1map = dec(raw.v1);
-      if (raw.v2) precosV2map = dec(raw.v2);
-    }
-
-    // Carrega cidades personalizadas (mesmo path que admin: config/profiles)
-    const cfgSnap = await db.ref('config/profiles').once('value');
-    const cfgCid = cfgSnap.val();
-    if (cfgCid && typeof cfgCid === 'object') {
-      Object.entries(cfgCid).forEach(([k, v]) => {
-        profilesCidades[k] = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []);
-      });
-      if (!profilesCidades.FILIAL) profilesCidades.FILIAL = [...FILIAL_CIDADES];
-      if (!profilesCidades.MATRIZ) profilesCidades.MATRIZ = [...MATRIZ_CIDADES];
-    }
-
+    // precos e config/profiles são carregados em loginSuccess() após autenticação
     // OS e descontos são carregados em carregarOsDoUsuario(uid) após o login
     // para evitar download de toda a coleção /os (muito grande → timeout 10s)
 
@@ -1275,6 +1281,14 @@ async function initFirebase() {
           document.getElementById('rel-upload-info').innerHTML = `<strong>${rel.nomePrestador||''}</strong><br>${MESES_PT[rm-1]||''} ${ry}<br>Valor: R$ ${Number(rel.valorTotal||0).toFixed(2).replace('.',',')}`;
           window._relatorioParaUpload = rel;
           window._relatorioCodigoUpload = codigoRel;
+          if (rel.htmlContent) {
+            const blob = new Blob([rel.htmlContent], {type:'text/html;charset=utf-8'});
+            const blobUrl = URL.createObjectURL(blob);
+            const frame = document.getElementById('rel-html-frame');
+            frame.src = blobUrl;
+            document.getElementById('rel-html-wrap').style.display = 'block';
+            document.getElementById('rel-btn-imprimir').onclick = function() { frame.contentWindow.print(); };
+          }
           screen('upload-relatorio');
           return;
         } else if (rel && rel.status !== 'enviado') {
@@ -1701,9 +1715,25 @@ async function doLogin() {
   if (!pass) { errEl.textContent = 'Digite sua senha.'; return; }
 
   // Sem hash cadastrado (nem passwordHash nem senha legada)
+  // NOTA: passwordHash pode ter sido removido do cache por segurança após login anterior.
+  // Tenta recarregar do Firebase antes de concluir que é primeiro acesso.
   if (!u.passwordHash && !u.senha) {
-    errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
-    return;
+    try {
+      const freshSnap = await db.ref('users/' + uid).once('value');
+      const fresh = freshSnap.val();
+      if (fresh && (fresh.passwordHash || fresh.senha)) {
+        usersCache[uid] = { ...usersCache[uid], passwordHash: fresh.passwordHash, salt: fresh.salt, senha: fresh.senha };
+        u.passwordHash = fresh.passwordHash;
+        u.salt = fresh.salt;
+        u.senha = fresh.senha;
+      } else {
+        errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
+        return;
+      }
+    } catch(_) {
+      errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
+      return;
+    }
   }
 
   // ── Wave 4: Firebase Auth como login primário ──
@@ -1713,8 +1743,9 @@ async function doLogin() {
   const fbOk = await _loginFirebaseAuth(uid, pass);
   if (!fbOk) {
     // Fallback: verifica hash armazenado no banco (já em memória — sem rede)
+    // Se hash foi removido do cache por segurança, não é possível verificar offline.
     if (!u.passwordHash && !u.senha) {
-      errEl.textContent = 'Primeiro acesso — crie sua senha pelo sistema principal.';
+      errEl.textContent = 'Sem conexão. Tente novamente com internet.';
       return;
     }
     const hashOk = await verificarSenha(pass, u);
@@ -1749,9 +1780,9 @@ async function carregarOsDoUsuario(uid) {
     const token = fbUser ? await fbUser.getIdToken() : null;
     const base = 'https://solucaoderua-default-rtdb.firebaseio.com';
     const qs = 'orderBy="userId"&equalTo=' + encodeURIComponent('"' + uid + '"');
-    const resp = await fetch(base + '/os.json?' + qs, {
-      headers: token ? {'Authorization':'Bearer ' + token} : {},
-      signal: AbortSignal.timeout(15000)
+    const authQs = token ? '&auth=' + token : '';
+    const resp = await fetch(base + '/os.json?' + qs + authQs, {
+      signal: AbortSignal.timeout(30000)
     });
     const osRaw = resp.ok ? (await resp.json() || {}) : {};
     allRecords = Object.entries(osRaw).map(([k, v]) => {
@@ -1777,6 +1808,29 @@ async function loginSuccess(uid) {
   const u = usersCache[uid];
   currentUser = { id: uid, name: u.name, nivel: u.nivel || 'V1' };
   sessionStorage.setItem('sdr_mobile_uid', uid);
+
+  // Carrega preços e cidades personalizadas (somente após autenticação)
+  try {
+    const prSnap = await db.ref('precos').once('value');
+    const raw = prSnap.val();
+    if (raw) {
+      const _normT = t => { try { return (decodeURIComponent(t)||t).replace(/\//g,'-'); } catch(_){ return (t||'').replace(/\//g,'-'); } };
+      const dec = o => { const m={}; Object.entries(o).forEach(([k,v])=>{ m[_normT(k)]=v; }); return m; };
+      if (raw.v1) precosV1map = dec(raw.v1);
+      if (raw.v2) precosV2map = dec(raw.v2);
+    }
+  } catch(_) {}
+  try {
+    const cfgSnap = await db.ref('config/profiles').once('value');
+    const cfgCid = cfgSnap.val();
+    if (cfgCid && typeof cfgCid === 'object') {
+      Object.entries(cfgCid).forEach(([k, v]) => {
+        profilesCidades[k] = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.values(v) : []);
+      });
+      if (!profilesCidades.FILIAL) profilesCidades.FILIAL = [...FILIAL_CIDADES];
+      if (!profilesCidades.MATRIZ) profilesCidades.MATRIZ = [...MATRIZ_CIDADES];
+    }
+  } catch(_) {}
 
   // Remove campos sensíveis de todos os usuários no cache após login bem-sucedido
   // Hashes de senha e dados biométricos não são necessários após a autenticação
@@ -1828,20 +1882,29 @@ async function loginSuccess(uid) {
       return;
     }
 
-    // 3. Verifica termos de abatimento pendentes
-    if (await verificarTermosPendentes(uid)) {
-      await renderAbatimento();
-      screen('abatimento');
-      return;
-    }
+    // 3. Verifica termos de abatimento pendentes (NÃO bloqueia — apenas detecta para banner)
+    try { _termosPendentesInfo = await verificarTermosPendentes(uid); } catch(_) { _termosPendentesInfo = false; }
 
-    // 3.5. Detecta Contratos de Venda a Prazo assinados sem gov.br (não bloqueia)
+    // 3.5. Contratos de Venda a Prazo pendentes — bloqueia se prazo de 3 dias expirou
     try {
-      let _snap = await db.ref('config/descontos').once('value');
-      const _desc = _snap.val() || {};
-      _vendaPrazoSemGovBr = Object.values(_desc).some(d =>
-        d.uid === uid && d.termoAssinado === true && (!d.termoAssinadoVia || d.termoAssinadoVia !== 'govbr-tec')
-      );
+      if (!_descontosVpCache) {
+        const _snap = await db.ref('config/descontos').once('value');
+        _descontosVpCache = _snap.val() || {};
+      }
+      const _desc = _descontosVpCache;
+      const _agora = Date.now();
+      const _PRAZO_ASSINAR_MS = 3 * 24 * 60 * 60 * 1000; // 3 dias corridos
+      _vendaPrazoSemGovBr = false;
+      for (const _d of Object.values(_desc)) {
+        if (_d.uid !== uid || _d.termoAssinado !== false || _d.termoAceitoTec === true) continue;
+        _vendaPrazoSemGovBr = true;
+        // Prazo expirado → bloqueia acesso e exibe tela de assinatura
+        if (_d.criado_em && (_agora - new Date(_d.criado_em).getTime()) > _PRAZO_ASSINAR_MS) {
+          await renderAbatimento();
+          screen('abatimento');
+          return;
+        }
+      }
     } catch(_) { _vendaPrazoSemGovBr = false; }
 
     // 4. Check-in: marca documentos vencidos no Firebase
@@ -2742,6 +2805,7 @@ let _contratoAlerta = null;
 // Variável para contrato assinado sem autenticação gov.br (solicita re-assinatura)
 let _contratoSemGovBr = null;
 let _vendaPrazoSemGovBr = false; // flag: tem Contrato de Venda a Prazo assinado sem gov.br
+let _termosPendentesInfo = false; // flag: tem Venda a Prazo pendente (não bloqueia, só banner)
 // Variável para o aviso severo de EPI (incompleta ou validade próxima)
 let _avisoEpi = null;
 
@@ -2878,9 +2942,8 @@ async function carregarMeuContrato() {
     const data = snap.val();
     if (!data) {
       if (['V0','V1','V2'].includes(nivel)) {
-        // Verifica se a ficha cadastral está preenchida
-        const empSnap = await db.ref(`users/${currentUser.id}/empresa`).once('value');
-        const emp = empSnap.val();
+        // Verifica se a ficha cadastral está preenchida (usa usersCache)
+        const emp = usersCache[currentUser.id]?.empresa || null;
         if (emp?.razaoSocial) {
           el.innerHTML = `
             <p style="color:var(--muted);font-size:.85rem;margin:0 0 10px">Nenhum contrato gerado ainda.</p>
@@ -3151,6 +3214,10 @@ function doLogout() {
   _sessionBioHash = null; // limpa hash Firebase da memória
   _impersonating = false;
   currentUser = null;
+  // Limpa session caches ao trocar de usuário
+  _alertasVencCache = null; _alertasVencCacheTs = 0;
+  _descontosVpCache = null; _assinaturaMasterCache = null;
+  window._admEmpresa = null;
   document.getElementById('app').style.display = 'none';
   document.getElementById('login-pass').value = '';
   // Encerra sessão Firebase Auth para que o próximo usuário não herde o token
@@ -3174,8 +3241,8 @@ function atualizarDados() {
 // 1. CADASTRO EMPRESA
 async function _precisaCadastroEmpresa(uid) {
   try {
-    const snap = await db.ref(`users/${uid}/empresa`).once('value');
-    const empresa = snap.val();
+    // empresa já está no usersCache (carregado em initFirebase via db.ref('users'))
+    const empresa = usersCache[uid]?.empresa || null;
     // Se admin dispensou o cadastro empresa, não precisa
     if (empresa && empresa.dispensado) return false;
     // Precisa de cadastro se não existe ou está incompleto
@@ -3192,8 +3259,8 @@ async function _precisaCadastroEmpresa(uid) {
 async function loadEmpresaScreen() {
   const uid = currentUser.id;
   try {
-    const snap = await db.ref(`users/${uid}/empresa`).once('value');
-    const empresa = snap.val();
+    // empresa já está no usersCache — usa diretamente sem read ao Firebase
+    const empresa = usersCache[uid]?.empresa || null;
 
     if (empresa) {
       // Pre-preenche formulário
@@ -3244,10 +3311,9 @@ async function abrirEditarFicha() {
   setupEditMask('edit-telefone', _formataPhone);
   setupEditMask('edit-resp-cpf', _formataCPF);
 
-  // Load current data
+  // Load current data — usa usersCache (já carregado no initFirebase)
   try {
-    const snap = await db.ref(`users/${currentUser.id}/empresa`).once('value');
-    const emp = snap.val();
+    const emp = usersCache[currentUser.id]?.empresa || null;
     if (emp) {
       document.getElementById('edit-razao-social').value = emp.razaoSocial || '';
       document.getElementById('edit-nome-fantasia').value = emp.nomeFantasia || '';
@@ -3550,20 +3616,23 @@ async function uploadRescisaoPDF() {
 // 3. TERMO ABATIMENTO
 async function verificarTermosPendentes(uid) {
   try {
-    // Tenta config/descontos primeiro, depois descontos
-    let snap = await db.ref('config/descontos').once('value');
-    let descontos = snap.val();
-    if (!descontos) {
-      snap = await db.ref('descontos').once('value');
-      descontos = snap.val() || {};
+    // Usa cache de sessão — evita read repetido (já lido em loginSuccess 3.5)
+    if (!_descontosVpCache) {
+      let snap = await db.ref('config/descontos').once('value');
+      let descontos = snap.val();
+      if (!descontos) {
+        snap = await db.ref('descontos').once('value');
+        descontos = snap.val() || {};
+      }
+      _descontosVpCache = descontos;
     }
+    let descontos = _descontosVpCache;
 
     const temPendente = Object.entries(descontos).some(([key, d]) => {
       if (d.uid !== uid) return false;
-      // Caso 1: termo ainda não assinado
+      // Bloqueia apenas se ainda NÃO assinou de forma alguma
       if (d.termoAssinado === false && d.termoAceitoTec !== true) return true;
-      // Caso 2: termo assinado SEM gov.br — precisa reassinar via gov.br
-      if (d.termoAssinado === true && d.termoAssinadoVia !== 'govbr-tec') return true;
+      // Se termoAssinado === true (qualquer canal, inclusive admin OTDR) → libera
       return false;
     });
 
@@ -3876,7 +3945,13 @@ async function gerarTermoAbatimento(desconto) {
   const u       = usersCache[desconto.uid] || {};
   const _empresa = u.empresa || {};
   let _contratante = {};
-  try { const s = await db.ref('config/assinatura_master').once('value'); _contratante = s.val() || {}; } catch(_){}
+  try {
+    if (!_assinaturaMasterCache) {
+      const s = await db.ref('config/assinatura_master').once('value');
+      _assinaturaMasterCache = s.val() || {};
+    }
+    _contratante = _assinaturaMasterCache;
+  } catch(_){}
   const fmtV    = v => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
   const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
   const [y, m]  = (desconto.parcelaInicio || desconto.mesAno || '').split('-').map(Number);
@@ -4092,13 +4167,18 @@ let _descontosLocal = {};
 async function renderAbatimento() {
   const uid = currentUser.id;
   try {
-    let snap = await db.ref('config/descontos').once('value');
-    let descontos = snap.val();
-    if (!descontos) {
-      snap = await db.ref('descontos').once('value');
-      descontos = snap.val() || {};
+    // Usa cache de sessão — evita read repetido de config/descontos
+    if (!_descontosVpCache) {
+      let snap = await db.ref('config/descontos').once('value');
+      let descontos = snap.val();
+      if (!descontos) {
+        snap = await db.ref('descontos').once('value');
+        descontos = snap.val() || {};
+      }
+      _descontosVpCache = descontos;
     }
-    _descontosLocal = descontos;
+    _descontosLocal = _descontosVpCache;
+    const descontos = _descontosVpCache;
 
     const pendentes = Object.entries(descontos)
       .filter(([key, d]) => d.uid === uid && (
@@ -4462,6 +4542,11 @@ function navTo(pageId) {
 // ════════════════════════════════════════════════════════
 // ── Alertas de vencimento estruturados (retorna objetos com tipo, texto, página destino) ──
 async function _obterAlertasVencimento(uid) {
+  // Cache com TTL de 10 minutos — evita 4-5 reads ao Firebase por render de dashboard
+  const _CACHE_TTL = 10 * 60 * 1000;
+  if (_alertasVencCache !== null && (Date.now() - _alertasVencCacheTs) < _CACHE_TTL) {
+    return _alertasVencCache;
+  }
   const alertas = [];
   // Documentos (CNH, ASO, LTCAT, PCMSO, PGR, Seguros, CRLV)
   try {
@@ -4569,6 +4654,9 @@ async function _obterAlertasVencimento(uid) {
 
   // Ordena: vencidos primeiro, depois vencendo
   alertas.sort((a, b) => (a.status === 'vencido' ? 0 : 1) - (b.status === 'vencido' ? 0 : 1));
+  // Salva no cache de sessão com timestamp
+  _alertasVencCache = alertas;
+  _alertasVencCacheTs = Date.now();
   return alertas;
 }
 
@@ -7318,18 +7406,42 @@ async function _enviarRelatorioAssinado() {
       }
     }
 
-    // 3. Converte para base64 e salva
-    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando relatorio assinado...';
-    const base64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    // 3. Faz upload para Firebase Storage (evita base64 no Realtime Database)
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando PDF para o servidor...';
+    let pdfStorageUrl = null;
+    try {
+      const storageFilename = codigo + '-' + Date.now() + '.pdf';
+      const storageRef = storage.ref('relatorios-assinados/' + storageFilename);
+      await storageRef.put(file, { contentType: 'application/pdf' });
+      pdfStorageUrl = await storageRef.getDownloadURL();
+    } catch(storageErr) {
+      console.warn('[relatorio] Falha no Storage, usando fallback base64:', storageErr);
+    }
 
-    await db.ref('relatorios/' + codigo).update({
-      status: 'assinado',
-      pdfAssinado: base64,
-      nomeArquivoAssinado: file.name,
-      recebidoEm: new Date().toISOString(),
-      assinaturaScore: score,
-      assinaturaDetalhes: { temSig, temByte, temCert }
-    });
+    statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando relatorio assinado...';
+
+    if (pdfStorageUrl) {
+      // Caminho preferido: salva apenas a URL no DB (sem base64)
+      await db.ref('relatorios/' + codigo).update({
+        status: 'assinado',
+        pdfAssinadoUrl: pdfStorageUrl,
+        nomeArquivoAssinado: file.name,
+        recebidoEm: new Date().toISOString(),
+        assinaturaScore: score,
+        assinaturaDetalhes: { temSig, temByte, temCert }
+      });
+    } else {
+      // Fallback: base64 (Storage indisponível)
+      const base64 = await new Promise((res,rej) => { const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+      await db.ref('relatorios/' + codigo).update({
+        status: 'assinado',
+        pdfAssinado: base64,
+        nomeArquivoAssinado: file.name,
+        recebidoEm: new Date().toISOString(),
+        assinaturaScore: score,
+        assinaturaDetalhes: { temSig, temByte, temCert }
+      });
+    }
 
     statusDiv.innerHTML = '<div style="background:#d1fae5;color:#065f46;padding:12px;border-radius:10px;font-weight:700"><i class="fas fa-check-circle" style="margin-right:6px"></i>Relatorio assinado enviado com sucesso!<br><span style="font-weight:400;font-size:.8rem">Aguardando aprovacao do gestor.</span></div>';
     document.getElementById('rel-upload-file').style.display = 'none';

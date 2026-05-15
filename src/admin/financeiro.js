@@ -57,11 +57,17 @@ async function verificarTermosPendentes() {
     return false; // Em caso de erro de permissão, não bloqueia
   }
 
+  // Contratos OTDR são gerenciados pelo admin via painel — não bloqueiam login
   const paraAssinar      = termosDoTec.filter(d =>
-    (d.termoAssinado === false && d.termoAceitoTec !== true) ||
-    (d.termoAssinado === true && d.termoAssinadoVia !== 'govbr-tec')
+    d.origemContrato !== 'otdr_730d' && (
+      (d.termoAssinado === false && d.termoAceitoTec !== true) ||
+      (d.termoAssinado === true && d.termoAssinadoVia !== 'govbr-tec')
+    )
   );
-  const aguardandoMaster = termosDoTec.filter(d => d.termoAssinado === false && d.termoAceitoTec === true);
+  const aguardandoMaster = termosDoTec.filter(d =>
+    d.origemContrato !== 'otdr_730d' &&
+    d.termoAssinado === false && d.termoAceitoTec === true
+  );
   console.log('[verificarTermosPendentes] uid:', uid,
     '| termos do tec:', termosDoTec.length,
     '| paraAssinar:', paraAssinar.length,
@@ -540,7 +546,96 @@ function _renderFinDescontos() {
       </tr>`;
     }).join('')}</tbody>
   </table></div>`;
+
+  // ── Controle PIX — Opção B ─────────────────────────────────────────────────
+  const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  // Coleta todos os meses com pelo menos uma escolha B nos últimos 6 meses
+  const hoje = new Date();
+  const mesesVerif = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    mesesVerif.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+  }
+  const pixEntries = [];
+  Object.entries(descontosCache).forEach(([fbKey, d]) => {
+    if (d.termoAssinado !== true) return;
+    mesesVerif.forEach(m => {
+      if (d.escolhas?.[m] !== 'B') return;
+      const tot = Number(d.parcelas) || 1;
+      const [yi, mi] = (d.parcelaInicio || d.mesAno || '').split('-').map(Number);
+      if (!yi) return;
+      const [ya, ma] = m.split('-').map(Number);
+      const diff = (ya - yi) * 12 + (ma - mi) + 1;
+      if (diff < 1 || diff > tot) return;
+      const recebido = d.pixPagamentos?.[m]?.recebido === true;
+      const recebidoEm = d.pixPagamentos?.[m]?.recebidoEm;
+      pixEntries.push({ fbKey, d, mes: m, diff, tot, vlr: +(d.valor/tot).toFixed(2), recebido, recebidoEm });
+    });
+  });
+
+  if (pixEntries.length > 0) {
+    const thP = 'padding:7px 10px;font-size:.75rem;font-weight:700;white-space:nowrap';
+    const tdP = 'padding:6px 10px;font-size:.8rem;border-bottom:1px solid #e5e7eb';
+    const pixRows = pixEntries.sort((a,b) => b.mes.localeCompare(a.mes)).map(e => {
+      const [ya, ma] = e.mes.split('-').map(Number);
+      const nomeMes = `${MESES_PT[ma-1]}/${ya}`;
+      const nome = usersCache[e.d.uid]?.name || e.d.uid;
+      const vlrFmt = `R$ ${e.vlr.toLocaleString('pt-BR',{minimumFractionDigits:2})}`;
+      const statusBadge = e.recebido
+        ? `<span style="font-size:.68rem;background:#dcfce7;color:#14532d;border:1px solid #86efac;padding:3px 8px;border-radius:8px;font-weight:700">✔ Recebido${e.recebidoEm ? ' ' + new Date(e.recebidoEm).toLocaleDateString('pt-BR') : ''}</span>`
+        : `<span style="font-size:.68rem;background:#fef9c3;color:#854d0e;border:1px solid #eab308;padding:3px 8px;border-radius:8px;font-weight:700">⏳ Aguardando PIX</span>`;
+      const btnPix = e.recebido ? '' :
+        `<button onclick="marcarPixRecebido('${e.fbKey}','${e.mes}')"
+           style="background:#15803d;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap">
+           <i class="fas fa-check"></i> Recebido
+         </button>`;
+      return `<tr style="background:${e.recebido?'#f0fdf4':'#fffbeb'}">
+        <td style="${tdP};font-weight:600">${nome}</td>
+        <td style="${tdP};text-align:center">${nomeMes}</td>
+        <td style="${tdP}">${e.d.motivo||'Venda a Prazo'} <span style="font-size:.7rem;color:#94a3b8">(${e.diff}/${e.tot})</span></td>
+        <td style="${tdP};text-align:right;font-weight:700;color:#1d4ed8">${vlrFmt}</td>
+        <td style="${tdP};text-align:center">${statusBadge}</td>
+        <td style="${tdP};text-align:center">${btnPix}</td>
+      </tr>`;
+    }).join('');
+
+    el.innerHTML += `
+    <div style="margin-top:24px">
+      <div style="font-size:.82rem;font-weight:700;color:#1d4ed8;margin-bottom:10px;display:flex;align-items:center;gap:6px">
+        <i class="fas fa-pix" style="color:#32bcad"></i> Controle de Pagamentos PIX — Opção B
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+        <thead style="background:#1d4ed8;color:#fff"><tr>
+          <th style="${thP}">Prestador</th>
+          <th style="${thP}">Mês</th>
+          <th style="${thP}">Descrição</th>
+          <th style="${thP};text-align:right">Valor</th>
+          <th style="${thP};text-align:center">Status</th>
+          <th style="${thP};text-align:center">Ação</th>
+        </tr></thead>
+        <tbody>${pixRows}</tbody>
+      </table></div>
+    </div>`;
+  }
 }
+
+async function marcarPixRecebido(fbKey, mes) {
+  if (!confirm(`Confirmar recebimento do PIX de ${MESES_NOME?.[parseInt(mes.split('-')[1])-1] || mes}?\n\nO pagamento será registrado como recebido.`)) return;
+  try {
+    const agora = new Date().toISOString();
+    await _dbUpdate(`config/descontos/${fbKey}/pixPagamentos/${mes}`, { recebido: true, recebidoEm: agora });
+    if (descontosCache[fbKey]) {
+      if (!descontosCache[fbKey].pixPagamentos) descontosCache[fbKey].pixPagamentos = {};
+      descontosCache[fbKey].pixPagamentos[mes] = { recebido: true, recebidoEm: agora };
+    }
+    _renderFinDescontos();
+    toast('PIX registrado como recebido!', 'success');
+  } catch(e) {
+    console.error('[marcarPixRecebido]', e);
+    toast('Erro ao registrar recebimento.', 'error');
+  }
+}
+window.marcarPixRecebido = marcarPixRecebido;
 
 function calcJeffersonV1(mesAtual) {
   // Encontra Jefferson (V3 nivel tech, não admin)
@@ -671,6 +766,7 @@ function renderFinanceiro() {
 
   // Calcula desconto de cada técnico para o mês visualizado
   // Um desconto aplica no mês se: parcelaInicio <= mesAtual < parcelaInicio + parcelas
+  // Opção B: técnico paga via PIX — NÃO desconta do honorário neste mês
   const _descontoTecMes = (uid) => {
     return Object.values(descontosCache)
       .filter(d => d.uid === uid)
@@ -684,6 +780,9 @@ function renderFinanceiro() {
         const [ya, ma] = mesAtual.split('-').map(Number);
         const diff = (ya - yi) * 12 + (ma - mi) + 1; // parcela atual (1-indexed)
         if (diff >= 1 && diff <= tot) {
+          // Opção B: paga via PIX — não desconta do honorário
+          const escolha = d.escolhas?.[mesAtual];
+          if (escolha === 'B') return soma;
           soma += +(d.valor / tot).toFixed(2);
         }
         return soma;
@@ -742,6 +841,9 @@ function renderFinanceiro() {
           totFrentes[f.key] += v;
           rowTotal += v; rowTotalPend += vp;
         });
+        // Serviço fixo mensal (ex: Gestão KMZ)
+        const sfVal   = window.getServicoFixoValor ? window.getServicoFixoValor(uid) : 0;
+        rowTotal += sfVal;
         const rowDesc = _descontoTecMes(uid);
         const rowLiq  = rowTotal - rowDesc;
         gtotal     += rowTotal;
@@ -804,6 +906,13 @@ function renderFinanceiro() {
           <div style="padding:12px;display:grid;grid-template-columns:1fr 1fr;gap:7px">
             ${frenteItems}
           </div>
+          <!-- Serviço fixo mensal (se houver) -->
+          ${sfVal > 0 ? `
+          <div style="padding:4px 12px 2px;display:flex;align-items:center;gap:6px;background:#f0fdf4;border-top:1px solid #bbf7d0">
+            <i class="fas fa-plus-circle" style="color:#16a34a;font-size:.7rem"></i>
+            <span style="font-size:.72rem;color:#166534;font-weight:600">${(window.servicosFixos?.[uid]?.descricao)||'Serviço Fixo'}</span>
+            <span style="margin-left:auto;font-size:.78rem;font-weight:800;color:#16a34a">+${fmt(sfVal)}</span>
+          </div>` : ''}
           <!-- Rodapé: totais -->
           <div style="border-top:1px solid #e5e7eb;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:6px;background:${isHist?'#f1f5f9':'#f9fafb'}">
             <div style="text-align:center;flex:1">
@@ -840,7 +949,18 @@ function renderFinanceiro() {
               <div style="font-weight:700;font-size:.88rem">${fu.name||fid}</div>
               <div style="font-size:.68rem;opacity:.75">Gestão — Honorários</div>
             </div>
-            <span style="background:rgba(255,255,255,.2);border-radius:6px;padding:3px 8px;font-size:.68rem;font-weight:700">Gestão</span>
+            <div style="display:flex;gap:4px;flex-shrink:0">
+              <button onclick="exportarCardTecnico('${fid}','${mesAtual}')" title="Gerar relatório"
+                style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:7px;padding:5px 9px;font-size:.72rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap"
+                onmouseover="this.style.background='rgba(255,255,255,.28)'" onmouseout="this.style.background='rgba(255,255,255,.15)'">
+                <i class="fas fa-file-alt"></i> Relatório
+              </button>
+              <button onclick="enviarRelatorioWhatsApp('${fid}','${mesAtual}')" title="Enviar via WhatsApp"
+                style="background:#25d366;border:1px solid #20bd5a;color:#fff;border-radius:7px;padding:5px 9px;font-size:.72rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:5px;white-space:nowrap"
+                onmouseover="this.style.background='#1da851'" onmouseout="this.style.background='#25d366'">
+                <i class="fab fa-whatsapp"></i>
+              </button>
+            </div>
           </div>
           <div style="padding:12px;text-align:center">
             <div style="font-size:.65rem;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Honorários Mensais</div>
@@ -1013,6 +1133,17 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     totalBruto += v;
   });
 
+  // V0 (Fiscal) — usa salário fixo de gestão como totalBruto
+  const _isFiscalUser = _isFiscal(u);
+  if (_isFiscalUser) {
+    FRENTES.forEach(f => { vals[f.key] = 0; });
+    totalBruto = window.SALARIO_V0 || 3000;
+  }
+
+  // Serviço fixo mensal (ex: Gestão KMZ) — soma ao totalBruto
+  const sfValCard = !_isFiscalUser && window.getServicoFixoValor ? window.getServicoFixoValor(uid) : 0;
+  if (sfValCard > 0) totalBruto += sfValCard;
+
   // Descontos do mês
   const descontosMes = Object.values(descontosCache).filter(d => {
     if (d.uid !== uid) return false;
@@ -1087,7 +1218,7 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Relatório de Serviços — ${u.name||uid} — ${mesLabel}</title>
+<title>${_isFiscalUser ? 'Relatório de Honorários' : 'Relatório de Serviços'} — ${u.name||uid} — ${mesLabel}</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',Arial,sans-serif;background:#f1f5f9;color:#1e293b;padding:30px}
@@ -1131,12 +1262,12 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
   <!-- Cabeçalho -->
   <div class="header">
     <div>
-      <div class="header-title">Relatório de Serviços Prestados</div>
+      <div class="header-title">${_isFiscalUser ? 'Relatório de Honorários' : 'Relatório de Serviços Prestados'}</div>
       <div class="header-sub">Referência: ${mesLabel}</div>
     </div>
     <div class="header-meta">
       Emitido em: ${dataGer}<br>
-      ${recs.length} OS executada${recs.length!==1?'s':''}
+      ${_isFiscalUser ? 'Honorários fixos de gestão' : `${recs.length} OS executada${recs.length!==1?'s':''}`}
     </div>
   </div>
 
@@ -1160,7 +1291,23 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     </div>
   </div>
 
-  <!-- Serviços por categoria -->
+  <!-- Serviços por categoria (técnicos) / Honorários fixos (fiscal) -->
+  ${_isFiscalUser ? `
+  <section>
+    <div class="sec-title">Honorários de Gestão</div>
+    <table>
+      <thead><tr>
+        <th>Descrição</th>
+        <th style="text-align:right">Valor</th>
+      </tr></thead>
+      <tbody>
+        <tr style="background:#fffbeb">
+          <td style="padding:8px 10px;font-size:.82rem;font-weight:600">Honorários Mensais Fixos — Supervisão Operacional e Controle de Estoque</td>
+          <td style="padding:8px 10px;font-size:.82rem;text-align:right;font-weight:700;color:#854d0e">${fmt(totalBruto)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>` : `
   <section>
     <div class="sec-title">Serviços Executados por Categoria</div>
     <table>
@@ -1181,15 +1328,15 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
         }).join('')}
       </tbody>
     </table>
-  </section>
+  </section>`}
 
   <!-- Resumo de valores -->
   <section>
     <div class="sec-title">Resumo de Valores</div>
     <div class="totals">
       <div class="tot-item">
-        <div class="tot-label">Total dos Serviços</div>
-        <div class="tot-val" style="color:#16a34a">${fmt(totalBruto)}</div>
+        <div class="tot-label">${_isFiscalUser ? 'Honorários Brutos' : 'Total dos Serviços'}</div>
+        <div class="tot-val" style="color:${_isFiscalUser?'#854d0e':'#16a34a'}">${fmt(totalBruto)}</div>
       </div>
       <div style="font-size:1.4rem;color:#e5e7eb">—</div>
       <div class="tot-item">
@@ -1217,7 +1364,8 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     </table>
   </section>` : ''}
 
-  <!-- Ordens de Serviço executadas -->
+  <!-- Ordens de Serviço executadas (apenas para técnicos, não fiscal) -->
+  ${_isFiscalUser ? '' : `
   <section>
     <div class="sec-title">Ordens de Serviço Executadas</div>
     <table>
@@ -1227,15 +1375,20 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
       </tr></thead>
       <tbody>${linhasOS}</tbody>
     </table>
-  </section>
+  </section>`}
 
-  <!-- Confirmação de execução dos serviços -->
+  <!-- Confirmação -->
   <div class="confirm-box">
-    <div class="confirm-title">Confirmação de Execução dos Serviços</div>
+    <div class="confirm-title">${_isFiscalUser ? 'Confirmação de Honorários' : 'Confirmação de Execução dos Serviços'}</div>
     <p style="font-size:.8rem;color:#166534;line-height:1.6">
-      Confirmo que os serviços listados neste relatório, referentes ao período de
-      <strong>${mesLabel}</strong>, foram por mim executados conforme as ordens de serviço
-      acordadas, e que as informações acima refletem os trabalhos realizados.
+      ${_isFiscalUser
+        ? `Confirmo que os serviços de supervisão operacional e controle de estoque referentes ao
+           período de <strong>${mesLabel}</strong> foram devidamente prestados, conforme o Contrato
+           de Prestação de Serviços vigente, e que os honorários acima refletem o acordado.`
+        : `Confirmo que os serviços listados neste relatório, referentes ao período de
+           <strong>${mesLabel}</strong>, foram por mim executados conforme as ordens de serviço
+           acordadas, e que as informações acima refletem os trabalhos realizados.`
+      }
     </p>
     <div class="sign-row">
       <div class="sign-box">

@@ -12,6 +12,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <style>
 :root {
   --primary:#1a6fc4; --primary-dark:#115097; --secondary:#f97316;
@@ -404,13 +405,6 @@ tbody tr:last-child{border-bottom:none}
     <button class="btn btn-primary" style="width:100%;padding:13px;font-size:.97rem;border-radius:10px"
       onclick="entrar()">
       <i class="fas fa-sign-in-alt"></i> Entrar
-    </button>
-
-    <button id="btn-biometrico" onclick="loginBiometrico()"
-      style="display:none;width:100%;padding:12px;font-size:.95rem;border-radius:10px;
-             margin-top:10px;background:#f0fdf4;color:#166534;border:1.5px solid #86efac;
-             cursor:pointer;font-weight:600;transition:background .2s">
-      <i class="fas fa-fingerprint"></i> <span>Entrar com biometria</span>
     </button>
 
     <!-- campos ocultos mantidos por compatibilidade -->
@@ -2148,25 +2142,6 @@ tbody tr:last-child{border-bottom:none}
   </div>
 </div>
 
-<!-- BANNER OFERTA DE BIOMETRIA -->
-<div id="bio-offer-banner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-  z-index:9999;background:#fff;border:1.5px solid #86efac;border-radius:14px;
-  box-shadow:0 4px 24px rgba(0,0,0,.15);padding:16px 22px;max-width:420px;width:90%;
-  align-items:center;gap:14px;flex-direction:row">
-  <i class="fas fa-fingerprint" style="font-size:1.8rem;color:#16a34a;flex-shrink:0"></i>
-  <div style="flex:1">
-    <div style="font-weight:700;color:#166534;margin-bottom:3px">Ativar login por biometria?</div>
-    <div style="font-size:.85rem;color:#555">Use Face ID ou impressão digital na próxima vez.</div>
-  </div>
-  <div style="display:flex;gap:8px;flex-shrink:0">
-    <button onclick="ativarBiometriaOffer()" style="background:#16a34a;color:#fff;border:none;
-      border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600;font-size:.85rem">Ativar</button>
-    <button onclick="document.getElementById('bio-offer-banner').style.display='none'"
-      style="background:#f1f5f9;color:#555;border:none;border-radius:8px;padding:8px 12px;
-      cursor:pointer;font-size:.85rem">Agora não</button>
-  </div>
-</div>
-
 <!-- MODAIS -->
 
 <!-- Modal PIN Tabela de Preços -->
@@ -2559,8 +2534,9 @@ const USERS_INIT = [
 // ════════════════════════════════════════════════════
 // ③ STATE
 // ════════════════════════════════════════════════════
-let db   = null;
-let auth = null; // Firebase Authentication instance
+let db      = null;
+let storage = null;
+let auth    = null; // Firebase Authentication instance
 let currentUser = null; // { id, name, role }
 let allRecords = [];
 let precosV1map = {...PRECOS_V1};
@@ -2709,8 +2685,9 @@ function salvarConfig() {
 async function iniciarFirebase(cfg) {
   try {
     firebase.initializeApp(cfg);
-    db   = firebase.database();
-    auth = firebase.auth();
+    db      = firebase.database();
+    storage = firebase.storage();
+    auth    = firebase.auth();
     // Test connectivity
     await db.ref('.info/connected').once('value');
     // Faz sign-in anônimo para satisfazer regras "auth != null".
@@ -3023,32 +3000,7 @@ function showLoginErr(msg) {
   el.textContent = msg; el.style.display = 'block';
 }
 
-/* ─── LOGIN: lembrar usuário + biometria ─────────────────────────────── */
-
-// Verifica se o ambiente suporta biometria e retorna objeto com detalhes
-async function _bioDiagnostico() {
-  if (!window.isSecureContext) {
-    return { ok: false, motivo: 'sem-https',
-      msg: 'Biometria requer HTTPS. O arquivo está aberto via file://. '
-         + 'Publique no Firebase Hosting ou use localhost.' };
-  }
-  if (!window.PublicKeyCredential) {
-    return { ok: false, motivo: 'sem-api',
-      msg: 'WebAuthn não está disponível neste navegador.' };
-  }
-  try {
-    const avail = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-    if (!avail) {
-      return { ok: false, motivo: 'sem-autenticador',
-        msg: 'Nenhum autenticador de plataforma encontrado. '
-           + 'No Windows, configure o Windows Hello em Configurações → Contas → Opções de Entrada. '
-           + 'No Mac, ative o Touch ID em Preferências do Sistema → Touch ID.' };
-    }
-  } catch(e) {
-    return { ok: false, motivo: 'erro-verificacao', msg: 'Erro ao verificar disponibilidade de biometria.' };
-  }
-  return { ok: true };
-}
+/* ─── LOGIN: lembrar usuário ─────────────────────────────────────────── */
 
 function initLoginScreen() {
   // Auto-preenche o último usuário logado
@@ -3057,118 +3009,6 @@ function initLoginScreen() {
     const inp = document.getElementById('login-user-input');
     inp.value = lastUser;
     setTimeout(() => document.getElementById('pwd-input').focus(), 100);
-  }
-  // Mostra botão de biometria apenas se houver credencial salva E contexto seguro
-  const lastUid = localStorage.getItem('srua_lastUid');
-  const credB64 = lastUid ? localStorage.getItem('srua_cred_' + lastUid) : null;
-  const bioBtn  = document.getElementById('btn-biometrico');
-  if (credB64 && lastUser && window.isSecureContext && window.PublicKeyCredential) {
-    bioBtn.querySelector('span').textContent = 'Entrar como ' + lastUser + ' com biometria';
-    bioBtn.style.display = 'block';
-  } else {
-    bioBtn.style.display = 'none';
-  }
-}
-
-async function loginBiometrico() {
-  const lastUid = localStorage.getItem('srua_lastUid');
-  const credB64 = lastUid ? localStorage.getItem('srua_cred_' + lastUid) : null;
-  if (!credB64 || !lastUid) { showLoginErr('Nenhuma biometria cadastrada para este usuário.'); return; }
-
-  // Diagnóstico antes de tentar
-  const diag = await _bioDiagnostico();
-  if (!diag.ok) { showLoginErr(diag.msg); return; }
-
-  try {
-    const rawId     = Uint8Array.from(atob(credB64), c => c.charCodeAt(0));
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        allowCredentials: [{ type: 'public-key', id: rawId }],
-        userVerification: 'required',
-        timeout: 60000,
-      }
-    });
-    // Assertion bem-sucedida — dispositivo verificou o usuário
-    const u = usersCache[lastUid];
-    if (!u) { showLoginErr('Usuário não encontrado.'); return; }
-    if (u.ativo === false) { showLoginErr('Usuário inativo.'); return; }
-    loginSuccess({ id: lastUid, name: u.name, role: u.role, nivel: u.nivel||'V1' });
-  } catch(e) {
-    if (e.name === 'NotAllowedError')
-      showLoginErr('Biometria cancelada ou não reconhecida pelo dispositivo.');
-    else if (e.name === 'SecurityError')
-      showLoginErr('Erro de segurança: acesse via HTTPS para usar biometria.');
-    else
-      showLoginErr('Erro na autenticação biométrica: ' + e.message);
-  }
-}
-
-let _biometricoUserPending = null;
-async function ofereceRegistrarBiometria(user) {
-  // Não oferecer se já registrado
-  if (localStorage.getItem('srua_cred_' + user.id)) return;
-  const diag = await _bioDiagnostico();
-  if (!diag.ok) {
-    // Mostra toast informativo apenas uma vez por sessão (não spam)
-    if (!sessionStorage.getItem('bio_diag_shown')) {
-      sessionStorage.setItem('bio_diag_shown', '1');
-      if (diag.motivo !== 'sem-https') {
-        // Para problema de hardware/configuração, avisa o usuário
-        toast('Biometria indisponível: ' + diag.msg, 'error');
-      }
-      // Para sem-https, não incomoda (é o cenário de teste local)
-    }
-    return;
-  }
-  _biometricoUserPending = user;
-  document.getElementById('bio-offer-banner').style.display = 'flex';
-}
-
-async function ativarBiometriaOffer() {
-  document.getElementById('bio-offer-banner').style.display = 'none';
-  if (!_biometricoUserPending) return;
-  await registrarBiometria(_biometricoUserPending);
-}
-
-async function registrarBiometria(user) {
-  const diag = await _bioDiagnostico();
-  if (!diag.ok) { toast(diag.msg, 'error'); return; }
-  try {
-    const challenge   = crypto.getRandomValues(new Uint8Array(32));
-    const userIdBytes = new TextEncoder().encode(user.id);
-    // rpId deve ser o hostname exato (sem porta); localhost é permitido
-    const rpId = location.hostname || 'localhost';
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { name: 'Solução de Rua', id: rpId },
-        user: { id: userIdBytes, name: user.name, displayName: user.name },
-        pubKeyCredParams: [
-          { type: 'public-key', alg: -7   },  // ES256
-          { type: 'public-key', alg: -257 },  // RS256
-        ],
-        authenticatorSelection: {
-          authenticatorAttachment: 'platform',
-          userVerification: 'required',
-        },
-        timeout: 60000,
-      }
-    });
-    // Armazena o ID da credencial (base64)
-    const rawId = new Uint8Array(cred.rawId);
-    const b64   = btoa(String.fromCharCode(...rawId));
-    localStorage.setItem('srua_cred_' + user.id, b64);
-    toast('Biometria ativada com sucesso! Use-a no próximo login.', 'success');
-    _biometricoUserPending = null;
-  } catch(e) {
-    if (e.name === 'NotAllowedError')
-      toast('Registro de biometria cancelado pelo usuário.', 'error');
-    else if (e.name === 'SecurityError')
-      toast('Erro de segurança: acesse via HTTPS para registrar biometria.', 'error');
-    else
-      toast('Não foi possível registrar a biometria: ' + e.message, 'error');
   }
 }
 
@@ -3581,8 +3421,6 @@ async function loginSuccess(user) {
     }
   }
   limparForm();
-  // Oferece biometria se disponível e não cadastrada (só se não estiver bloqueado)
-  if (!bloqueadoPorTermo) setTimeout(() => ofereceRegistrarBiometria(user), 800);
 }
 
 function logout() {
@@ -10233,6 +10071,14 @@ async function renderRelatoriosAssinados() {
     const items = Object.values(rels).sort((a,b) => (b.geradoEm||'').localeCompare(a.geradoEm||''));
     const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
+    // Migração em background: PDFs antigos (base64 no DB) → Firebase Storage
+    // Remove o base64 do DB após migrar, reduzindo o tráfego nas próximas leituras
+    Object.entries(rels).forEach(([codigo, rel]) => {
+      if (rel.pdfAssinado && !rel.pdfAssinadoUrl) {
+        _migrarPdfParaStorage(codigo, rel.pdfAssinado, rel.nomeArquivoAssinado);
+      }
+    });
+
     if (items.length === 0) {
       lista.innerHTML = '<div style="color:#94a3b8;font-size:.82rem">Nenhum relatorio gerado ainda.</div>';
       return;
@@ -10303,11 +10149,29 @@ async function renderRelatoriosAssinados() {
   }
 }
 
+// Migra registro antigo (base64 no DB) para Firebase Storage em background
+async function _migrarPdfParaStorage(codigo, pdfBase64, nomeArquivo) {
+  try {
+    const resp = await fetch(pdfBase64);
+    const blob = await resp.blob();
+    const filename = (nomeArquivo || (codigo + '-assinado.pdf')).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storageRef = storage.ref('relatorios-assinados/' + codigo + '-migrado-' + Date.now() + '.pdf');
+    await storageRef.put(blob, { contentType: 'application/pdf' });
+    const url = await storageRef.getDownloadURL();
+    await db.ref('relatorios/' + codigo).update({ pdfAssinadoUrl: url, pdfAssinado: null });
+    console.log('[migrar] PDF migrado para Storage:', codigo);
+  } catch(e) {
+    console.warn('[migrar] Falha ao migrar PDF do registro', codigo, e);
+  }
+}
+
 async function _verRelatorioAssinado(codigo) {
   try {
     const snap = await db.ref('relatorios/' + codigo).once('value');
     const rel = snap.val();
-    if (!rel || !rel.pdfAssinado) { toast('PDF assinado nao encontrado.', 'error'); return; }
+    // Suporta tanto o novo formato (URL no Storage) quanto o antigo (base64)
+    const pdfSrc = rel?.pdfAssinadoUrl || rel?.pdfAssinado;
+    if (!rel || !pdfSrc) { toast('PDF assinado nao encontrado.', 'error'); return; }
     const modal = document.createElement('div');
     modal.id = 'modal-ver-rel-assinado';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -10322,7 +10186,7 @@ async function _verRelatorioAssinado(codigo) {
         <button onclick="this.closest('#modal-ver-rel-assinado').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer">&times;</button>
       </div>
       <div style="flex:1;overflow:auto;padding:10px;background:#f1f5f9">
-        <iframe src="${rel.pdfAssinado}" style="width:100%;height:80vh;border:none;border-radius:6px"></iframe>
+        <iframe src="${pdfSrc}" style="width:100%;height:80vh;border:none;border-radius:6px"></iframe>
       </div>
     </div>`;
     document.body.appendChild(modal);

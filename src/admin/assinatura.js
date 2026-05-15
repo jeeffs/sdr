@@ -6,6 +6,11 @@
 let _padDrawing = false;
 
 window.abrirModalAssinatura = function() {
+  // Somente o admin (role === 'master') pode cadastrar a assinatura da contratante
+  if (!_isAdmin(window.currentUser)) {
+    window.toast('Acesso restrito ao administrador.', 'error');
+    return;
+  }
   // Preenche os campos com dados salvos (se existirem)
   if (window.assinaturaMaster) {
     const nomEl = document.getElementById('assin-nome');
@@ -132,6 +137,10 @@ window.usarAssinaturaSalva = function() {
 }
 
 window.salvarAssinaturaMaster = async function() {
+  if (!_isAdmin(window.currentUser)) {
+    window.toast('Acesso restrito ao administrador.', 'error');
+    return;
+  }
   const canvas = document.getElementById('assin-canvas');
   const nome     = document.getElementById('assin-nome').value.trim();
   const cpfCnpj  = document.getElementById('assin-cnpj').value.trim();
@@ -174,6 +183,10 @@ window.salvarAssinaturaMaster = async function() {
 }
 
 window.apagarAssinaturaMaster = async function() {
+  if (!_isAdmin(window.currentUser)) {
+    window.toast('Acesso restrito ao administrador.', 'error');
+    return;
+  }
   if (!confirm('Apagar a assinatura cadastrada?\nEsta ação não pode ser desfeita.')) return;
   const btn = document.getElementById('btn-apagar-assinatura');
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Apagando...'; }
@@ -210,6 +223,12 @@ window.apagarAssinaturaMaster = async function() {
 window._atualizarBotaoAssinatura = function() {
   const btn = document.getElementById('btn-assinatura-master');
   if (!btn) return;
+  // Oculta o botão completamente para usuários que não são admin
+  if (!_isAdmin(window.currentUser)) {
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
   if (window.assinaturaMaster?.dataUrl) {
     btn.style.background = '#f0fdf4';
     btn.style.borderColor = '#86efac';

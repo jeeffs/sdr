@@ -78,6 +78,7 @@ import './admin/seguranca_page.js';
 import './admin/importar.js';
 import './admin/dashboard_admin.js';
 import './admin/contratos.js';
+import './admin/contratos_otdr.js';
 
 export {
   haversineM,
@@ -99,4 +100,4 @@ export {
   sdrAuditLog
 };
 
-console.log('[SDR Bundle] sdr-bundle.js v49.0 carregado — fix: escapeHtml tickets/alertas, sem XSS em dados do banco');
+console.log('[SDR Bundle] sdr-bundle.js v70.0 carregado — Login apenas usuário e senha (biometria removida)');

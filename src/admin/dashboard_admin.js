@@ -397,6 +397,28 @@ function renderTecnicosPage() {
     const num = parseInt(uid.replace(/\D/g,'')) || (idx+1);
     const totalOS = allRecords.filter(r => r.userId === uid && (r.data||'').startsWith(mesFiltro)).length;
     if (totalOS === 0) return ''; // não mostra técnico sem OS no mês
+    const sf = window.servicosFixos?.[uid];
+    const sfHtml = sf
+      ? `<div style="margin-top:12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <i class="fas fa-plus-circle" style="color:#16a34a;font-size:.82rem"></i>
+          <span style="font-size:.8rem;font-weight:700;color:#166534;flex:1">${sf.descricao}</span>
+          <span style="font-size:.88rem;font-weight:800;color:#16a34a">R$ ${Number(sf.valor).toFixed(2).replace('.',',')}</span>
+          <span style="font-size:.7rem;padding:2px 8px;border-radius:99px;font-weight:700;background:${sf.ativo!==false?'#dcfce7':'#fee2e2'};color:${sf.ativo!==false?'#166534':'#991b1b'}">${sf.ativo!==false?'ATIVO':'INATIVO'}</span>
+          <button onclick="_toggleServicoFixo('${uid}',${sf.ativo===false})"
+            style="background:${sf.ativo!==false?'#dc2626':'#16a34a'};color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:.72rem;font-weight:700;cursor:pointer">
+            ${sf.ativo!==false?'Desativar':'Ativar'}
+          </button>
+          <button onclick="_removerServicoFixo('${uid}')"
+            style="background:#f1f5f9;color:#64748b;border:1px solid #e2e8f0;border-radius:6px;padding:4px 10px;font-size:.72rem;font-weight:600;cursor:pointer">
+            Remover
+          </button>
+        </div>`
+      : `<div style="margin-top:12px">
+          <button onclick="_abrirModalServicoFixo('${uid}','${u.name}')"
+            style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;border-radius:8px;padding:7px 14px;font-size:.77rem;font-weight:700;cursor:pointer;width:100%">
+            <i class="fas fa-plus"></i> Adicionar Serviço Fixo Mensal
+          </button>
+        </div>`;
     return `
     <div style="border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px;background:#fff">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
@@ -407,6 +429,7 @@ function renderTecnicosPage() {
         </div>
       </div>
       ${_tecTabela(uid, mesFiltro)}
+      ${sfHtml}
     </div>`;
   }).join('');
   lista.innerHTML = seletorMes + dashboard + cards;
@@ -1849,16 +1872,20 @@ async function renderInventarioFiscal() {
     const preenchido = !!(inv && inv.data);
     if (preenchido) totalPreenchidos++; else totalPendentes++;
 
-    // Pendências — mostra todas não resolvidas
+    // Pendências — mostra todas não resolvidas; distingue arrastadas de novas
     const pends = inv?.pendencias ? Object.entries(inv.pendencias).filter(([item,p]) => !p.resolvido) : [];
     if (pends.length > 0) totalComPendencias++;
+    const arrastadas = pends.filter(([,p]) => p.criadoEm && p.criadoEm.substring(0,7) !== mesSel);
+    const novas = pends.filter(([,p]) => !p.criadoEm || p.criadoEm.substring(0,7) === mesSel);
 
     // Status badge
     let badge;
     if (preenchido && pends.length === 0) {
       badge = `<span style="font-size:.75rem;background:#dcfce7;color:#14532d;padding:3px 10px;border-radius:20px;font-weight:700"><i class="fas fa-check-circle"></i> Completo</span>`;
-    } else if (preenchido && pends.length > 0) {
-      badge = `<span style="font-size:.75rem;background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:20px;font-weight:700"><i class="fas fa-exclamation-circle"></i> ${pends.length} pendência(s)</span>`;
+    } else if (preenchido && arrastadas.length > 0) {
+      badge = `<span style="font-size:.75rem;background:#fee2e2;color:#7f1d1d;padding:3px 10px;border-radius:20px;font-weight:700"><i class="fas fa-lock"></i> ${arrastadas.length} BLOQUEANTE(s)${novas.length > 0 ? ' + '+novas.length+' nova(s)' : ''}</span>`;
+    } else if (preenchido && novas.length > 0) {
+      badge = `<span style="font-size:.75rem;background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:20px;font-weight:700"><i class="fas fa-exclamation-circle"></i> ${novas.length} pendência(s)</span>`;
     } else {
       badge = `<span style="font-size:.75rem;background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:20px;font-weight:700"><i class="fas fa-clock"></i> Não preenchido</span>`;
     }
@@ -1872,10 +1899,13 @@ async function renderInventarioFiscal() {
       const validadoPor = inv.fiscalNome ? ` · Validado por ${inv.fiscalNome}` : '';
       resumoHtml = `<div style="font-size:.76rem;color:#64748b;margin-top:4px">${dataPreench}${validadoPor}</div>`;
 
-      if (pends.length > 0) {
-        resumoHtml += `<div style="margin-top:6px;padding:6px 10px;background:#fee2e2;border-radius:6px;font-size:.76rem;color:#991b1b">
-          ${pends.map(([item,p]) => `<div>• <strong>${item}</strong>${p.obs ? ': '+p.obs : ''}</div>`).join('')}
-        </div>`;
+      if (arrastadas.length > 0) {
+        const rowsArr = arrastadas.map(([item,p]) => '<div style="margin-top:2px"><i class="fas fa-exclamation-triangle"></i> <strong>' + item + '</strong> (desde ' + (p.criadoEm ? new Date(p.criadoEm).toLocaleDateString('pt-BR') : '') + ')' + (p.obs ? ': '+p.obs : '') + '</div>').join('');
+        resumoHtml += '<div style="margin-top:6px;padding:6px 10px;background:#fee2e2;border-radius:6px;font-size:.76rem;color:#7f1d1d"><strong><i class="fas fa-lock"></i> BLOQUEANTE — arrastada(s) de mês anterior:</strong>' + rowsArr + '</div>';
+      }
+      if (novas.length > 0) {
+        const rowsNov = novas.map(([item,p]) => '<div style="margin-top:2px">• <strong>' + item + '</strong>' + (p.criadoEm ? ' (desde ' + new Date(p.criadoEm).toLocaleDateString('pt-BR') + ')' : '') + (p.obs ? ': '+p.obs : '') + '</div>').join('');
+        resumoHtml += '<div style="margin-top:6px;padding:6px 10px;background:#fef3c7;border-radius:6px;font-size:.76rem;color:#92400e"><strong><i class="fas fa-exclamation-circle"></i> Nova(s) — prazo em aberto:</strong>' + rowsNov + '</div>';
       }
     }
 
@@ -2150,6 +2180,197 @@ function renderDashboardAnual() {
   _renderDaTabContent(rec);
 }
 
+// ════════════════════════════════════════════════════
+// Dashboard Mensal — mudarMesDash + renderDashboard
+// ════════════════════════════════════════════════════
+let _dashMes = null; // null = mês atual; formato 'YYYY-MM'
+
+function mudarMesDash(delta) {
+  const hoje = new Date();
+  let base;
+  if (_dashMes) {
+    const [_a, _m] = _dashMes.split('-');
+    base = new Date(parseInt(_a), parseInt(_m) - 1, 1);
+  } else {
+    base = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  }
+  base.setMonth(base.getMonth() + delta);
+  const novoMes = `${base.getFullYear()}-${String(base.getMonth()+1).padStart(2,'0')}`;
+  const atualMes = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  _dashMes = novoMes === atualMes ? null : novoMes;
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const rec = allRecords;
+
+  const hoje   = new Date();
+  const MESES_NOME = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  let anoM, mesM;
+  if (_dashMes) {
+    [anoM, mesM] = _dashMes.split('-');
+  } else {
+    anoM = String(hoje.getFullYear());
+    mesM = String(hoje.getMonth()+1).padStart(2,'0');
+  }
+  const prefM = `${anoM}-${mesM}`;
+  const mesLabel = `${MESES_NOME[parseInt(mesM)-1]} ${anoM}`;
+  const fmt = v => `<span class="money-val">R$ ${v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
+  const _n  = s => (s||'').normalize('NFC').trim().toUpperCase();
+
+  const labelEl = document.getElementById('dash-mes-label');
+  if (labelEl) labelEl.textContent = mesLabel;
+  const btnNext = document.getElementById('btn-dash-next');
+  if (btnNext) {
+    const atualMes = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+    btnNext.disabled = prefM >= atualMes;
+    btnNext.style.opacity = prefM >= atualMes ? '0.4' : '1';
+  }
+
+  const recMes = rec.filter(r => {
+    const d = (r.data || '').toString().trim();
+    return d.startsWith(prefM);
+  });
+
+  const _bannerEl = document.getElementById('dash-sem-dados');
+  if (_bannerEl) {
+    _bannerEl.style.display = recMes.length === 0 ? 'block' : 'none';
+    _bannerEl.innerHTML = recMes.length === 0
+      ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:14px 18px;margin-bottom:16px;color:#92400e;font-size:.88rem;display:flex;align-items:center;gap:10px">
+           <i class="fas fa-info-circle" style="font-size:1.1rem"></i>
+           <span>Nenhum registro encontrado em <b>${mesLabel}</b>. Os dados serão exibidos assim que houver OS lançadas para este período.</span>
+         </div>`
+      : '';
+  }
+
+  const statsEl = document.getElementById('dash-stats-mes');
+  if (statsEl) {
+    const totalMes = recMes.reduce((s,r)=>s+(r.total||0),0);
+    const svsMes   = recMes.reduce((s,r)=>s+(r.servicos?.length||0),0);
+    const tecsMes  = new Set(recMes.map(r=>r.userId).filter(Boolean)).size;
+    statsEl.innerHTML = `
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-file-alt"></i></div>
+        <div><div class="stat-val">${recMes.length}</div><div class="stat-lbl">OS no Mês</div></div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-dollar-sign"></i></div>
+        <div><div class="stat-val" style="font-size:1rem">${fmtMoeda(totalMes)}</div><div class="stat-lbl">Valor no Mês</div></div></div>
+      <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-tools"></i></div>
+        <div><div class="stat-val">${svsMes}</div><div class="stat-lbl">Serviços no Mês</div></div></div>
+      <div class="stat-card"><div class="stat-icon purple"><i class="fas fa-users"></i></div>
+        <div><div class="stat-val">${tecsMes}</div><div class="stat-lbl">Prestadores no Mês</div></div></div>`;
+  }
+
+  const _nivelRec = r => {
+    if (r.importado && r.nivelImp) return r.nivelImp;
+    const u = usersCache[r.userId];
+    if (!u) return 'V1';
+    if (u.role === 'master' || _isV3Import(u)) return 'V3';
+    return u.nivel || 'V1';
+  };
+  const recV1 = recMes.filter(r => _nivelRec(r) === 'V1');
+  const recV2 = recMes.filter(r => _nivelRec(r) === 'V2');
+  const recV3 = recMes.filter(r => _nivelRec(r) === 'V3');
+  const nivelEl = document.getElementById('dash-nivel-breakdown');
+  if (nivelEl) {
+    const nivCard = (label, cor, bg, recs) => {
+      const tv = recs.reduce((s,r)=>s+(r.total||0),0);
+      const tecs = new Set(recs.map(r=>r.userId).filter(Boolean)).size;
+      return `<div style="background:${bg};border-radius:12px;padding:16px 18px;border-left:4px solid ${cor}">
+        <div style="font-size:.68rem;font-weight:800;color:${cor};text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${label}</div>
+        <div style="font-size:1.25rem;font-weight:800;color:#1e293b">${recs.length} <span style="font-size:.75rem;font-weight:500;color:#64748b">OS</span></div>
+        <div style="font-size:.9rem;font-weight:700;color:${cor};margin-top:4px">${fmt(tv)}</div>
+        <div style="font-size:.7rem;color:#94a3b8;margin-top:2px">${tecs} técnico${tecs!==1?'s':''}</div>
+      </div>`;
+    };
+    nivelEl.innerHTML =
+      nivCard('Prestador',  '#16a34a','#f0fdf4', recV1) +
+      nivCard('PRESTADOR',  '#ea580c','#fff7ed', recV2) +
+      nivCard('Admin',      '#7c3aed','#f5f3ff', recV3);
+  }
+
+  const filialRec = recMes.filter(r => _n(r.profile) === 'FILIAL');
+  const matrizRec = recMes.filter(r => _n(r.profile) === 'MATRIZ');
+  const elFilialVal = document.getElementById('dash-filial-val');
+  const elFilialOS  = document.getElementById('dash-filial-os');
+  const elMatrizVal = document.getElementById('dash-matriz-val');
+  const elMatrizOS  = document.getElementById('dash-matriz-os');
+  if (elFilialVal) elFilialVal.innerHTML = fmt(filialRec.reduce((s,r)=>s+(r.total||0),0));
+  if (elFilialOS)  elFilialOS.textContent  = `${filialRec.length} OS`;
+  if (elMatrizVal) elMatrizVal.innerHTML = fmt(matrizRec.reduce((s,r)=>s+(r.total||0),0));
+  if (elMatrizOS)  elMatrizOS.textContent  = `${matrizRec.length} OS`;
+
+  let totalRend = 0;
+  recMes.forEach(r => {
+    const v3 = Number(r.totalV3 || 0);
+    if (r.totalV3 !== undefined) {
+      const v2 = Number(r.totalV2 || 0);
+      totalRend += v3 - v2;
+    } else {
+      (r.servicos||[]).forEach(sv => {
+        const sv3 = Number(sv.valorV3) || (Number(sv.qtd)||0) * (precosV3map[sv.tipo] ?? precosV3map[_normServico(sv.tipo)] ?? 0);
+        const sv2 = Number(sv.valorV2) || (Number(sv.qtd)||0) * (precosV2map[sv.tipo] ?? precosV2map[_normServico(sv.tipo)] ?? 0);
+        totalRend += sv3 - sv2;
+      });
+    }
+  });
+
+  const elRend = document.getElementById('s-rendimentos');
+  const elPer  = document.getElementById('s-rend-periodo');
+  if (elRend) elRend.innerHTML = fmt(totalRend);
+  if (elPer)  elPer.textContent  = mesLabel;
+
+  const byTec = {};
+  recMes.forEach(r => {
+    const nome    = r.userName || r.userId || '—';
+    const profile = _n(r.profile) || '—';
+    const tipo    = _n(r.tipo)    || '—';
+    const key     = `${nome}||${profile}||${tipo}`;
+    if (!byTec[key]) byTec[key] = { nome, profile, tipo, v: 0 };
+    if (r.totalV3 !== undefined) {
+      const v2 = Number(r.totalV2 || 0);
+      byTec[key].v += (Number(r.totalV3)||0) - v2;
+    } else {
+      (r.servicos||[]).forEach(sv => {
+        const v3 = Number(sv.valorV3) || (Number(sv.qtd)||0) * (precosV3map[sv.tipo] ?? precosV3map[_normServico(sv.tipo)] ?? 0);
+        const v2 = Number(sv.valorV2) || (Number(sv.qtd)||0) * (precosV2map[sv.tipo] ?? precosV2map[_normServico(sv.tipo)] ?? 0);
+        byTec[key].v += v3 - v2;
+      });
+    }
+  });
+
+  const rendRows = Object.values(byTec).filter(x => x.v > 0).sort((a,b)=>b.v-a.v);
+  const thS = 'padding:9px 12px;font-size:.78rem;font-weight:700;text-align:left;white-space:nowrap';
+  const tdS = 'padding:8px 12px;font-size:.82rem;border-bottom:1px solid #e5e7eb';
+  const elTec = document.getElementById('dash-rend-tec');
+  if (elTec) {
+    elTec.innerHTML = rendRows.length
+      ? `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+          <thead style="background:#7c3aed;color:#fff">
+            <tr>
+              <th style="${thS}">Prestador</th>
+              <th style="${thS}">Profile</th>
+              <th style="${thS}">Tipo</th>
+              <th style="${thS};text-align:right;color:#e9d5ff">Rendimentos</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rendRows.map((x,i)=>`<tr style="background:${i%2===0?'#faf5ff':'#fff'}">
+              <td style="${tdS}">${x.nome}</td>
+              <td style="${tdS}">${x.profile}</td>
+              <td style="${tdS}">${x.tipo}</td>
+              <td style="${tdS};text-align:right;color:#7c3aed;font-weight:700">${fmt(x.v)}</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot style="background:#f3e8ff;border-top:2px solid #c4b5fd">
+            <tr>
+              <td colspan="3" style="padding:9px 12px;font-weight:700;font-size:.82rem">Total</td>
+              <td style="padding:9px 12px;text-align:right;font-weight:800;color:#7c3aed">${fmt(totalRend)}</td>
+            </tr>
+          </tfoot>
+        </table></div>`
+      : `<p style="color:var(--muted);font-size:.85rem">Nenhum registro em ${mesLabel}.</p>`;
+  }
+}
+
 // ── Expor funções como globals para o admin.html (tree-shaking fix) ──
 window._calcTecTotal = _calcTecTotal;
 window._fmtTec = _fmtTec;
@@ -2176,3 +2397,5 @@ window.daShowTab = daShowTab;
 window._renderDaBarras = _renderDaBarras;
 window._renderDaTabContent = _renderDaTabContent;
 window.renderDashboardAnual = renderDashboardAnual;
+window.mudarMesDash = mudarMesDash;
+window.renderDashboard = renderDashboard;
