@@ -8,6 +8,25 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>Solução de Rua</title>
+<link rel="icon" href="/icon-192.png" type="image/png">
+<script>
+// ── Console silenciado em produção ───────────────────────────────────────────
+// Mantém console.error intacto. Para ativar todos os logs:
+//   localStorage.setItem('sdr_debug','1')  →  F5
+// Para desativar:
+//   localStorage.removeItem('sdr_debug')  →  F5
+;(function(){
+  if (localStorage.getItem('sdr_debug')) {
+    console.log('[SDR] Modo debug ativo — todos os logs visíveis');
+    return;
+  }
+  var _noop = function(){};
+  window._sdrLog  = console.log.bind(console);
+  window._sdrWarn = console.warn.bind(console);
+  console.log  = _noop;
+  console.warn = _noop;
+})();
+</script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
@@ -334,12 +353,12 @@ tbody tr:last-child{border-bottom:none}
 #g-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);
   border:5px solid transparent;border-top-color:#1e293b}
 </style>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
@@ -405,10 +424,11 @@ tbody tr:last-child{border-bottom:none}
     <div class="login-heading">Acesse sua conta</div>
     <div class="login-subheading">Entre com seu usuário e senha para continuar</div>
 
+    <form id="login-form" onsubmit="entrar(); return false;" autocomplete="on">
     <div class="login-field">
       <label>Usuário</label>
       <input type="text" id="login-user-input" placeholder="Digite seu usuário"
-        autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+        autocomplete="username" autocorrect="off" autocapitalize="off" spellcheck="false"
         onkeydown="if(event.key==='Enter')document.getElementById('pwd-input').focus()">
     </div>
 
@@ -416,6 +436,7 @@ tbody tr:last-child{border-bottom:none}
       <label>Senha</label>
       <div class="input-wrap">
         <input type="password" id="pwd-input" placeholder="Digite sua senha" maxlength="30"
+          autocomplete="current-password"
           onkeydown="if(event.key==='Enter')entrar()">
         <button type="button" class="pwd-toggle" onclick="togglePwdVis()" tabindex="-1">
           <i class="fas fa-eye" id="pwd-eye-icon"></i>
@@ -425,17 +446,10 @@ tbody tr:last-child{border-bottom:none}
 
     <p class="login-err" id="login-err"></p>
 
-    <button class="btn btn-primary" style="width:100%;padding:13px;font-size:.97rem;border-radius:10px"
-      onclick="entrar()">
+    <button type="submit" class="btn btn-primary" style="width:100%;padding:13px;font-size:.97rem;border-radius:10px">
       <i class="fas fa-sign-in-alt"></i> Entrar
     </button>
-
-    <button id="btn-biometrico" onclick="loginBiometrico()"
-      style="display:none;width:100%;padding:12px;font-size:.95rem;border-radius:10px;
-             margin-top:10px;background:#f0fdf4;color:#166534;border:1.5px solid #86efac;
-             cursor:pointer;font-weight:600;transition:background .2s">
-      <i class="fas fa-fingerprint"></i> <span>Entrar com biometria</span>
-    </button>
+    </form>
 
     <!-- campos ocultos mantidos por compatibilidade -->
     <div id="users-grid" style="display:none"></div>
@@ -468,19 +482,22 @@ tbody tr:last-child{border-bottom:none}
     <div class="avatar"><i class="fas fa-user-shield"></i></div>
     <h2 id="first-login-title">Bem-vindo!</h2>
     <p>É seu primeiro acesso. Crie uma senha pessoal de pelo menos 4 caracteres. Você usará ela em todos os logins.</p>
+    <form onsubmit="criarSenha(); return false;" autocomplete="new-password">
+    <input type="text" id="first-login-username" autocomplete="username" style="display:none" tabindex="-1" aria-hidden="true">
     <div class="pwd-row">
       <label>Nova senha</label>
-      <input type="password" id="new-pwd" placeholder="Digite sua senha" maxlength="30">
+      <input type="password" id="new-pwd" placeholder="Digite sua senha" maxlength="30" autocomplete="new-password">
     </div>
     <div class="pwd-row">
       <label>Confirmar senha</label>
       <input type="password" id="new-pwd2" placeholder="Repita a senha" maxlength="30"
-        onkeydown="if(event.key==='Enter')criarSenha()">
+        autocomplete="new-password" onkeydown="if(event.key==='Enter')criarSenha()">
     </div>
     <p id="first-login-err" style="color:var(--danger);font-size:.82rem;margin-bottom:12px;display:none"></p>
-    <button class="btn btn-primary" style="width:100%" onclick="criarSenha()">
+    <button type="submit" class="btn btn-primary" style="width:100%">
       <i class="fas fa-lock"></i> Criar senha e entrar
     </button>
+    </form>
   </div>
 </div>
 
@@ -700,6 +717,13 @@ tbody tr:last-child{border-bottom:none}
             <option value="">Todos os registros</option>
             <option value="imp">Somente importados</option>
             <option value="nao">Somente lançados</option>
+          </select>
+          <select id="os-load-mode"
+                  class="filter-select"
+                  onchange="window._setOsLoadMode(this.value)"
+                  title="Quanto histórico de OS carregar do servidor">
+            <option value="atual_anterior" selected>Mês atual + anterior</option>
+            <option value="tudo">Histórico completo</option>
           </select>
           <button class="btn btn-danger btn-sm" id="btn-del-tudo" onclick="confirmarLimparTudo()" style="display:none">
             <i class="fas fa-trash"></i> Limpar Tudo
@@ -990,17 +1014,6 @@ tbody tr:last-child{border-bottom:none}
             </div>
           </div>
 
-
-          <!-- Relatorios Assinados (apenas master) -->
-          <div id="sec-relatorios-assinados" style="display:none;margin-top:24px">
-            <hr class="divider" style="margin:0 0 16px">
-            <div style="font-size:.82rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">
-              <i class="fas fa-file-signature" style="margin-right:4px"></i> Relatorios Assinados — Pendentes de Aprovacao
-            </div>
-            <div id="relatorios-assinados-lista" style="min-height:40px">
-              <div style="color:#94a3b8;font-size:.82rem"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
-            </div>
-          </div>
         </div>
 
         <!-- ── EXPORTAR DOCUMENTOS (seção dentro da aba Exportar — visível para master/fiscal) ── -->
@@ -1284,6 +1297,17 @@ tbody tr:last-child{border-bottom:none}
                 <i class="fas fa-plus"></i> Adicionar
               </button>
             </div>
+          </div>
+        </div>
+
+        <!-- Relatórios Assinados — pendentes de aprovação -->
+        <div id="sec-relatorios-assinados" style="margin-top:24px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <i class="fas fa-file-signature" style="color:#7c3aed;font-size:1rem"></i>
+            <span style="font-size:.88rem;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.04em">Relatórios Assinados — Pendentes de Aprovação</span>
+          </div>
+          <div id="relatorios-assinados-lista" style="min-height:40px">
+            <div style="color:#94a3b8;font-size:.82rem"><i class="fas fa-spinner fa-spin"></i> Carregando...</div>
           </div>
         </div>
         </div><!-- /fin-sub-producao -->
@@ -1833,11 +1857,27 @@ tbody tr:last-child{border-bottom:none}
                 <option value="todos">Todos os tipos</option>
                 <option value="prestacao">Prestação de Serviços</option>
                 <option value="vendaPrazo">Venda a Prazo</option>
+                <option value="otdr">Contrato OTDR</option>
               </select>
               <input id="doc-filtro-nome" oninput="renderDocumentosAutenticados()" placeholder="Filtrar por nome..." style="padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:.82rem;flex:1;min-width:150px">
             </div>
 
             <div id="documentos-autenticados-list"></div>
+
+            <!-- OTDR: painel colapsável -->
+            <div style="margin-top:20px">
+              <button onclick="(function(){var s=document.getElementById('otdr-gestao-wrap');var open=s.style.display!=='none';s.style.display=open?'none':'block';if(!open&&typeof renderGerenciarOTDR==='function')renderGerenciarOTDR();})()"
+                style="background:#0e7490;color:#fff;border:none;border-radius:10px;
+                padding:10px 18px;font-size:.83rem;font-weight:600;cursor:pointer;
+                display:flex;align-items:center;gap:8px">
+                <i class="fas fa-camera"></i>
+                Gestão Contrato OTDR
+                <i class="fas fa-chevron-down" style="font-size:.7rem;opacity:.8"></i>
+              </button>
+              <div id="otdr-gestao-wrap" style="display:none;margin-top:14px">
+                <div id="otdr-gestao-content"></div>
+              </div>
+            </div>
           </div>
         </div><!-- /cfg-sub-documentos -->
 
@@ -1906,6 +1946,24 @@ tbody tr:last-child{border-bottom:none}
       <p style="color:#64748b;font-size:.9rem;margin:0">Seu contrato foi gerado. Siga os passos abaixo para ativar seu acesso.</p>
     </div>
     <div id="contrato-pendente-content"></div>
+    <div style="text-align:center;margin-top:16px">
+      <button onclick="logout()" style="background:none;border:none;color:#94a3b8;font-size:.82rem;cursor:pointer;text-decoration:underline">
+        <i class="fas fa-sign-out-alt" style="margin-right:4px"></i>Sair da conta
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TELA: CONTRATO OTDR PENDENTE (bloqueia acesso até técnico assinar o contrato OTDR) -->
+<div id="screen-otdr-pendente" style="display:none;min-height:100vh;background:#f8fafc;
+  align-items:center;justify-content:center;flex-direction:column;padding:24px">
+  <div style="max-width:640px;width:100%">
+    <div style="text-align:center;margin-bottom:24px">
+      <i class="fas fa-camera" style="font-size:3rem;color:#0e7490;margin-bottom:12px;display:block"></i>
+      <h2 style="font-size:1.35rem;font-weight:700;color:#1e293b;margin:0 0 6px">Contrato OTDR</h2>
+      <p style="color:#64748b;font-size:.9rem;margin:0">Você possui um contrato de aluguel/compra de equipamento OTDR que precisa ser assinado digitalmente.</p>
+    </div>
+    <div id="otdr-pendente-content" style="background:#fff;border-radius:14px;box-shadow:0 2px 16px rgba(0,0,0,.1);padding:24px"></div>
     <div style="text-align:center;margin-top:16px">
       <button onclick="logout()" style="background:none;border:none;color:#94a3b8;font-size:.82rem;cursor:pointer;text-decoration:underline">
         <i class="fas fa-sign-out-alt" style="margin-right:4px"></i>Sair da conta
@@ -2165,25 +2223,6 @@ tbody tr:last-child{border-bottom:none}
   </div>
 </div>
 
-<!-- BANNER OFERTA DE BIOMETRIA -->
-<div id="bio-offer-banner" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-  z-index:9999;background:#fff;border:1.5px solid #86efac;border-radius:14px;
-  box-shadow:0 4px 24px rgba(0,0,0,.15);padding:16px 22px;max-width:420px;width:90%;
-  align-items:center;gap:14px;flex-direction:row">
-  <i class="fas fa-fingerprint" style="font-size:1.8rem;color:#16a34a;flex-shrink:0"></i>
-  <div style="flex:1">
-    <div style="font-weight:700;color:#166534;margin-bottom:3px">Ativar login por biometria?</div>
-    <div style="font-size:.85rem;color:#555">Use Face ID ou impressão digital na próxima vez.</div>
-  </div>
-  <div style="display:flex;gap:8px;flex-shrink:0">
-    <button onclick="ativarBiometriaOffer()" style="background:#16a34a;color:#fff;border:none;
-      border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600;font-size:.85rem">Ativar</button>
-    <button onclick="document.getElementById('bio-offer-banner').style.display='none'"
-      style="background:#f1f5f9;color:#555;border:none;border-radius:8px;padding:8px 12px;
-      cursor:pointer;font-size:.85rem">Agora não</button>
-  </div>
-</div>
-
 <!-- MODAIS -->
 
 <!-- Modal PIN Tabela de Preços -->
@@ -2192,22 +2231,27 @@ tbody tr:last-child{border-bottom:none}
     <div style="font-size:2.4rem;margin-bottom:4px">🔒</div>
     <h3 id="pin-modal-title" style="margin-bottom:6px">Área Restrita</h3>
     <p id="pin-modal-desc" style="color:var(--muted);font-size:.86rem;margin-bottom:20px">Digite a senha de 6 dígitos para acessar Tabela de Preços e Prestadores.</p>
+    <form onsubmit="confirmarPin(); return false;" autocomplete="off">
+    <input type="text" autocomplete="username" style="display:none" tabindex="-1" aria-hidden="true">
     <div style="display:flex;justify-content:center;gap:8px;margin-bottom:16px" id="pin-dots-wrap">
       <input type="password" id="pin-input" inputmode="numeric" maxlength="6"
+        autocomplete="current-password"
         style="width:180px;font-size:1.6rem;letter-spacing:10px;text-align:center;padding:10px;border:2px solid var(--border);border-radius:10px;outline:none"
         oninput="onPinInput()" onkeydown="if(event.key==='Enter')confirmarPin()">
     </div>
     <div id="pin-err" style="color:var(--danger);font-size:.82rem;min-height:18px;margin-bottom:12px"></div>
     <div class="modal-actions" id="pin-actions">
-      <button class="btn btn-secondary" onclick="fecharModal('modal-pin-precos')">Cancelar</button>
-      <button class="btn btn-primary" id="btn-confirmar-pin" onclick="confirmarPin()"><i class="fas fa-unlock"></i> Confirmar</button>
+      <button type="button" class="btn btn-secondary" onclick="fecharModal('modal-pin-precos')">Cancelar</button>
+      <button type="submit" class="btn btn-primary" id="btn-confirmar-pin"><i class="fas fa-unlock"></i> Confirmar</button>
     </div>
     <div id="pin-criar-wrap" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:14px">
       <p style="color:var(--muted);font-size:.82rem;margin-bottom:8px">Confirme a nova senha:</p>
       <input type="password" id="pin-confirm-input" inputmode="numeric" maxlength="6"
+        autocomplete="new-password"
         style="width:180px;font-size:1.6rem;letter-spacing:10px;text-align:center;padding:10px;border:2px solid var(--border);border-radius:10px;outline:none"
         oninput="onPinInput()" onkeydown="if(event.key==='Enter')confirmarPin()">
     </div>
+    </form>
   </div>
 </div>
 
@@ -2628,7 +2672,7 @@ var PRECOS_V3 = {
   'EQUIPAGEM DE POSTE (FERRAGEN PESADA)':36.5,'RETIRA DE SPLITER':16.5,'TROCA DE BANDEJA':11,
   'KM RODADO':1.2,'LANÇAMENTO DE DROP':0.5,'INSTALAÇÃO DE CRUZETA':33,
   'SERVIÇO DE RADIO':100,'CERTIFICAÇÃO DE PORTAS OCUPADAS':106,
-  'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)':36,'INSTALAÇÃO DE PLAQUETAS':13,
+  'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)':49,'OTDR ARMARIO (ROMPIMENTO/ATENUAÇÃO)':49,'INSTALAÇÃO DE PLAQUETAS':13,
   'ORGANIZAÇÃO DE CABOS EM CTO':11,'RETIRADA DE EQUIPAMENTO':44,
 };
 var SERVICOS_DESC = {
@@ -2676,6 +2720,7 @@ var SERVICE_ALIASES = {
   'OTDR ARMARIO':                    'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)',
   'OTDR ARMARIO ROMPIMENTO ATENUAÇÃO':'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)',
   'OTDR ARMARIO ROMPIMENTO-ATENUAÇÃO':'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)',
+  'OTDR ARMARIO (ROMPIMENTO/ATENUAÇÃO)':'OTDR ARMARIO (ROMPIMENTO-ATENUAÇÃO)',
   'CERTIFICAÇÃO DE PORTAS':          'CERTIFICAÇÃO DE PORTAS OCUPADAS',
   'CERTIFICACAO DE PORTAS':          'CERTIFICAÇÃO DE PORTAS OCUPADAS',
 };
@@ -2820,6 +2865,13 @@ window._isV3Import  = u => (u?.name||'').toLowerCase() === 'jefferson' && u?.rol
 window._isFiscal    = u => (u?.nivel || 'V1') === 'V0';
 window._isObservador= u => (u?.nivel || 'V1') === 'V4';
 window._isMasterUid = uid => { const u = usersCache[uid]; return u?.role === 'master'; };
+// Lista de técnicos ativos: exclui fiscal (V0), observador (V4) e quem não fez 1º login
+window._getTecnicosAtivos = function() {
+  return Object.entries(usersCache)
+    .filter(([,u]) => u.ativo !== false && !u.firstLogin && !window._isFiscal(u) && !window._isObservador(u))
+    .map(([id,u]) => ({id, nome:u.name||id, nivel:u.nivel||'V1'}))
+    .sort((a,b) => a.nome.localeCompare(b.nome));
+};
 const SALARIO_V0 = 3000; // R$ fixo/mês para o Fiscal
 // Aliases locais (retrocompatibilidade com código inline no admin.html)
 const _isAdmin      = window._isAdmin;
@@ -3062,11 +3114,7 @@ async function salvarEdicaoOS() {
 // ════════════════════════════════════════════════════
 // ⑪ DASHBOARD
 // ════════════════════════════════════════════════════
-let _dashMes = null; // null = mês atual; formato 'YYYY-MM'
-
-    // → window.mudarMesDash() em sdr-bundle (admin/Fase-E/render-dashboard.js)
-
-    // → window.renderDashboard() em sdr-bundle (admin/Fase-E/render-dashboard.js)
+// _dashMes, mudarMesDash e renderDashboard → sdr-bundle (src/admin/dashboard_admin.js)
 
 // ════════════════════════════════════════════════════
 // ⑫ FORM / GPS / OS CODE
@@ -3105,6 +3153,28 @@ let fotoBase64 = null;
 
 // ── Gerenciar Profiles e Cidades ──
 
+// ── Input de preço (tabela de preços) ──
+function _inputPreco(s, nivel, map) {
+  const v = map[s] !== undefined ? map[s] : '';
+  return '<div style="position:relative;display:inline-flex;align-items:center">'
+    + '<span style="position:absolute;left:6px;color:var(--muted);font-size:.75rem;pointer-events:none">R$</span>'
+    + '<input type="number" data-servico="' + s + '" data-nivel="' + nivel + '" value="' + v + '" min="0" step="0.01" placeholder="0,00"'
+    + ' style="padding:5px 6px 5px 22px;width:110px;border:1px solid var(--border);border-radius:7px;font-size:.82rem;text-align:right"'
+    + ' oninput="atualizarPrecoMemoria(this)">'
+    + '</div>';
+}
+window._inputPreco = _inputPreco;
+
+function atualizarPrecoMemoria(el) {
+  const s   = el.getAttribute('data-servico');
+  const niv = el.getAttribute('data-nivel');
+  const v   = parseFloat(el.value) || 0;
+  if (niv === 'V1' && window.precosV1map) window.precosV1map[s] = v;
+  else if (niv === 'V2' && window.precosV2map) window.precosV2map[s] = v;
+  else if (niv === 'V3' && window.precosV3map) window.precosV3map[s] = v;
+  else if (niv === 'V4' && window.precosV4map) window.precosV4map[s] = v;
+}
+window.atualizarPrecoMemoria = atualizarPrecoMemoria;
 
 // ════════════════════════════════════════════════════
 // PIN — Tabela de Preços
@@ -3482,13 +3552,24 @@ async function _buildXlsxTecnico(recs, priceMap=null) {
   return wb.xlsx.writeBuffer();
 }
 
-// Recalcula o total de uma OS usando a tabela de preços V3
-// Para OS importadas, preserva o valor histórico no momento da importação
+// Recalcula o total de uma OS usando a tabela de preços V3.
+// Para OS importadas com totalV3 gravado, usa o valor armazenado.
+// Para importadas sem totalV3, computa pela tabela V3 × qtd.
+// Para lançadas, usa valorV3 por serviço ou tabela V3 × qtd.
+// Normaliza variantes de nome via SERVICE_ALIASES (ex: ROMPIMENTO/ATENUAÇÃO → ROMPIMENTO-ATENUAÇÃO).
 function _calcTotalV3(r) {
-  if (r.importado) return r.total || (r.servicos||[]).reduce((s,sv) => s + (Number(sv.valor)||0), 0);
-  return (r.servicos||[]).reduce((s, sv) => {
+  const svList = sv => Array.isArray(sv) ? sv : Object.values(sv || {});
+  const normTipo = t => (t && SERVICE_ALIASES[t]) || t;
+  if (r.importado) {
+    if (r.totalV3 !== undefined) return r.totalV3 || 0;
+    return svList(r.servicos).reduce((s, sv) => {
+      const preco = precosV3map[normTipo(sv.tipo)] || 0;
+      return s + preco * (Number(sv.qtd) || 0);
+    }, 0);
+  }
+  return svList(r.servicos).reduce((s, sv) => {
     if (sv.valorV3 !== undefined) return s + sv.valorV3;
-    const preco = precosV3map[sv.tipo] || 0;
+    const preco = precosV3map[normTipo(sv.tipo)] || 0;
     const qtd   = Number(sv.qtd) || 0;
     return s + preco * qtd;
   }, 0);
@@ -3967,26 +4048,70 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
   }
 
-  // ── Monkey-patch: db.ref().once() → REST API ─────────────────────────────────
-  // O SDK Firebase abre o WebSocket no nível TCP mas falha no handshake de auth da aplicação.
-  // Todas as chamadas .once('value') no bundle (carregarDados, _carregarConfig, etc.)
-  // ficam penduradas indefinidamente. Redirecionamos para REST que funciona perfeitamente.
+  // ── Monkey-patch: db.ref() → REST API (leitura + escrita) ───────────────────
+  // O SDK Firebase abre o WebSocket no nível TCP mas falha no handshake de auth.
+  // Todas as chamadas .once()/.set()/.update()/.remove()/.push() são redirecionadas
+  // para a REST API, que funciona com qualquer token Firebase Auth (anônimo ou email).
+  //
+  // Escrita: tenta re-autenticar com conta @solucaoderua.app se o usuário atual for
+  // anônimo — garante que a regra .write do banco seja satisfeita.
   if (window.db) {
     const _rtdbBase = 'https://solucaoderua-default-rtdb.firebaseio.com';
+
+    // ── Helper: obtém token de escrita (@solucaoderua.app) ──────────────────
+    async function _getWriteToken() {
+      const _fa = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth() : null;
+      if (!_fa) return null;
+      let _wu = _fa.currentUser;
+      // Se anônimo ou sem email SDR, tenta re-auth com hash salvo no localStorage
+      if (!_wu || _wu.isAnonymous || !(_wu.email || '').endsWith('@solucaoderua.app')) {
+        const _wuid = (window.currentUser && window.currentUser.id) || '';
+        const _wh   = _wuid && localStorage.getItem('sdr_admin_bio_fhash_' + _wuid);
+        if (_wuid && _wh) {
+          const _eb = _wuid.replace(/[^a-zA-Z0-9._-]/g, '_');
+          for (const _em of [_eb + '@solucaoderua.app', _eb + '.v2@solucaoderua.app']) {
+            try {
+              const _cr = await _fa.signInWithEmailAndPassword(_em, _wh);
+              if (_cr && _cr.user) { _wu = _cr.user; break; }
+            } catch(_) { /* tenta próximo */ }
+          }
+        }
+        _wu = _fa.currentUser;
+        // Fallback: se ainda não é @solucaoderua.app mas está autenticado (não-anônimo),
+        // usa o token atual — funciona para caminhos com ".write": "auth != null"
+        if (!_wu) return null;
+        if (!(_wu.email || '').endsWith('@solucaoderua.app') && !_wu.isAnonymous) {
+          return _wu.getIdToken();
+        }
+        if (!(_wu.email || '').endsWith('@solucaoderua.app')) return null;
+      }
+      return _wu.getIdToken();
+    }
+
+    // ── Helper: lança erro compatível com Firebase SDK ──────────────────────
+    async function _restWriteError(res) {
+      const body = await res.json().catch(() => ({}));
+      const msg  = body.error || 'HTTP ' + res.status;
+      const err  = new Error(msg);
+      if (msg.includes('PERMISSION_DENIED') || res.status === 403) err.code = 'PERMISSION_DENIED';
+      throw err;
+    }
+
     const _dbRefOrig = window.db.ref.bind(window.db);
     window.db.ref = function(path) {
-      const _ref = _dbRefOrig(path);
+      const _ref       = _dbRefOrig(path);
+      const _cleanPath = String(path || '').replace(/^\/+/, '');
+
+      // ── .once() — leitura via REST (token anônimo funciona) ────────────────
       const _onceOrig = _ref.once.bind(_ref);
       _ref.once = async function(eventType) {
         try {
           const _u = firebase.auth().currentUser;
           if (!_u) return _onceOrig(eventType);
           const _tk2 = await _u.getIdToken();
-          const _cleanPath = String(path || '').replace(/^\/+/, '');
           const _r = await fetch(`${_rtdbBase}/${_cleanPath}.json?auth=${_tk2}`,
             { signal: AbortSignal.timeout(10000) });
           const _val = _r.ok ? await _r.json() : null;
-          // Snapshot compatível com Firebase SDK
           const _snap = {
             val:     () => _val,
             exists:  () => _val !== null,
@@ -4001,9 +4126,86 @@ document.addEventListener('DOMContentLoaded', async function() {
           return { val:()=>null, exists:()=>false, key:'', child:()=>({val:()=>null,exists:()=>false}), forEach:()=>{} };
         }
       };
+
+      // ── .set(value) — PUT via REST ──────────────────────────────────────────
+      const _setOrig = _ref.set ? _ref.set.bind(_ref) : null;
+      _ref.set = async function(value) {
+        try {
+          const _tk = await _getWriteToken();
+          if (!_tk) { throw new Error('sem-token-escrita'); }
+          const _r = await fetch(`${_rtdbBase}/${_cleanPath}.json?auth=${_tk}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(value === undefined ? null : value),
+            signal: AbortSignal.timeout(10000)
+          });
+          if (!_r.ok) await _restWriteError(_r);
+        } catch(e) {
+          console.warn('[SDR REST] .set() erro:', path, e.message);
+          throw e;
+        }
+      };
+
+      // ── .update(updates) — PATCH via REST ──────────────────────────────────
+      const _updateOrig = _ref.update ? _ref.update.bind(_ref) : null;
+      _ref.update = async function(updates) {
+        try {
+          const _tk = await _getWriteToken();
+          if (!_tk) { throw new Error('sem-token-escrita'); }
+          const _r = await fetch(`${_rtdbBase}/${_cleanPath}.json?auth=${_tk}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates),
+            signal: AbortSignal.timeout(10000)
+          });
+          if (!_r.ok) await _restWriteError(_r);
+        } catch(e) {
+          console.warn('[SDR REST] .update() erro:', path, e.message);
+          throw e;
+        }
+      };
+
+      // ── .remove() — DELETE via REST ─���──────────────────────────────────────
+      const _removeOrig = _ref.remove ? _ref.remove.bind(_ref) : null;
+      _ref.remove = async function() {
+        try {
+          const _tk = await _getWriteToken();
+          if (!_tk) { throw new Error('sem-token-escrita'); }
+          const _r = await fetch(`${_rtdbBase}/${_cleanPath}.json?auth=${_tk}`, {
+            method: 'DELETE',
+            signal: AbortSignal.timeout(10000)
+          });
+          if (!_r.ok) await _restWriteError(_r);
+        } catch(e) {
+          console.warn('[SDR REST] .remove() erro:', path, e.message);
+          throw e;
+        }
+      };
+
+      // ── .push(value) — POST via REST — retorna {key} compatível com SDK ────
+      const _pushOrig = _ref.push ? _ref.push.bind(_ref) : null;
+      _ref.push = async function(value) {
+        try {
+          const _tk = await _getWriteToken();
+          if (!_tk) { throw new Error('sem-token-escrita'); }
+          const _r = await fetch(`${_rtdbBase}/${_cleanPath}.json?auth=${_tk}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(value),
+            signal: AbortSignal.timeout(10000)
+          });
+          if (!_r.ok) await _restWriteError(_r);
+          const _d = await _r.json();
+          return { key: _d.name };
+        } catch(e) {
+          console.warn('[SDR REST] .push() erro:', path, e.message);
+          throw e;
+        }
+      };
+
       return _ref;
     };
-    console.log('[SDR] db.ref().once() → REST API ativo');
+    console.log('[SDR] db.ref() → REST API ativo (once + set + update + remove + push)');
   }
 
   try {
@@ -4074,9 +4276,22 @@ const TABELA_LICENCIAMENTO = {
 };
 const MESES_NOME = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 
-const SEG_VEICULO_ITENS = ['Funilaria','Para-choques','Pneus','Faróis','Lanterna','Luz Ré','Limpeza','Óleo Motor','Óleo Freio','Correia Dentada'];
-const SEG_FERRAMENTAL_ITENS = ['Máquina de Fusão','Clivador','Alicate Decapador','Power Meter','Medidor Fibra Ativa','Fusimec','Alicates','Chave Fenda/Philips','Mesa','Maçarico'];
-const SEG_EPI_ITENS = ['Cinto Segurança','Capacete','Bota Segurança','Cones','Escadas'];
+const SEG_VEICULO_ITENS = [
+  'Funilaria - Porta Direita','Funilaria - Porta Esquerda','Funilaria - Capô','Funilaria - Porta-Mala',
+  'Para-choque Dianteiro','Para-choque Traseiro',
+  'Pneu Dianteiro Esquerdo','Pneu Dianteiro Direito','Pneu Traseiro Esquerdo','Pneu Traseiro Direito','Estepe',
+  'Farol Direito','Farol Esquerdo',
+  'Lanterna Direita','Lanterna Esquerda',
+  'Luz Ré Direita','Luz Ré Esquerda',
+  'Limpeza Interna','Limpeza Externa',
+  'Óleo Motor','Óleo Freio','Correia Dentada'
+];
+const SEG_FERRAMENTAL_ITENS = [
+  'Máquina de Fusão','Clivador','Alicate Decapador','Power Meter','Medidor Fibra Ativa',
+  'Fusimec','Alicates','Chave Fenda-Philips','Mesa','Maçarico',
+  'Escada - Pé','Escada - Pica-pau','Escada - Lingueta','Escada - Borracha'
+];
+const SEG_EPI_ITENS = ['Cinto Segurança','Capacete','Bota Segurança','Cones'];
 
 const SEG_EPI_TIPOS = {
   protecao_ocular:          'Proteção Ocular',
@@ -4185,16 +4400,154 @@ const SIMPLES_FAIXAS = [
   { limInf:3600000.01, limSup:4800000,    aliq:0.330, ded:648000,  irpj:0.350, csll:0.150, cofins:0.1603, pis:0.0347, cpp:0.305, iss:0.000 },
 ];
 
-    // → window._simplesCalc() em sdr-bundle (admin/Fase-E/impostos.js)
+function _simplesCalc(faturamento, rbt12) {
+  if (!faturamento || !rbt12) return null;
+  const faixa = SIMPLES_FAIXAS.find(f => rbt12 >= f.limInf && rbt12 <= f.limSup);
+  if (!faixa) return null;
+  const aliqEfetiva = (rbt12 * faixa.aliq - faixa.ded) / rbt12;
+  const r2 = v => Math.round(v * 100) / 100;
+  const irpj   = r2(faturamento * aliqEfetiva * faixa.irpj);
+  const csll   = r2(faturamento * aliqEfetiva * faixa.csll);
+  const cofins = r2(faturamento * aliqEfetiva * faixa.cofins);
+  const pis    = r2(faturamento * aliqEfetiva * faixa.pis);
+  const cpp    = r2(faturamento * aliqEfetiva * faixa.cpp);
+  const issRaw = faturamento * aliqEfetiva * faixa.iss;
+  const issCap = faturamento * 0.05;
+  const iss    = r2(Math.min(issRaw, issCap));
+  const total  = r2(irpj + csll + cofins + pis + cpp + iss);
+  return { aliqEfetiva, total, irpj, csll, cofins, pis, cpp, iss };
+}
+
+function renderImpostos() {
+  const tbody = document.getElementById('imp-tbody');
+  const tfoot = document.getElementById('imp-tfoot');
+  const resumo = document.getElementById('imp-resumo');
+  if (!tbody) return;
+  const anoIni = parseInt(document.getElementById('imp-ano-ini')?.value || 2025);
+  const anos = [anoIni, anoIni + 1];
+  const mesesPt = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const allMonths = [];
+  for (let y = anoIni - 1; y <= anoIni + 1; y++) {
+    for (let m = 1; m <= 12; m++) allMonths.push({ y, m, ym: `${y}-${String(m).padStart(2,'0')}` });
+  }
+  const rbt12Map = {};
+  allMonths.forEach((mo, idx) => {
+    let soma = 0;
+    for (let i = Math.max(0, idx - 11); i <= idx; i++) soma += _impFaturamentos[allMonths[i].ym] || 0;
+    rbt12Map[mo.ym] = soma;
+  });
+  const fmt = v => v.toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  const fmtPct = v => (v * 100).toFixed(2) + '%';
+  let rows = '';
+  let totFat=0, totDas=0, totIrpj=0, totCsll=0, totCofins=0, totPis=0, totCpp=0, totIss=0;
+  let anoAtual = null;
+  allMonths.filter(mo => anos.includes(mo.y)).forEach((mo, idx) => {
+    if (mo.y !== anoAtual) {
+      anoAtual = mo.y;
+      rows += `<tr><td colspan="11" style="background:#dbeafe;color:#1e3a5f;font-weight:700;font-size:.8rem;padding:6px 10px;border-top:2px solid #93c5fd">▸ ${anoAtual}</td></tr>`;
+    }
+    const fat = _impFaturamentos[mo.ym] || 0;
+    const rbt = rbt12Map[mo.ym] || 0;
+    const calc = fat > 0 ? _simplesCalc(fat, rbt) : null;
+    const bg = idx % 2 === 0 ? '#f8fafc' : '#fff';
+    totFat += fat; totDas += calc?.total||0; totIrpj += calc?.irpj||0; totCsll += calc?.csll||0;
+    totCofins += calc?.cofins||0; totPis += calc?.pis||0; totCpp += calc?.cpp||0; totIss += calc?.iss||0;
+    const td = `padding:7px 6px;border-bottom:1px solid #e2e8f0;text-align:right;background:${bg}`;
+    rows += `<tr>
+      <td style="${td};text-align:left;font-weight:600;white-space:nowrap">${mesesPt[mo.m-1]}/${mo.y}</td>
+      <td style="padding:4px 6px;border-bottom:1px solid #e2e8f0;background:#fefce8">
+        <input type="number" data-ym="${mo.ym}" value="${fat||''}" placeholder="0,00" min="0" step="0.01"
+          style="width:100%;border:1px solid #d1d5db;border-radius:5px;padding:5px 7px;font-size:.82rem;text-align:right;background:transparent"
+          onchange="impAtualizarLinha(this)">
+      </td>
+      <td style="${td}">${rbt > 0 ? fmt(rbt) : '—'}</td>
+      <td style="${td};color:${calc?'#1f4e79':'#94a3b8'};font-weight:600">${calc ? fmtPct(calc.aliqEfetiva) : '—'}</td>
+      <td style="${td};font-weight:700;color:${calc?'#dc2626':'#94a3b8'};background:${calc?'#fef2f2':bg}">${calc ? fmt(calc.total) : '—'}</td>
+      <td style="${td};font-size:.78rem">${calc ? fmt(calc.irpj)   : '—'}</td>
+      <td style="${td};font-size:.78rem">${calc ? fmt(calc.csll)   : '—'}</td>
+      <td style="${td};font-size:.78rem">${calc ? fmt(calc.cofins) : '—'}</td>
+      <td style="${td};font-size:.78rem">${calc ? fmt(calc.pis)    : '—'}</td>
+      <td style="${td};font-size:.78rem">${calc ? fmt(calc.cpp)    : '—'}</td>
+      <td style="${td};font-size:.78rem">${calc ? fmt(calc.iss)    : '—'}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows;
+  tfoot.innerHTML = `<tr style="background:#1f3a6e;color:#fff;font-weight:700;font-size:.82rem">
+    <td style="padding:9px 10px">TOTAL</td>
+    <td style="padding:9px 6px;text-align:right">${fmt(totFat)}</td>
+    <td></td><td></td>
+    <td style="padding:9px 6px;text-align:right">${fmt(totDas)}</td>
+    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totIrpj)}</td>
+    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totCsll)}</td>
+    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totCofins)}</td>
+    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totPis)}</td>
+    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totCpp)}</td>
+    <td style="padding:9px 6px;text-align:right;font-size:.78rem">${fmt(totIss)}</td>
+  </tr>`;
+  const cards = [
+    {label:'Faturamento Total',val:fmt(totFat),icon:'fa-money-bill-wave',color:'#1f4e79'},
+    {label:'Total DAS',val:fmt(totDas),icon:'fa-receipt',color:'#dc2626'},
+    {label:'IRPJ',val:fmt(totIrpj),icon:'fa-landmark',color:'#7c3aed'},
+    {label:'CSLL',val:fmt(totCsll),icon:'fa-university',color:'#7c3aed'},
+    {label:'Cofins',val:fmt(totCofins),icon:'fa-coins',color:'#d97706'},
+    {label:'PIS/Pasep',val:fmt(totPis),icon:'fa-coins',color:'#d97706'},
+    {label:'CPP',val:fmt(totCpp),icon:'fa-users',color:'#059669'},
+    {label:'ISS',val:fmt(totIss),icon:'fa-city',color:'#0891b2'},
+  ];
+  if (resumo) resumo.innerHTML = cards.map(c => `<div class="card" style="padding:14px 16px;text-align:center">
+    <i class="fas ${c.icon}" style="font-size:1.3rem;color:${c.color};margin-bottom:6px"></i>
+    <div style="font-size:.72rem;color:var(--muted);margin-bottom:4px">${c.label}</div>
+    <div style="font-size:.95rem;font-weight:700;color:${c.color}">R$ ${c.val}</div>
+  </div>`).join('');
+}
+
+function impAtualizarLinha(inp) {
+  const ym = inp.dataset.ym;
+  const val = parseFloat(inp.value.replace(',','.')) || 0;
+  if (val > 0) _impFaturamentos[ym] = val; else delete _impFaturamentos[ym];
+  renderImpostos();
+}
 
 // faturamentos armazenados: { "2025-01": 1500, "2025-02": 2000, ... }
 let _impFaturamentos = {};
 
 async function _impCarregar() {
+  // 1. Carrega overrides manuais salvos no Firebase
+  let manuais = {};
   try {
     const snap = await db.ref('impostos_mensais/faturamentos').once('value');
-    _impFaturamentos = snap.val() || {};
-  } catch(e) { _impFaturamentos = {}; }
+    manuais = snap.val() || {};
+  } catch(e) { manuais = {}; }
+
+  // 2. Auto-calcula faturamento bruto V3 de TODOS os técnicos, incluindo OS importadas
+  // e OS lançadas manualmente no app (meses de transição como março/2026).
+  // Para importadas: usa r.totalV3 gravado; fallback r.total.
+  // Para lançadas: usa _calcTotalV3 (valorV3 por serviço ou precosV3map × qtd).
+  const autoCalc = {};
+  const recs = window.allRecords || [];
+  recs.forEach(r => {
+    // Exclui fiscais e observadores (não geram faturamento)
+    const u = (window.usersCache || {})[r.userId];
+    if (window._isFiscal && window._isFiscal(u)) return;
+    if (window._isObservador && window._isObservador(u)) return;
+    const mes = (r.data || '').slice(0, 7);
+    if (!mes) return;
+    let fatV3;
+    if (r.importado) {
+      fatV3 = r.totalV3 !== undefined ? (Number(r.totalV3) || 0) : (Number(r.total) || 0);
+    } else {
+      fatV3 = typeof _calcTotalV3 === 'function' ? _calcTotalV3(r) : 0;
+    }
+    autoCalc[mes] = (autoCalc[mes] || 0) + fatV3;
+  });
+
+  // 3. Mescla: manual tem precedência; V3 auto preenche meses sem override
+  _impFaturamentos = {};
+  const todosMeses = new Set([...Object.keys(manuais), ...Object.keys(autoCalc)]);
+  todosMeses.forEach(ym => {
+    if (manuais[ym] != null) _impFaturamentos[ym] = manuais[ym];
+    else if (autoCalc[ym]) _impFaturamentos[ym] = Math.round(autoCalc[ym] * 100) / 100;
+  });
 }
 
 async function salvarFaturamentos() {
@@ -4507,35 +4860,6 @@ const MAX_SERVICOS_POR_OS = 5; // número máximo de serviços por OS (slots s-t
     return _loginSuccessOrig(user);
   };
 
-  // ── loginBiometrico: wrapper pós-execução para detectar credencial obsoleta ──
-  // O wrapper NÃO faz nenhum await antes de chamar o original — preservando o
-  // user activation context necessário para navigator.credentials.get().
-  // Após a execução, se o login falhou E havia credencial salva, significa que
-  // a passkey foi deletada do dispositivo (ex: Edge settings) → limpa localStorage
-  // e guia o usuário a re-cadastrar via senha.
-  const _loginBiometricoOrig = window.loginBiometrico;
-  window.loginBiometrico = async function() {
-    const lastUid = localStorage.getItem('srua_lastUid');
-    const hadCred = lastUid && !!localStorage.getItem('srua_cred_' + lastUid);
-    await _loginBiometricoOrig();
-    // Se tinha credencial mas login não ocorreu → passkey obsoleta no dispositivo
-    if (hadCred && !window.currentUser) {
-      if (lastUid) {
-        localStorage.removeItem('srua_cred_' + lastUid);
-        localStorage.removeItem('sdr_admin_bio_fhash_' + lastUid);
-      }
-      // Atualiza mensagem de erro para orientar o usuário
-      const err = document.getElementById('login-err');
-      if (err && err.style.display !== 'none') {
-        err.textContent = 'Biometria não reconhecida — credencial removida. Entre com senha para recadastrar.';
-      }
-      // Esconde botão de biometria pois a credencial foi limpa
-      const bioBtn = document.getElementById('btn-biometrico');
-      if (bioBtn) bioBtn.style.display = 'none';
-      console.warn('[SDR Admin] Credencial biométrica obsoleta detectada e removida para:', lastUid);
-    }
-  };
-
   // Wrap window.logout: encerra sessão Firebase Auth ao sair
   const _logoutOrig = window.logout;
   window.logout = function() {
@@ -4637,8 +4961,4 @@ if ('serviceWorker' in navigator) {
 // Nota Wave 1 Firebase Auth: criarNovoUsuario é encapsulada internamente pelo
 // bundle (não exposta como global), portanto novos usuários não recebem
 // firebaseAuthLinked: false explícito. Isso é seguro: o login mobile trata
-// firebaseAuthLinked === undefined identicamente a false — chama
-// _vincularFirebaseAuth() e define true após o primeiro login bem-sucedido.
-</script>
-</body>
-</html>
+// firebaseAuthLinked 

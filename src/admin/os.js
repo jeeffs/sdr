@@ -6,33 +6,99 @@
 window._getRecordByKey = function(fbKey) { return window._recordsByKey?.[fbKey] || null; };
 
 
+// ── Estado: qual janela de OS carregar ──
+// Default: 'atual_anterior' (mês corrente + mês anterior) — bate com fluxo de fechamento.
+// 'tudo' = histórico completo. 'mes:YYYY-MM' = um mês específico.
+let _osLoadMode = 'atual_anterior';
+window._setOsLoadMode = function(mode) {
+  _osLoadMode = mode;
+  console.log('[SDR Admin] _osLoadMode →', mode);
+  return carregarDados();
+};
+window._getOsLoadMode = function() { return _osLoadMode; };
+
+function _osLoadStartAt(mode) {
+  const hoje = new Date();
+  if (mode === 'atual_anterior') {
+    const mesAnt = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    return mesAnt.toISOString().slice(0, 10);
+  }
+  if (mode && mode.startsWith('mes:')) {
+    return mode.slice(4) + '-01';
+  }
+  return new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10);
+}
+
+function _osLoadEndAt(mode) {
+  if (mode && mode.startsWith('mes:')) {
+    return mode.slice(4) + '-31';
+  }
+  return null;
+}
+
 async function carregarDados() {
-  _dataVersion++;  // Fase4: invalida page cache
+  _dataVersion++;
   Object.keys(_pageRenderVersion).forEach(k => delete _pageRenderVersion[k]);
-  _precosHistoricoMes = null; // invalida cache de preços históricos
-  const snap = await db.ref('os').once('value');
-  const raw = snap.val() || {};
+  _precosHistoricoMes = null;
+
+  // ── Query: REST direto para queries filtradas ──
+  // IMPORTANTE: o monkey-patch do admin substitui apenas db.ref(path).once(),
+  // não funciona com .orderByChild().startAt().once() (que retorna Query do SDK
+  // não patched e cai no WebSocket que está falhando — audit 13/05 C3).
+  let raw;
+  if (_osLoadMode === 'tudo') {
+    const snap = await db.ref('os').once('value');  // já passa pelo patch REST
+    raw = snap.val() || {};
+  } else {
+    const _fbUser = firebase.auth().currentUser;
+    const _tk     = _fbUser ? await _fbUser.getIdToken() : null;
+    const _base   = 'https://solucaoderua-default-rtdb.firebaseio.com';
+    const startAt = _osLoadStartAt(_osLoadMode);
+    const endAt   = _osLoadEndAt(_osLoadMode);
+
+    const params = [
+      'orderBy=' + encodeURIComponent('"data"'),
+      'startAt=' + encodeURIComponent('"' + startAt + '"'),
+    ];
+    if (endAt) params.push('endAt=' + encodeURIComponent('"' + endAt + '"'));
+    if (_tk)   params.push('auth=' + _tk);
+
+    const _resp = await fetch(_base + '/os.json?' + params.join('&'),
+      { signal: AbortSignal.timeout(30000) });
+    raw = _resp.ok ? (await _resp.json() || {}) : {};
+  }
+
   allRecords = Object.entries(raw).map(([fbKey, v]) => {
-    // Normaliza nomes de serviço legados (/ → -) para compatibilidade
     if (v.servicos) v.servicos.forEach(sv => { if (sv.tipo) sv.tipo = _normTipo(sv.tipo); });
     if (v.tipo) v.tipo = _normTipo(v.tipo);
     return {...v, fbKey};
   });
-  allRecords.sort((a,b)=>new Date(b.criado_em||0)-new Date(a.criado_em||0));
-  // Constrói índice fbKey → record para lookups O(1)
+  // Fallback para 'data' quando criado_em ausente (registros legados)
+  allRecords.sort((a,b)=>new Date(b.criado_em||b.data||0)-new Date(a.criado_em||a.data||0));
+
   _recordsByKey = {};
   allRecords.forEach(r => { _recordsByKey[r.fbKey] = r; });
+
+  console.log('[SDR Admin] carregarDados:', _osLoadMode, '→', allRecords.length, 'registros');
 
   await _carregarTodosPrecos();
   buildServiceRows();
 
   usersCache = await _dbRead('users', {});
   if (_isAdmin(currentUser)) {
-    await carregarDescontos();
+    await Promise.all([
+      carregarDescontos(),
+      carregarServicosFixos(),
+    ]);
     assinaturaMaster = await _dbRead('config/assinatura_master', null);
-  } else await carregarDescontosTec(currentUser.id);
+  } else {
+    await Promise.all([
+      carregarDescontosTec(currentUser.id),
+      carregarServicosFixos(),
+    ]);
+  }
   popularFiltros();
-  _tabelaPagina = 0;  // Fase4: reseta paginação ao recarregar dados
+  _tabelaPagina = 0;
   renderTabela(filteredRecords());
   renderBotoesTecnicos();
   const count = filteredRecords().length;
@@ -282,6 +348,33 @@ async function deletarOS(fbKey) {
   } catch(e) {
     console.error('[deletarOS]', e);
     toast('Erro ao excluir registro. Tente novamente.', 'error');
+  }
+}
+
+function confirmarDel(fbKey) {
+  const r = allRecords.find(x => x.fbKey === fbKey);
+  const desc = r ? ` (OS ${r.codigo_os || fbKey})` : '';
+  if (!confirm(`Excluir o registro${desc}?\n\nEsta ação não pode ser desfeita.`)) return;
+  deletarOS(fbKey);
+}
+
+async function confirmarLimparTudo() {
+  if (!_isAdmin(currentUser)) { toast('Sem permissão para esta ação.', 'error'); return; }
+  const total = allRecords.length;
+  if (!total) { toast('Não há registros para excluir.', 'warning'); return; }
+  const confirmMsg = `⚠️ ATENÇÃO: Isso excluirá TODOS os ${total} registro(s) de OS do banco de dados.\n\nDigite CONFIRMAR para prosseguir:`;
+  const input = window.prompt(confirmMsg);
+  if ((input || '').trim().toUpperCase() !== 'CONFIRMAR') {
+    toast('Operação cancelada.', 'warning'); return;
+  }
+  try {
+    toast('Excluindo todos os registros...', 'warning');
+    await _dbRemove('os');
+    await carregarDados();
+    toast(`${total} registro(s) excluído(s) com sucesso.`, 'success');
+  } catch(e) {
+    console.error('[confirmarLimparTudo]', e);
+    toast('Erro ao excluir registros. Tente novamente.', 'error');
   }
 }
 
@@ -540,6 +633,24 @@ async function carregarDescontos() {
   }
 }
 
+// ── Serviços Fixos Mensais ───────────────────────────────────────────────────
+async function carregarServicosFixos() {
+  try {
+    const snap = await db.ref('config/servicos_fixos').once('value');
+    window.servicosFixos = snap.val() || {};
+  } catch(e) {
+    window.servicosFixos = {};
+  }
+}
+window.carregarServicosFixos = carregarServicosFixos;
+
+// Retorna o valor fixo mensal de um técnico (0 se inativo/não cadastrado)
+window.getServicoFixoValor = function(uid) {
+  const sf = window.servicosFixos?.[uid];
+  if (!sf || sf.ativo === false) return 0;
+  return Number(sf.valor) || 0;
+};
+
 async function carregarDescontosTec(uid) {
   try {
     const [snapD, snapA] = await Promise.all([
@@ -624,6 +735,8 @@ window.verificarTermoServicos = verificarTermoServicos;
 window.mostrarTermoServicos = mostrarTermoServicos;
 window.aceitarTermoServicos = aceitarTermoServicos;
 window.deletarOS = deletarOS;
+window.confirmarDel = confirmarDel;
+window.confirmarLimparTudo = confirmarLimparTudo;
 window.filteredRecords = filteredRecords;
 window.filtrarTabela = filtrarTabela;
 window.renderTabela = renderTabela;

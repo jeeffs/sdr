@@ -2,33 +2,67 @@
   "rules": {
 
     // ── Regra raiz: leitura requer auth ──────────────────────────────────────
-    // Write restrito a contas @solucaoderua.app — bloqueia auth anônima
+    // Write na raiz restrito a contas @solucaoderua.app (admin)
+    // Caminhos que técnicos escrevem têm regras próprias abaixo (auth anônima OK)
     ".read":  "auth != null",
     ".write": "auth != null && auth.token.email != null && auth.token.email.endsWith('@solucaoderua.app')",
 
+    // ── Ordens de Serviço ────────────────────────────────────────────────────
+    // Técnicos usam signInAnonymously — precisa de regra própria
+    "os": {
+      ".indexOn": ["userId", "data"],
+      ".write": "auth != null"
+    },
+
+    // ── Dados dos usuários (técnicos) ────────────────────────────────────────
+    // Técnico atualiza seus próprios dados: empresa, termoServicos, firstLogin
+    "users": {
+      ".write": "auth != null"
+    },
+
+    // ── Contratos de prestação de serviço ────────────────────────────────────
+    "contratos": {
+      ".write": "auth != null"
+    },
+
+    // ── Segurança: documentos, pendentes, inventários, EPI ──────────────────
+    "seguranca": {
+      ".write": "auth != null"
+    },
+
+    // ── Relatórios (OS importadas pelo fiscal) ───────────────────────────────
+    "relatorios": {
+      ".write": "auth != null"
+    },
+
+    // ── Descontos / parcelamentos (escolhas A/B dos técnicos) ────────────────
+    "config": {
+      "descontos": {
+        ".write": "auth != null"
+      }
+    },
+
+    // ── Path legado de descontos ─────────────────────────────────────────────
+    "descontos": {
+      ".write": "auth != null"
+    },
+
     // ── Mapeamento Firebase UID → App UID ────────────────────────────────────
     // Cada técnico só pode gravar seu próprio mapeamento (auth.uid === $fbUid)
-    // Leitura liberada para auth (usado pelas rules e pelo admin)
     "authUidToAppUid": {
       ".read": "auth != null",
       "$fbUid": {
-        ".write": "auth != null && auth.uid === $fbUid && auth.token.email != null && auth.token.email.endsWith('@solucaoderua.app')"
+        ".write": "auth != null && auth.uid === $fbUid"
       }
     },
 
     // ── Audit Log — append-only ──────────────────────────────────────────────
-    // Usuário autenticado com conta SDR pode criar registros, mas NUNCA editar ou deletar
+    // Apenas contas SDR podem criar registros, NUNCA editar ou deletar
     "audit_log": {
       ".read": "auth != null",
       "$entry": {
         ".write": "auth != null && auth.token.email != null && auth.token.email.endsWith('@solucaoderua.app') && !data.exists()"
       }
-    },
-
-    // ── Índice: permite query /os?orderBy="userId" na REST API ───────────────
-    // Usado pelo mobile para carregar só as OS do técnico logado
-    "os": {
-      ".indexOn": ["userId"]
     }
 
   }
