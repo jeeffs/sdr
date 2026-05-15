@@ -743,10 +743,13 @@ window.capturarGPS = function capturarGPS() {
   // Cancela watch anterior
   if (_gpsWatchIdAdmin != null) { navigator.geolocation.clearWatch(_gpsWatchIdAdmin); _gpsWatchIdAdmin = null; }
 
-  const ACC_TARGET = 25;
-  const TIMEOUT_MS = 20000;
+  const ACC_TARGET = 60;    // acurácia aceitável em metros (GPS urbano ~30-80m)
+  const FAST_ACC   = 150;   // após FAST_WAIT_MS, aceita qualquer leitura < FAST_ACC
+  const FAST_WAIT  = 4000;  // 4s mínimo antes de aceitar leitura rápida
+  const TIMEOUT_MS = 15000; // desiste após 15s e usa o melhor resultado
   let bestPos = null;
   let timerDone = false;
+  let startTs = Date.now();
 
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando sinal...'; }
   if (gs)  gs.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refinando posição...';
@@ -774,7 +777,8 @@ window.capturarGPS = function capturarGPS() {
 
       const rua    = addr.road || addr.pedestrian || addr.footway || '';
       const num    = addr.house_number || '';
-      const bairro = addr.suburb || addr.neighbourhood || '';
+      // Nominatim BR: bairro vem em quarter ou hamlet (não suburb/neighbourhood)
+      const bairro = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || '';
       let refText  = rua;
       if (num) refText += ', ' + num;
       if (bairro) refText += ' — ' + bairro;
@@ -825,8 +829,11 @@ window.capturarGPS = function capturarGPS() {
     pos => {
       bestPos = pos;
       const acc = pos.coords.accuracy;
+      const elapsed = Date.now() - startTs;
       if (gs) gs.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Refinando posição... ±${acc.toFixed(0)}m`;
-      if (acc <= ACC_TARGET) { clearTimeout(timer); finalizarGPS(pos); }
+      if (acc <= ACC_TARGET || (elapsed >= FAST_WAIT && acc <= FAST_ACC)) {
+        clearTimeout(timer); finalizarGPS(pos);
+      }
     },
     err => {
       clearTimeout(timer);

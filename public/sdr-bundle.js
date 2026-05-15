@@ -7131,7 +7131,7 @@ var SDR = function(exports) {
         if (!navigator.geolocation) return void (gs && (gs.innerHTML = '<i class="fas fa-times-circle" style="color:#dc2626"></i> GPS não disponível neste dispositivo.'));
         null != _gpsWatchIdAdmin && (navigator.geolocation.clearWatch(_gpsWatchIdAdmin), 
         _gpsWatchIdAdmin = null);
-        let bestPos = null, timerDone = !1;
+        let bestPos = null, timerDone = !1, startTs = Date.now();
         btn && (btn.disabled = !0, btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Aguardando sinal...'), 
         gs && (gs.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refinando posição...');
         const finalizarGPS = async pos => {
@@ -7149,7 +7149,7 @@ var SDR = function(exports) {
                     headers: {
                         "Accept-Language": "pt-BR"
                     }
-                }), addr = (await res.json()).address || {}, rua = addr.road || addr.pedestrian || addr.footway || "", num = addr.house_number || "", bairro = addr.suburb || addr.neighbourhood || "";
+                }), addr = (await res.json()).address || {}, rua = addr.road || addr.pedestrian || addr.footway || "", num = addr.house_number || "", bairro = addr.suburb || addr.neighbourhood || addr.quarter || addr.hamlet || "";
                 let refText = rua;
                 if (num && (refText += ", " + num), bairro && (refText += " — " + bairro), refText) {
                     const fRef = document.getElementById("f-referencia");
@@ -7176,12 +7176,12 @@ var SDR = function(exports) {
             !timerDone && bestPos ? finalizarGPS(bestPos) : timerDone || (timerDone = !0, null != _gpsWatchIdAdmin && (navigator.geolocation.clearWatch(_gpsWatchIdAdmin), 
             _gpsWatchIdAdmin = null), btn && (btn.disabled = !1, btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente'), 
             gs && (gs.innerHTML = '<i class="fas fa-exclamation-triangle" style="color:#f59e0b"></i> Tempo esgotado — tente em local aberto.'));
-        }, 2e4);
+        }, 15e3);
         _gpsWatchIdAdmin = navigator.geolocation.watchPosition(pos => {
             bestPos = pos;
-            const acc = pos.coords.accuracy;
+            const acc = pos.coords.accuracy, elapsed = Date.now() - startTs;
             gs && (gs.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Refinando posição... ±${acc.toFixed(0)}m`), 
-            acc <= 25 && (clearTimeout(timer), finalizarGPS(pos));
+            (acc <= 60 || elapsed >= 4e3 && acc <= 150) && (clearTimeout(timer), finalizarGPS(pos));
         }, err => {
             clearTimeout(timer), null != _gpsWatchIdAdmin && (navigator.geolocation.clearWatch(_gpsWatchIdAdmin), 
             _gpsWatchIdAdmin = null), btn && (btn.disabled = !1, btn.innerHTML = '<i class="fas fa-map-marker-alt"></i> Tentar novamente');
@@ -7190,7 +7190,7 @@ var SDR = function(exports) {
             err.message;
         }, {
             enableHighAccuracy: !0,
-            timeout: 2e4,
+            timeout: 15e3,
             maximumAge: 0
         });
     }, window.carregarDados = carregarDados$1, window._validarOS = _validarOS, window._montarObjOS = _montarObjOS, 
