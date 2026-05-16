@@ -844,6 +844,26 @@ function renderFinanceiro() {
         // Serviço fixo mensal (ex: Gestão KMZ)
         const sfVal   = window.getServicoFixoValor ? window.getServicoFixoValor(uid) : 0;
         rowTotal += sfVal;
+        // Honorários Extra (diferencial V2-V1) para técnicos V2
+        const isV2Tec = (u.nivel === 'V2') || (u.supervisao === true);
+        let rowHonExtra = 0;
+        if (isV2Tec) {
+          const _masterU = new Set(Object.entries(usersCache).filter(([,ju])=>_isAdmin(ju)||_isFiscal(ju)||_isObservador(ju)).map(([id])=>id));
+          const _jeffU   = new Set(Object.entries(usersCache).filter(([,ju])=>(ju.name||'').toLowerCase()==='jefferson'&&ju.role!=='master').map(([id])=>id));
+          recMes.forEach(r => {
+            if (_masterU.has(r.userId||'')||_jeffU.has(r.userId||'')) return;
+            if (r.importado && (r.nivelImp||'V1')==='V3') return;
+            (r.servicos||[]).forEach(sv => {
+              const q = Number(sv.qtd)||0;
+              if (r.importado && sv.valorV2 !== undefined) {
+                rowHonExtra += sv.valorV2 - (Number(sv.valor)||0);
+              } else {
+                rowHonExtra += q * ((precosV2map[sv.tipo]||0) - (precosV1map[sv.tipo]||0));
+              }
+            });
+          });
+          rowTotal += rowHonExtra;
+        }
         const rowDesc = _descontoTecMes(uid);
         const rowLiq  = rowTotal - rowDesc;
         gtotal     += rowTotal;
@@ -851,11 +871,11 @@ function renderFinanceiro() {
         gtotalLiq  += rowLiq;
         const isHist   = u.ativo === false;
         const avatarBg = isHist ? '#94a3b8' : '#'+Math.abs((u.name||uid).split('').reduce((h,c)=>((h<<5)-h)+c.charCodeAt(0),0)%0xffffff).toString(16).padStart(6,'0').slice(0,6);
-        return { uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount: rTec.length, osPendCount: rTecPend.length, sfVal };
+        return { uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount: rTec.length, osPendCount: rTecPend.length, sfVal, rowHonExtra, isV2Tec };
       });
 
       // Cards individuais por técnico
-      const cards = tecsData.map(({ uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount, osPendCount, sfVal }) => {
+      const cards = tecsData.map(({ uid, u, vals, valsPend, rowTotal, rowTotalPend, rowDesc, rowLiq, isHist, avatarBg, osCount, osPendCount, sfVal, rowHonExtra, isV2Tec }) => {
         const cardBorder = isHist ? '#cbd5e1' : avatarBg;
         const headerBg  = isHist ? '#64748b' : '#1f4e79';
 
@@ -912,6 +932,13 @@ function renderFinanceiro() {
             <i class="fas fa-plus-circle" style="color:#16a34a;font-size:.7rem"></i>
             <span style="font-size:.72rem;color:#166534;font-weight:600">${(window.servicosFixos?.[uid]?.descricao)||'Serviço Fixo'}</span>
             <span style="margin-left:auto;font-size:.78rem;font-weight:800;color:#16a34a">+${fmt(sfVal)}</span>
+          </div>` : ''}
+          <!-- Honorários Extra (V2) -->
+          ${isV2Tec && rowHonExtra > 0 ? `
+          <div style="padding:4px 12px 2px;display:flex;align-items:center;gap:6px;background:#faf5ff;border-top:1px solid #e9d5ff">
+            <i class="fas fa-coins" style="color:#7c3aed;font-size:.7rem"></i>
+            <span style="font-size:.72rem;color:#6d28d9;font-weight:600">Honorários Extra</span>
+            <span style="margin-left:auto;font-size:.78rem;font-weight:800;color:#7c3aed">+${fmt(rowHonExtra)}</span>
           </div>` : ''}
           <!-- Rodapé: totais -->
           <div style="border-top:1px solid #e5e7eb;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:6px;background:${isHist?'#f1f5f9':'#f9fafb'}">

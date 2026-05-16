@@ -4942,7 +4942,7 @@ function renderDashboard() {
       </div>
       ${isV2 ? `
       <div class="metric fade-in" style="background:var(--success-light)">
-        <div class="metric-label" style="color:var(--success)"><i class="fas fa-star"></i> Gestão</div>
+        <div class="metric-label" style="color:var(--success)"><i class="fas fa-coins"></i> Honorários Extra</div>
         <div class="metric-value" style="color:var(--success)">${fmt(totalGestao)}</div>
       </div>
       <div class="metric fade-in" style="background:#ede9fe">
@@ -5913,7 +5913,7 @@ function renderFinanceiro() {
     </div>
     ${isV2 ? `
     <div class="metric" style="background:#ede9fe">
-      <div class="metric-label" style="color:#7c3aed">Coordenação Técnica</div>
+      <div class="metric-label" style="color:#7c3aed">Honorários Extra</div>
       <div class="metric-value" style="color:#7c3aed">+${fmt(bonus)}</div>
     </div>` : ''}
     <div class="metric" style="background:var(--danger-light)">
@@ -6055,7 +6055,7 @@ function renderFinanceiro() {
       });
       const tecsSorted = Object.entries(porTec).filter(([,v]) => v.total > 0).sort((a,b) => b[1].total - a[1].total);
       let bnsHtml = `<div style="font-size:.8rem;color:var(--muted);font-weight:700;margin-bottom:8px">
-        <i class="fas fa-coins" style="margin-right:4px;color:#7c3aed"></i>Detalhamento Bônus PRESTADOR</div>`;
+        <i class="fas fa-coins" style="margin-right:4px;color:#7c3aed"></i>Detalhamento Honorários Extra</div>`;
       tecsSorted.forEach(([nome, v]) => {
         const isMe = nome === currentUser.name;
         bnsHtml += `<div style="background:${isMe?'#f5f3ff':'var(--card)'};border:1px solid ${isMe?'#c4b5fd':'var(--border)'};border-radius:10px;padding:12px;margin-bottom:8px">
@@ -6088,7 +6088,7 @@ function renderFinanceiro() {
       </div>
       ${isV2 && bonus > 0 ? `
       <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
-        <span style="color:#7c3aed">Coordenação Técnica</span>
+        <span style="color:#7c3aed">Honorários Extra</span>
         <span style="font-weight:700;color:#7c3aed">+${fmt(bonus)}</span>
       </div>
       ` : ''}

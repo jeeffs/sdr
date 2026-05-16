@@ -738,37 +738,94 @@ function renderMeuDash() {
     !(r.importado && (r.nivelImp||'V1')==='V3')
   ) : [];
 
-  // ── Totais gerais (usa r.total gravado na OS) ── [Fase2-Refactor: usa Finance namespace]
+  // ── Helpers inline (Finance namespace não está disponível no bundle) ──
+  const _calcBonusHonorariosExtra = (recs, v1map, v2map) => {
+    let bonus = 0;
+    recs.forEach(r => (r.servicos||[]).forEach(sv => {
+      const q = Number(sv.qtd)||0;
+      if (r.importado && sv.valorV2 !== undefined) {
+        bonus += sv.valorV2 - (Number(sv.valor)||0);
+      } else {
+        bonus += q * ((v2map[sv.tipo]||0) - (v1map[sv.tipo]||0));
+      }
+    }));
+    return bonus;
+  };
+  const _calcDescontosMes = (cache, pref) => {
+    const _mn = s => { const [y,m]=(s||'').split('-').map(Number); return (y||0)*12+(m||0); };
+    const mn = _mn(pref);
+    const ativos = Object.values(cache).filter(d => {
+      if (d.termoAssinado === false) return false;
+      const tot = Number(d.parcelas)||1;
+      const ini = _mn(d.parcelaInicio || d.mesAno || '');
+      return mn >= ini && mn < ini + tot;
+    });
+    return { ativos, total: ativos.reduce((s,d) => s + +((d.valor/(Number(d.parcelas)||1)).toFixed(2)), 0) };
+  };
+  const _agruparCombo = recs => {
+    const _n2 = s => (s||'').normalize('NFC').trim().toUpperCase();
+    const m = {};
+    recs.forEach(r => {
+      const k = `${_n2(r.profile)}||${_n2(r.tipo)}`;
+      if (!m[k]) m[k] = { profile: _n2(r.profile), tipo: _n2(r.tipo), v1: 0 };
+      m[k].v1 += r.total || 0;
+    });
+    return m;
+  };
+  const _calcBonusByCombo = (recs, v1map, v2map) => {
+    const _n2 = s => (s||'').normalize('NFC').trim().toUpperCase();
+    const m = {};
+    recs.forEach(r => {
+      const k = `${_n2(r.profile)}||${_n2(r.tipo)}`;
+      if (!m[k]) m[k] = { g: 0 };
+      (r.servicos||[]).forEach(sv => {
+        const q = Number(sv.qtd)||0;
+        if (r.importado && sv.valorV2 !== undefined) {
+          m[k].g += sv.valorV2 - (Number(sv.valor)||0);
+        } else {
+          m[k].g += q * ((v2map[sv.tipo]||0) - (v1map[sv.tipo]||0));
+        }
+      });
+    });
+    return m;
+  };
+  const _agruparCidade = recs => {
+    const m = {};
+    recs.forEach(r => { const c=r.cidade||'—'; if(!m[c])m[c]={qtd:0,total:0}; m[c].qtd++; m[c].total+=r.total||0; });
+    return m;
+  };
+  const _agruparServico = recs => {
+    const m = {};
+    recs.forEach(r => (r.servicos||[]).forEach(sv => {
+      const t=sv.tipo||'—'; if(!m[t])m[t]={qtd:0,total:0};
+      m[t].qtd+=Number(sv.qtd)||0; m[t].total+=(Number(sv.qtd)||0)*(Number(sv.valor)||0);
+    }));
+    return m;
+  };
+
+  // ── Totais gerais ──
   const totalV1 = myRecs.reduce((s, r) => s + (r.total || 0), 0);
-  const totalGestao = isV2 ? Finance.calcBonusGestao(allMes, precosV1map, precosV2map) : 0;
+  const totalGestao = isV2 ? _calcBonusHonorariosExtra(allMes, precosV1map, precosV2map) : 0;
   const totalGeral = totalV1 + totalGestao;
 
   // ── OS Pendentes de Validação do Fiscal ──
-  // Retrocompatibilidade: registros sem o campo (undefined) = validados por padrão
-  // REGRA: prazo do fiscal = dia 10 do MÊS SEGUINTE ao mês da OS
-  // Ex.: OS de março → prazo até 10 de abril. OS do mês vigente → prazo nunca venceu.
   const osPendentesValMes = myRecs.filter(r => r.validacaoFiscal === 'pendente');
   const totalPendenteVal  = osPendentesValMes.reduce((s,r) => s + (r.total||0), 0);
   const diaHoje = hoje.getDate();
-  // Como myRecs filtra pelo mês vigente (prefixo = mês atual),
-  // o prazo dessas OS só vence no dia 10 do PRÓXIMO mês.
-  // Portanto, para o mês vigente: nunca encerrado, alerta de aproximação somente
-  // nos últimos dias do mês quando se aproxima do vencimento do mês anterior.
-  // Na verdade, OS do mês ATUAL nunca estão vencidas (prazo = dia 10 do próximo mês).
-  const alertaCriticoVal = false; // OS do mês vigente → prazo é mês que vem, nunca vencido
-  const alertaAproximandoVal = false; // sem urgência para mês vigente
+  const alertaCriticoVal = false;
+  const alertaAproximandoVal = false;
   const nomeMesProximo = MESES_NOME[hoje.getMonth() === 11 ? 0 : hoje.getMonth() + 1];
 
-  // ── Descontos & Parcelamentos ativos no mês vigente ── [Fase2-Refactor: usa Finance namespace]
-  const { ativos: descontosMesAtivo, total: totalDescontoMes } = Finance.calcDescontosMes(descontosCache, prefixo);
+  // ── Descontos & Parcelamentos ativos no mês vigente ──
+  const { ativos: descontosMesAtivo, total: totalDescontoMes } = _calcDescontosMes(descontosCache, prefixo);
   const totalLiquido = totalGeral - totalDescontoMes;
 
-  // ── Por Profile × Tipo ── [Fase2-Refactor: usa Finance namespace]
-  const byCombo = Finance.agruparPorCombo(myRecs);
-  const byComboGestao = isV2 ? Finance.calcBonusGestaoByCombo(allMes, precosV1map, precosV2map) : {};
+  // ── Por Profile × Tipo ──
+  const byCombo = _agruparCombo(myRecs);
+  const byComboGestao = isV2 ? _calcBonusByCombo(allMes, precosV1map, precosV2map) : {};
 
-  // ── Resumo por Cidade ── [Fase2-Refactor: usa Finance namespace]
-  const cMap = Finance.agruparPorCidade(myRecs);
+  // ── Resumo por Cidade ──
+  const cMap = _agruparCidade(myRecs);
   const cidadeRows = Object.entries(cMap).sort((a,b) => b[1].total - a[1].total)
     .map(([c,v]) => `<tr style="border-bottom:1px solid #e5e7eb">
       <td style="padding:8px 12px;font-size:.82rem">${c}</td>
@@ -776,8 +833,8 @@ function renderMeuDash() {
       <td style="padding:8px 12px;font-size:.82rem;text-align:right;font-weight:700;color:#16a34a">${fmt(v.total)}</td>
     </tr>`).join('');
 
-  // ── Resumo por Serviço ── [Fase2-Refactor: usa Finance namespace]
-  const sMap = Finance.agruparPorServico(myRecs);
+  // ── Resumo por Serviço ──
+  const sMap = _agruparServico(myRecs);
   const servicoRows = Object.entries(sMap).sort((a,b) => b[1].total - a[1].total)
     .map(([s,v]) => `<tr style="border-bottom:1px solid #e5e7eb">
       <td style="padding:8px 12px;font-size:.82rem">${s}</td>
@@ -952,7 +1009,7 @@ function renderMeuDash() {
       ${isV2?`
       <div style="background:#f0fdf4;border-radius:12px;padding:18px 20px;border-left:4px solid #16a34a">
         <div style="font-size:.75rem;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">
-          <i class="fas fa-star"></i> Gestão
+          <i class="fas fa-coins"></i> Honorários Extra
         </div>
         <div style="font-size:1.35rem;font-weight:800;color:#16a34a">${fmt(totalGestao)}</div>
       </div>
@@ -986,7 +1043,7 @@ function renderMeuDash() {
             <th style="${thS}">Profile</th>
             <th style="${thS}">Tipo</th>
             <th style="${thS};text-align:right">Rendimentos</th>
-            ${isV2?`<th style="${thS};text-align:right;color:#86efac">Gestão</th>`:''}
+            ${isV2?`<th style="${thS};text-align:right;color:#86efac">Hon. Extra</th>`:''}
             ${isV2?`<th style="${thS};text-align:right;color:#d8b4fe">Total</th>`:''}
           </tr>
         </thead>
