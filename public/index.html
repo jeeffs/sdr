@@ -8217,4 +8217,62 @@ function _mobMapaInit() {
 
         // CABOS — mesma logica do admin: kmz_color -> fibra -> tipo
         if (item.type === 'cable') {
-         
+          var route = item.route || item.coords;
+          if (!Array.isArray(route) || route.length < 2) return;
+          var latlngs = route.map(function(p) { return Array.isArray(p) ? p : [p.lat, p.lng]; });
+          var ctype = item.cable_type || 'unknown';
+          var fibers = item.fiber_count || 0;
+          if (item.kmz_color) {
+            var mc = _mobMatchColor(item.kmz_color, MOB_CABLE_COLOR_MAP);
+            if (mc) { ctype = mc.cabo; if (!fibers) fibers = mc.fibers; }
+          }
+          var fiberSty = fibers && MOB_FIBER_COLOR[fibers];
+          var typeSty  = MOB_CABLE_RENDER[ctype] || MOB_CABLE_RENDER.unknown;
+          var color  = ctype === 'projeto' ? '#06b6d4' : (fiberSty ? fiberSty.color : typeSty.color);
+          var weight = fiberSty ? fiberSty.weight : typeSty.weight;
+          L.polyline(latlngs, { color: color, weight: weight, opacity: 0.9 }).addTo(_mobMap);
+          return;
+        }
+
+        if (!item.lat || !item.lng) return;
+
+        // POSTES
+        if (item.type === 'pole') {
+          L.circleMarker([item.lat, item.lng], {
+            radius: 3, color: '#d97706', fillColor: '#d97706',
+            fillOpacity: 0.8, weight: 1, renderer: renderer
+          }).addTo(_mobMap);
+          return;
+        }
+
+        // OLT
+        if (item.type === 'olt') {
+          L.divIcon({ className: '', html: '<div style="width:28px;height:28px;border-radius:6px;background:#dc2626;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4)"><i class="fas fa-server" style="font-size:12px"></i></div>', iconSize:[28,28], iconAnchor:[14,14] });
+          L.marker([item.lat, item.lng], { icon: L.divIcon({ className:'', html:'<div style="width:28px;height:28px;border-radius:6px;background:#dc2626;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #fff"><i class="fas fa-server" style="font-size:12px"></i></div>', iconSize:[28,28], iconAnchor:[14,14] }) })
+            .bindTooltip(item.name || 'OLT', { direction:'top' }).addTo(_mobMap);
+          return;
+        }
+
+        // CTOs, splitters, CEO, emenda, RT — mesma logica do admin
+        if (item.type === 'cto' || item.type === 'splitter') {
+          var subtype = item.cto_type || 'default';
+          if (!item.cto_type && item.kmz_color) {
+            var mt = _mobMatchColor(item.kmz_color, MOB_CTO_COLOR_MAP);
+            if (mt) subtype = mt.cto_type;
+          }
+          var markerHTML = _mobCTOMarkerHTML(item, subtype);
+          var ico2 = MOB_CTO_ICONS[subtype] || MOB_CTO_ICONS['default'];
+          var mk = L.marker([item.lat, item.lng], {
+            icon: L.divIcon({ className:'', html: markerHTML, iconSize:[50,32], iconAnchor:[25,32] })
+          });
+          mk.bindTooltip((item.name || 'CTO') + ' - ' + ico2.label, { direction:'top', offset:[0,-5] });
+          mk.addTo(ctoCluster);
+        }
+      });
+    });
+  }, 150);
+}
+</script>
+
+</body>
+</html>
