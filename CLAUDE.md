@@ -166,11 +166,10 @@ Ver `SUPERVISOR_DESIGN.md` para documentação completa.
 
 ## 🚨 ERROS CONHECIDOS — NÃO REPITA
 
-### Bug duplo bônus no mobile (NÃO CORRIGIDO AINDA)
-- No `renderFinanceiro` do index.html, o bloco `${isV2 ? ...}` exibe o bonus
-  mesmo para supervisor, onde ele já está embutido no `totalLiq`
-- Causa: `isV2 && !isSupervisor` deveria ser a condição, mas está só `isV2`
-- Resultado: Resumo Financeiro mostra R$88,25 duplicado para Juliano
+### Bug bônus V2 corrigido (2026-05-15)
+- `totalLiq` em `renderFinanceiro` agora inclui o bônus: `totalBruto + bonus - totalDesc`
+- Card "Coordenação Técnica" (roxo) mostra o componente bônus antes do Valor Líquido
+- Alinhado com `renderDashboard` que já calculava `totalGeral = totalV1 + totalGestao`
 
 ### allRecords no mobile (limitação conhecida)
 - `allRecords` no mobile carrega apenas registros do usuário logado
@@ -206,3 +205,55 @@ Ver `SUPERVISOR_DESIGN.md` para documentação completa.
 - `2026-05-07` — SW bump sdr-v147, deploy
 - `2026-05-06` — Implementação completa do sistema supervisor
 - `2026-04-xx` — Aditivo contratual, assinatura digital, Firebase Storage
+
+## Regras de colaboração (atualizadas em 2026-05-15)
+
+### Edições do Cowork em arquivos grandes
+
+O sandbox Linux do Cowork tem histórico de truncar arquivos durante edits.
+Aconteceu 3x nesta sessão (os.js 2x, mobile.html 1x).
+
+**SEMPRE validar no Windows após edição do Cowork** antes de qualquer
+`git commit` em:
+
+- APP/interface/*.html
+- public/*.html
+- src/admin/*.js
+- src/**/*.js grandes (>500 linhas)
+
+Os 3 checks obrigatórios:
+
+```powershell
+# 1. Line count match entre origem e destino
+$src = (Get-Content APP\interface\mobile.html | Measure-Object -Line).Lines
+$dst = (Get-Content public\index.html | Measure-Object -Line).Lines
+if ($src -ne $dst) { throw "DIVERGEM: $src vs $dst" }
+
+# 2. Final do arquivo
+$tail = (Get-Content public\index.html -Tail 1).Trim()
+if ($tail -ne "</html>") { throw "Não fecha em </html>: '$tail'" }
+
+# 3. Scripts balanceados
+$c = Get-Content public\index.html -Raw
+$o = ([regex]::Matches($c, '<script')).Count
+$x = ([regex]::Matches($c, '</script>')).Count
+if ($o -ne $x) { throw "Scripts desbalanceados: $o vs $x" }
+```
+
+### Deploy de hosting — sequência canônica
+
+```powershell
+cd C:\dev\SDR
+.\bump-sw.ps1               # SEMPRE — bumpa CACHE_NAME E CACHE_SHELL juntos
+npm run build               # Se mexeu em src/
+Copy-Item APP\interface\mobile.html public\index.html -Force  # Se mexeu no mobile
+# VALIDAR (3 checks acima) — não pular
+git add . ; git commit -m "..." ; git push origin main
+firebase deploy --only hosting
+```
+
+### Ambiente
+
+- Projeto em `C:\dev\SDR\` (FORA do OneDrive — não retornar pro OneDrive nunca)
+- PowerShell 5.1 não suporta `-replace { ... }` (script block), usar `-replace "str", "str"`
+- `Set-Content` default = ASCII, usar `[System.IO.File]::WriteAllText` com UTF-8
