@@ -1182,9 +1182,55 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     return diff >= 1 && diff <= tot;
   });
   const totalDesc = descontosMes.reduce((s,d) => s + +(d.valor/((Number(d.parcelas)||1))).toFixed(2), 0);
+
+  // Honorarios Extra (bonus V2) -- so para tecnicos V2/supervisor
+  const _isV2Card = !_isFiscalUser && ((u.nivel === 'V2') || (u.supervisao === true));
+  let honExtrasCard = 0;
+  if (_isV2Card) {
+    const _masterU2 = new Set(Object.entries(usersCache).filter(([,ju])=>_isAdmin(ju)||_isFiscal(ju)||_isObservador(ju)).map(([id])=>id));
+    const _jeffU2   = new Set(Object.entries(usersCache).filter(([,ju])=>(ju.name||'').toLowerCase()==='jefferson'&&ju.role!=='master').map(([id])=>id));
+    allRecords.filter(r =>
+      (r.data||'').startsWith(mesAno) &&
+      !_masterU2.has(r.userId||'') &&
+      !_jeffU2.has(r.userId||'') &&
+      !(r.importado && (r.nivelImp||'V1')==='V3')
+    ).forEach(r => {
+      (r.servicos||[]).forEach(sv => {
+        const q = Number(sv.qtd)||0;
+        if (r.importado && sv.valorV2 !== undefined) {
+          honExtrasCard += sv.valorV2 - (Number(sv.valor)||0);
+        } else {
+          honExtrasCard += q * ((precosV2map[sv.tipo]||0) - (precosV1map[sv.tipo]||0));
+        }
+      });
+    });
+    totalBruto += honExtrasCard;
+  }
+
+  // Descricao do servico fixo mensal (ex: Gestao KMZ)
+  const sfDesc = (window.servicosFixos && window.servicosFixos[uid] && window.servicosFixos[uid].descricao)
+    ? window.servicosFixos[uid].descricao
+    : 'Servico Fixo Mensal';
+
   const totalLiq  = totalBruto - totalDesc;
 
-  // Data de geração
+  // Linhas adicionais pre-computadas (evita template literals aninhados)
+  const _sfValRow = sfValCard > 0
+    ? '<tr style="background:#f0fdf4">'
+      + '<td style="padding:8px 10px;font-size:.82rem;font-weight:600;color:#166534">' + sfDesc + '</td>'
+      + '<td style="padding:8px 10px;font-size:.82rem;text-align:center;color:#64748b">—</td>'
+      + '<td style="padding:8px 10px;font-size:.82rem;text-align:right;font-weight:700;color:#16a34a">' + fmt(sfValCard) + '</td>'
+      + '</tr>'
+    : '';
+  const _honExtrasRow = (_isV2Card && honExtrasCard > 0)
+    ? '<tr style="background:#faf5ff">'
+      + '<td style="padding:8px 10px;font-size:.82rem;font-weight:600;color:#7c3aed">Honorários Extra</td>'
+      + '<td style="padding:8px 10px;font-size:.82rem;text-align:center;color:#64748b">—</td>'
+      + '<td style="padding:8px 10px;font-size:.82rem;text-align:right;font-weight:700;color:#7c3aed">+' + fmt(honExtrasCard) + '</td>'
+      + '</tr>'
+    : '';
+
+  // Data de geracao
   const hoje = new Date();
   const dataGer = `${String(hoje.getDate()).padStart(2,'0')}/${String(hoje.getMonth()+1).padStart(2,'0')}/${hoje.getFullYear()}`;
 
@@ -1353,6 +1399,7 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
             <td style="padding:8px 10px;font-size:.82rem;text-align:right;font-weight:700;color:${v>0?'#1a6fc4':'#cbd5e1'}">${v>0?fmt(v):'—'}</td>
           </tr>`;
         }).join('')}
+        ${_sfValRow}${_honExtrasRow}
       </tbody>
     </table>
   </section>`}
