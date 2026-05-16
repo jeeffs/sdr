@@ -38,6 +38,7 @@
     // ── Descontos / parcelamentos (escolhas A/B dos técnicos) ────────────────
     "config": {
       "descontos": {
+        ".indexOn": ["uid"],
         ".write": "auth != null"
       }
     },

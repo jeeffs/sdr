@@ -133,7 +133,8 @@ root/
 
 ### Regras de negócio críticas
 - Valor calculado por `precosV1map[tipo] × qtd` — NUNCA pela coluna VALOR da planilha
-- Crédito de ferramenta: em `config/emprestimos` (não `config/descontos` — depreciado)
+- Descontos/parcelamentos: salvos em `config/descontos` com campo `uid` (admin lê/escreve aqui — OTDR aqui)
+- `config/emprestimos`: path alternativo também lido pelo mobile (mobile faz merge dos dois paths)
 - Importação: fingerprint de duplicata `userId|tipo|cidade|cto_ceo|data|nSvs|total_cents`
 - Arquivos V2: só referência de preço, não geram registros
 - V3 rejeitado se técnico já tem V1 no mesmo lote (exceto Jefferson)

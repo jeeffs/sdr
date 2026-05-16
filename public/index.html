@@ -1813,8 +1813,27 @@ async function carregarOsDoUsuario(uid) {
   }
 
   try {
-    const descSnap = await db.ref('config/emprestimos').once('value');
-    descontosCache = descSnap.val() || {};
+    // Carrega emprestimos (path legado) + descontos do técnico via REST com filtro server-side
+    const fbUser = firebase.auth().currentUser;
+    const token  = fbUser ? await fbUser.getIdToken() : null;
+    const base   = 'https://solucaoderua-default-rtdb.firebaseio.com';
+    const authQs = token ? '&auth=' + token : '';
+
+    const uidEnc = encodeURIComponent('"' + uid + '"');
+    const [empSnap, descResp] = await Promise.all([
+      db.ref('config/emprestimos').once('value'),
+      fetch(`${base}/config/descontos.json?orderBy="uid"&equalTo=${uidEnc}${authQs}`,
+        { signal: AbortSignal.timeout(15000) }),
+    ]);
+    const emprestimos   = empSnap.val() || {};
+    const descRaw       = descResp.ok ? (await descResp.json() || {}) : {};
+    // descRaw já contém apenas registros do uid atual (filtro server-side)
+    const descontosDoTec = {};
+    Object.entries(descRaw).forEach(([k, v]) => {
+      descontosDoTec[k] = { ...v, fbKey: k };
+    });
+    descontosCache = { ...emprestimos, ...descontosDoTec };
+    console.log('[SDR] descontosCache:', Object.keys(descontosCache).length, 'entradas');
   } catch (e) {
     console.warn('[SDR] carregarDescontos erro:', e.message);
     descontosCache = {};
