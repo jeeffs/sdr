@@ -5859,10 +5859,7 @@ function renderFinanceiro() {
   });
   const totalDesc = descontosMes.reduce((s,d) => s + +((d.valor/(Number(d.parcelas)||1)).toFixed(2)), 0);
 
-  // Calculate net amount
-  const totalLiq = totalBruto - totalDesc;
-
-  // Calculate V2 bonus if applicable — inclui TODOS os técnicos (V1+V2), não só o próprio
+  // Calculate V2 bonus ANTES do totalLiq — inclui TODOS os técnicos (V1+V2), não só o próprio
   let bonus = 0;
   if (isV2) {
     const masterUids = new Set(Object.entries(usersCache).filter(([,u]) => u.role==='master').map(([id])=>id));
@@ -5886,12 +5883,20 @@ function renderFinanceiro() {
     }));
   }
 
+  // Valor Líquido = produção bruta + bônus gestão (V2) - descontos
+  const totalLiq = totalBruto + bonus - totalDesc;
+
   // Render metrics
   const metricsHtml = `
     <div class="metric" style="background:var(--primary-light)">
       <div class="metric-label" style="color:var(--primary)">Produção Bruta</div>
       <div class="metric-value" style="color:var(--primary-dark)">${fmt(totalBruto)}</div>
     </div>
+    ${isV2 ? `
+    <div class="metric" style="background:#ede9fe">
+      <div class="metric-label" style="color:#7c3aed">Coordenação Técnica</div>
+      <div class="metric-value" style="color:#7c3aed">+${fmt(bonus)}</div>
+    </div>` : ''}
     <div class="metric" style="background:var(--danger-light)">
       <div class="metric-label" style="color:var(--danger)">Venda a Prazo</div>
       <div class="metric-value" style="color:var(--danger)">-${fmt(totalDesc)}</div>
@@ -5900,11 +5905,6 @@ function renderFinanceiro() {
       <div class="metric-label" style="color:var(--success)">Valor Líquido</div>
       <div class="metric-value" style="color:var(--success)">${fmt(totalLiq)}</div>
     </div>
-    ${isV2 ? `
-    <div class="metric" style="background:#ede9fe">
-      <div class="metric-label" style="color:#7c3aed">Bônus PRESTADOR</div>
-      <div class="metric-value" style="color:#7c3aed">${fmt(bonus)}</div>
-    </div>` : ''}
   `;
   document.getElementById('fin-metricas').innerHTML = metricsHtml;
 
