@@ -258,3 +258,21 @@ firebase deploy --only hosting
 - Projeto em `C:\dev\SDR\` (FORA do OneDrive — não retornar pro OneDrive nunca)
 - PowerShell 5.1 não suporta `-replace { ... }` (script block), usar `-replace "str", "str"`
 - `Set-Content` default = ASCII, usar `[System.IO.File]::WriteAllText` com UTF-8
+
+### Cowork — edição de arquivos grandes (aprendizado de 2026-05-15)
+
+O sandbox Linux do Cowork tem histórico de **truncar arquivos durante Edit tool**
+em arquivos com >500 linhas. Aconteceu 4x nesta sessão:
+- src/admin/os.js (2x)
+- APP/interface/mobile.html (2x)
+
+**Regras obrigatórias para Cowork em arquivos grandes:**
+
+1. Ler arquivo inteiro ANTES de editar
+2. Aplicar mudança via Python script (NÃO usar Edit tool diretamente)
+3. Validar line count contra HEAD pré-edição
+4. Se detectou truncamento: `git checkout HEAD -- <arquivo>` e refaz via Python
+5. Os 3 checks do CLAUDE.md (line count + </html> + scripts balanceados) NÃO SÃO OPCIONAIS
+
+A regra `if ($o -ne $x) { throw "Scripts desbalanceados" }` já pegou 1 truncamento
+nesta sessão antes do deploy — provou seu valor.
