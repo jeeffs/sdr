@@ -6067,6 +6067,12 @@ function renderFinanceiro() {
         <span>Produção Bruta</span>
         <span style="font-weight:700">${fmt(totalBruto)}</span>
       </div>
+      ${isV2 && bonus > 0 ? `
+      <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
+        <span style="color:#7c3aed">Coordenação Técnica</span>
+        <span style="font-weight:700;color:#7c3aed">+${fmt(bonus)}</span>
+      </div>
+      ` : ''}
       ${totalDesc > 0 ? `
       <div style="display:flex;justify-content:space-between;font-size:.85rem;margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid var(--border)">
         <span>Venda a Prazo</span>
