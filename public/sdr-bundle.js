@@ -9837,13 +9837,13 @@ var SDR = function(exports) {
         } else propWrap && (propWrap.style.display = "none");
     }, window.renderRelatoriosAssinados = renderRelatoriosAssinados, window._verRelatorioAssinado = async function(codigo) {
         try {
-            const rel = (await db.ref("relatorios/" + codigo).once("value")).val();
-            if (!rel || !rel.pdfAssinado) return void toast("PDF assinado nao encontrado.", "error");
+            const rel = (await db.ref("relatorios/" + codigo).once("value")).val(), pdfSrc = (null == rel ? void 0 : rel.pdfAssinadoUrl) || (null == rel ? void 0 : rel.pdfAssinado) || null;
+            if (!rel || !pdfSrc) return void toast("PDF assinado nao encontrado.", "error");
             const modal = document.createElement("div");
             modal.id = "modal-ver-rel-assinado", modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px", 
             modal.onclick = e => {
                 e.target === modal && modal.remove();
-            }, modal.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:90vw;max-height:90vh;width:100%;display:flex;flex-direction:column;overflow:hidden">\n      <div style="padding:14px 18px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center">\n        <div>\n          <div style="font-weight:700">${rel.nomePrestador || ""} — Relatorio Assinado</div>\n          <div style="font-size:.78rem;color:#64748b">${codigo} | Recebido: ${rel.recebidoEm ? new Date(rel.recebidoEm).toLocaleDateString("pt-BR") : "—"}</div>\n          <div style="font-size:.78rem;color:#065f46">Assinatura Gov.br: Score ${rel.assinaturaScore || "?"}/10</div>\n        </div>\n        <button onclick="this.closest('#modal-ver-rel-assinado').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer">&times;</button>\n      </div>\n      <div style="flex:1;overflow:auto;padding:10px;background:#f1f5f9">\n        <iframe src="${rel.pdfAssinado}" style="width:100%;height:80vh;border:none;border-radius:6px"></iframe>\n      </div>\n    </div>`, 
+            }, modal.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:90vw;max-height:90vh;width:100%;display:flex;flex-direction:column;overflow:hidden">\n      <div style="padding:14px 18px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center">\n        <div>\n          <div style="font-weight:700">${rel.nomePrestador || ""} — Relatorio Assinado</div>\n          <div style="font-size:.78rem;color:#64748b">${codigo} | Recebido: ${rel.recebidoEm ? new Date(rel.recebidoEm).toLocaleDateString("pt-BR") : "—"}</div>\n          <div style="font-size:.78rem;color:#065f46">Assinatura Gov.br: Score ${rel.assinaturaScore || "?"}/10</div>\n        </div>\n        <button onclick="this.closest('#modal-ver-rel-assinado').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer">&times;</button>\n      </div>\n      <div style="flex:1;overflow:auto;padding:10px;background:#f1f5f9">\n        <iframe src="${pdfSrc}" style="width:100%;height:80vh;border:none;border-radius:6px"></iframe>\n      </div>\n    </div>`, 
             document.body.appendChild(modal);
         } catch (e) {
             toast("Erro ao carregar PDF.", "error");
@@ -9866,6 +9866,7 @@ var SDR = function(exports) {
             if (await _dbUpdate("relatorios/" + codigo, {
                 status: "enviado",
                 pdfAssinado: null,
+                pdfAssinadoUrl: null,
                 recebidoEm: null,
                 rejeitadoEm:  (new Date).toISOString(),
                 motivoRejeicao: motivo || "Sem motivo"

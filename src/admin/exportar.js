@@ -616,7 +616,8 @@ async function _verRelatorioAssinado(codigo) {
   try {
     const snap = await db.ref('relatorios/' + codigo).once('value');
     const rel = snap.val();
-    if (!rel || !rel.pdfAssinado) { toast('PDF assinado nao encontrado.', 'error'); return; }
+    const pdfSrc = rel?.pdfAssinadoUrl || rel?.pdfAssinado || null;
+    if (!rel || !pdfSrc) { toast('PDF assinado nao encontrado.', 'error'); return; }
     const modal = document.createElement('div');
     modal.id = 'modal-ver-rel-assinado';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
@@ -631,7 +632,7 @@ async function _verRelatorioAssinado(codigo) {
         <button onclick="this.closest('#modal-ver-rel-assinado').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer">&times;</button>
       </div>
       <div style="flex:1;overflow:auto;padding:10px;background:#f1f5f9">
-        <iframe src="${rel.pdfAssinado}" style="width:100%;height:80vh;border:none;border-radius:6px"></iframe>
+        <iframe src="${pdfSrc}" style="width:100%;height:80vh;border:none;border-radius:6px"></iframe>
       </div>
     </div>`;
     document.body.appendChild(modal);
@@ -661,6 +662,7 @@ async function _rejeitarRelatorio(codigo) {
     await _dbUpdate('relatorios/' + codigo, {
       status: 'enviado',
       pdfAssinado: null,
+      pdfAssinadoUrl: null,
       recebidoEm: null,
       rejeitadoEm: new Date().toISOString(),
       motivoRejeicao: motivo || 'Sem motivo'
