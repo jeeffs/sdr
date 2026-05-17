@@ -1,6 +1,6 @@
 # CLAUDE.md — SDR Soluções de Rua
 > Leia este arquivo inteiro antes de qualquer ação. Sem exceções.
-> **Última atualização:** 2026-05-15
+> **Última atualização:** 2026-05-17
 
 ---
 
@@ -47,8 +47,10 @@ cálculo financeiro, relatórios, EPI/segurança e assinatura digital.
 ## 🚀 COMANDO DE DEPLOY
 
 ```powershell
-cd "C:\Users\Jeeff\OneDrive\Documentos\ObsidianAI\Claude\SDR"; firebase deploy --only hosting
+cd C:\dev\SDR; firebase deploy --only hosting
 ```
+
+> ⚠️ **ATENÇÃO:** O path OneDrive (`C:\Users\Jeeff\OneDrive\Documentos\ObsidianAI\Claude\SDR`) está **CORROMPIDO** (fatal: bad object HEAD). **Nunca use.** Veja seção [Pasta OneDrive Proibida](#-pasta-onedrive-proibida) abaixo.
 
 **Sempre bumpar o SW cache antes de deploy** — usar `.\bump-sw.ps1` (bumpa CACHE_NAME + CACHE_SHELL juntos).
 Cache atual: `sdr-v157` / `sdr-shell-v132`
@@ -188,13 +190,18 @@ Ver `SUPERVISOR_DESIGN.md` para documentação completa.
 - [ ] Testei admin.html no browser (sem erros no console)
 - [ ] Testei index.html no browser (sem erros no console)
 - [ ] Bumpei `CACHE_NAME` em `sw.js` (ex: sdr-v147 → sdr-v148)
-- [ ] Executei: `cd "C:\Users\Jeeff\OneDrive\Documentos\ObsidianAI\Claude\SDR"; firebase deploy --only hosting`
+- [ ] Executei: `cd C:\dev\SDR; firebase deploy --only hosting`
 - [ ] Verifiquei o app em produção após deploy
 
 ---
 
 ## 🔄 HISTÓRICO RECENTE (ver SPRINT_LOG.md para detalhes)
 
+- `2026-05-17` — Relatório assinado: fix "PDF assinado não encontrado" — admin checava `pdfAssinado`, mobile salvava `pdfAssinadoUrl` (Storage OK) — exportar.js agora lê ambos
+- `2026-05-17` — Botão "Salvar como PDF" no iframe: trocado de `frame.contentWindow.print()` (bloqueado por sandbox) para `window.open(frame.src, '_blank')`; sandbox ganhou `allow-scripts allow-modals`
+- `2026-05-17` — Honorários Extra: detalhamento no PDF exportarCardTecnico, replicando algoritmo `renderFinanceiro` do mobile (agrupamento uid‖prof‖tipo, badge auto-prestador)
+- `2026-05-17` — Fix iframe vazio em `solucaoderua.web.app/?relatorio=`: `htmlContent` agora salvo no Firebase após geração do HTML; `skipWindow` param adicionado a `exportarCardTecnico`; `enviarRelatorioWhatsApp` delega para `exportarCardTecnico`
+- `2026-05-17` — Substituições legais: Bônus→Honorários, Supervisão→Acompanhamento, remuneração→valor, Gestão→Fiscal (6 arquivos)
 - `2026-05-15` — GPS best-of-N: watchPosition + bestPos (menor accuracy), ACC_IDEAL=20m, ACC_GOOD=50m, coleta 6s mínimo
 - `2026-05-15` — GPS admin: capturarGPS implementado em src/admin/os.js (era missing)
 - `2026-05-15` — GPS verDetalhe: coordenadas + link Google Maps no modal de detalhe
@@ -207,72 +214,143 @@ Ver `SUPERVISOR_DESIGN.md` para documentação completa.
 - `2026-05-06` — Implementação completa do sistema supervisor
 - `2026-04-xx` — Aditivo contratual, assinatura digital, Firebase Storage
 
-## Regras de colaboração (atualizadas em 2026-05-15)
+## Regras de colaboração (atualizadas em 2026-05-17)
 
-### Edições do Cowork em arquivos grandes
+---
 
-O sandbox Linux do Cowork tem histórico de truncar arquivos durante edits.
-Aconteceu 3x nesta sessão (os.js 2x, mobile.html 1x).
+### 🚫 Pasta OneDrive Proibida
 
-**SEMPRE validar no Windows após edição do Cowork** antes de qualquer
-`git commit` em:
+**Path único válido: `C:\dev\SDR\`**
 
-- APP/interface/*.html
-- public/*.html
-- src/admin/*.js
-- src/**/*.js grandes (>500 linhas)
+A pasta `C:\Users\Jeeff\OneDrive\Documentos\ObsidianAI\Claude\SDR` está **CORROMPIDA**
+(`fatal: bad object HEAD`) e **nunca deve ser usada**.
 
-Os 3 checks obrigatórios:
+Em sessão anterior, o Cowork editou e fez deploy a partir do OneDrive, causando **perda de
+~8h de trabalho**. A recuperação foi via `cd C:\dev\SDR; firebase deploy --only hosting`
+(funcionou porque `C:\dev\SDR` tinha todos os commits no GitHub).
+
+> **TODO:** deletar a pasta OneDrive após confirmar que C:\dev\SDR está completa.
+
+---
+
+### ✂️ Edição de arquivos grandes — PowerShell vs Python
+
+Scripts Python no sandbox Linux do Cowork **truncaram arquivos 8 vezes** em sessões
+recentes (mobile.html: 7547 linhas, ~440KB). Padrão do truncamento:
+
+- Python lê ~435 KB e escreve de volta sem o restante
+- Arquivo fica com ~7250–7400 linhas (perdeu 150–300 linhas do final)
+- `tail` não termina em `</html>`
+- Scripts ficam desbalanceados (ex: 11 abertos / 10 fechados)
+
+#### Edições CIRÚRGICAS (1–5 substituições simples) — use PowerShell
+
+**PowerShell direto no Windows é o caminho seguro** para arquivos grandes.
 
 ```powershell
-# 1. Line count match entre origem e destino
-$src = (Get-Content APP\interface\mobile.html | Measure-Object -Line).Lines
-$dst = (Get-Content public\index.html | Measure-Object -Line).Lines
-if ($src -ne $dst) { throw "DIVERGEM: $src vs $dst" }
+# Comando-padrão (UTF-8 sem BOM):
+$path  = "C:\dev\SDR\APP\interface\mobile.html"
+$old   = "texto exato a substituir"
+$new   = "novo texto"
+$enc   = [System.Text.UTF8Encoding]::new($false)
+$txt   = [System.IO.File]::ReadAllText($path, $enc)
+# Verificar que há exatamente 1 ocorrência antes de salvar:
+$count = ([regex]::Matches($txt, [regex]::Escape($old))).Count
+if ($count -ne 1) { throw "ABORT: $count ocorrencias encontradas (esperado 1)" }
+$txt   = $txt.Replace($old, $new)
+[System.IO.File]::WriteAllText($path, $txt, $enc)
+```
 
-# 2. Final do arquivo
-$tail = (Get-Content public\index.html -Tail 1).Trim()
-if ($tail -ne "</html>") { throw "Não fecha em </html>: '$tail'" }
+Depois: sempre rodar os 3 checks de integridade (ver seção abaixo).
 
-# 3. Scripts balanceados
-$c = Get-Content public\index.html -Raw
+#### Edições GRANDES (refactor, nova função, múltiplas mudanças) — Cowork via Python
+
+- Restaurar do git antes de reescrever: `git show HEAD:ARQUIVO > /tmp/original.html`
+- Aplicar mudanças no original restaurado, não no arquivo potencialmente corrompido
+- Rodar os 3 checks obrigatoriamente
+- Se falhar: `git checkout HEAD -- ARQUIVO` e refazer
+
+---
+
+### ✅ Os 3 Checks de Integridade
+
+Após **qualquer** edição em arquivos grandes (feita pelo Cowork ou pelo próprio Claude),
+rodar **obrigatoriamente** os 3 checks antes de `git commit`:
+
+```powershell
+$path = "C:\dev\SDR\APP\interface\mobile.html"   # ajustar para o arquivo editado
+
+# CHECK 1 — Line count (se caiu >100 linhas: TRUNCOU)
+$lines = (Get-Content $path | Measure-Object -Line).Lines
+Write-Host "Linhas: $lines"
+
+# CHECK 2 — Tail termina em </html>
+$tail = (Get-Content $path -Tail 1).Trim()
+if ($tail -ne "</html>") { throw "NAO fecha em </html>: '$tail'" }
+Write-Host "Tail OK: $tail"
+
+# CHECK 3 — Scripts balanceados
+$c = Get-Content $path -Raw
 $o = ([regex]::Matches($c, '<script')).Count
 $x = ([regex]::Matches($c, '</script>')).Count
-if ($o -ne $x) { throw "Scripts desbalanceados: $o vs $x" }
+if ($o -ne $x) { throw "Scripts desbalancados: $o open / $x close" }
+Write-Host "Scripts OK: $o/$x"
 ```
+
+Se **qualquer** check falhar → restaurar imediatamente:
+```powershell
+git checkout HEAD -- APP\interface\mobile.html
+```
+
+> A regra de scripts balanceados já pegou 1 truncamento antes do deploy em 2026-05-15 —
+> provou seu valor. Não pule.
+
+---
+
+### 🔄 Diferença LF vs CRLF (informativo)
+
+O git no Windows mostra "LF will be replaced by CRLF" ao fazer `git add`. **Normal — não
+quebra nada.**
+
+Sintoma comum: o Cowork (Linux) vê `mobile.html` com ~8293 linhas (LF), enquanto o
+PowerShell (Windows) vê ~7547 linhas (CRLF). **Diferença de 400–800 linhas não é
+truncamento** — é apenas a contagem de quebras de linha.
+
+Para distinguir truncamento real de diferença CRLF/LF:
+- Tamanho em bytes antes/depois (`(Get-Item $path).Length`)
+- Tail termina em `</html>` (CHECK 2)
+- Scripts balanceados (CHECK 3)
+
+---
+
+### 👥 Papéis fixos: Claude ↔ Cowork ↔ Jeff
+
+| Papel | Responsabilidade |
+|---|---|
+| **Claude (chat)** | Analisa o problema, planeja a solução, verifica integridade pós-edição, passa ordens estruturadas ao Cowork. **NÃO executa edições diretas** (exceto quando Cowork falhou repetidamente e Jeff aprovou PowerShell) |
+| **Cowork** | Executa as ordens recebidas do Claude, reporta status de cada passo, aguarda aprovação do Jeff antes de commit/push/deploy |
+| **Jeff** | Arbitra (aprova/rejeita), executa comandos finais (commit, push, deploy), valida resultado em produção |
+
+**Regra de prompt para o Cowork:** Toda tarefa deve especificar explicitamente
+`INVESTIGA E PROPÕE` ou `EXECUTA`. Sem essa distinção, o Cowork tende a aplicar fixes
+sem aprovação.
+
+---
 
 ### Deploy de hosting — sequência canônica
 
 ```powershell
 cd C:\dev\SDR
-.\bump-sw.ps1               # SEMPRE — bumpa CACHE_NAME E CACHE_SHELL juntos
-npm run build               # Se mexeu em src/
-Copy-Item APP\interface\mobile.html public\index.html -Force  # Se mexeu no mobile
-# VALIDAR (3 checks acima) — não pular
+.\bump-sw.ps1                                                    # SEMPRE — bumpa CACHE_NAME + CACHE_SHELL
+npm run build                                                    # se mexeu em src/admin/*.js
+Copy-Item APP\interface\mobile.html public\index.html -Force    # se mexeu em mobile.html
+# VALIDAR com os 3 checks — não pular
 git add . ; git commit -m "..." ; git push origin main
 firebase deploy --only hosting
 ```
 
 ### Ambiente
 
-- Projeto em `C:\dev\SDR\` (FORA do OneDrive — não retornar pro OneDrive nunca)
-- PowerShell 5.1 não suporta `-replace { ... }` (script block), usar `-replace "str", "str"`
-- `Set-Content` default = ASCII, usar `[System.IO.File]::WriteAllText` com UTF-8
-
-### Cowork — edição de arquivos grandes (aprendizado de 2026-05-15)
-
-O sandbox Linux do Cowork tem histórico de **truncar arquivos durante Edit tool**
-em arquivos com >500 linhas. Aconteceu 4x nesta sessão:
-- src/admin/os.js (2x)
-- APP/interface/mobile.html (2x)
-
-**Regras obrigatórias para Cowork em arquivos grandes:**
-
-1. Ler arquivo inteiro ANTES de editar
-2. Aplicar mudança via Python script (NÃO usar Edit tool diretamente)
-3. Validar line count contra HEAD pré-edição
-4. Se detectou truncamento: `git checkout HEAD -- <arquivo>` e refaz via Python
-5. Os 3 checks do CLAUDE.md (line count + </html> + scripts balanceados) NÃO SÃO OPCIONAIS
-
-A regra `if ($o -ne $x) { throw "Scripts desbalanceados" }` já pegou 1 truncamento
-nesta sessão antes do deploy — provou seu valor.
+- Projeto em `C:\dev\SDR\` (FORA do OneDrive — não retornar nunca)
+- PowerShell 5.1 não suporta `-replace { ... }` (script block) — usar `-replace "str", "str"`
+- `Set-Content` default = ASCII — usar `[System.IO.File]::WriteAllText` com UTF-8 sem BOM

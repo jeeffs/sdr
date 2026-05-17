@@ -7547,11 +7547,11 @@ var SDR = function(exports) {
                 assinados.length > 0 && (html += `<div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:12px;margin-bottom:12px;animation:pulse 2s infinite">\n        <div style="font-weight:700;color:#92400e;margin-bottom:8px"><i class="fas fa-clock"></i> ${assinados.length} relatorio(s) aguardando aprovacao</div>`, 
                 assinados.forEach(r => {
                     const [ry, rm] = (r.mesAno || "").split("-").map(Number);
-                    html += `<div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid #f59e0b">\n          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">\n            <div>\n              <div style="font-weight:700;font-size:.88rem">${r.nomePrestador || r.uid}</div>\n              <div style="font-size:.75rem;color:#64748b">${MESES_PT[rm - 1] || ""}/${ry} — ${r.codigo}</div>\n              <div style="font-size:.75rem;color:#64748b">Recebido: ${r.recebidoEm ? new Date(r.recebidoEm).toLocaleDateString("pt-BR") : "—"}</div>\n            </div>\n            <div style="font-weight:700;color:#1f4e79;font-size:.9rem">R$ ${Number(r.valorTotal || 0).toFixed(2).replace(".", ",")}</div>\n          </div>\n          <div style="display:flex;gap:6px">\n            <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="_verRelatorioAssinado('${r.codigo}')"><i class="fas fa-eye"></i> Ver PDF</button>\n            <button class="btn btn-sm" style="background:#d1fae5;color:#065f46" onclick="_aprovarRelatorio('${r.codigo}')"><i class="fas fa-check"></i> Aprovar</button>\n            <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626" onclick="_rejeitarRelatorio('${r.codigo}')"><i class="fas fa-times"></i> Rejeitar</button>\n          </div>\n        </div>`;
+                    html += `<div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid #f59e0b">\n          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">\n            <div>\n              <div style="font-weight:700;font-size:.88rem">${r.nomePrestador || r.uid}</div>\n              <div style="font-size:.75rem;color:#64748b">${MESES_PT[rm - 1] || ""}/${ry} — ${r.codigo}</div>\n              <div style="font-size:.75rem;color:#64748b">Recebido: ${r.recebidoEm ? new Date(r.recebidoEm).toLocaleDateString("pt-BR") : "—"}</div>\n            </div>\n            <div style="font-weight:700;color:#1f4e79;font-size:.9rem">R$ ${Number(r.valorTotal || 0).toFixed(2).replace(".", ",")}</div>\n          </div>\n          <div style="display:flex;gap:6px">\n            <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="_verRelatorioAssinado('${r.codigo}')"><i class="fas fa-eye"></i> Ver PDF</button>\n            <button class="btn btn-sm" style="background:#d1fae5;color:#065f46" onclick="_aprovarRelatorio('${r.codigo}')"><i class="fas fa-check"></i> Aprovar</button>\n            <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626" onclick="_rejeitarRelatorio('${r.codigo}')"><i class="fas fa-times"></i> Rejeitar</button>\n            <button class="btn btn-sm" style="background:#1e293b;color:#f1f5f9" onclick="_excluirRelatorio('${r.codigo}')"><i class="fas fa-trash"></i> Excluir</button>\n          </div>\n        </div>`;
                 }), html += "</div>"), enviados.length > 0 && (html += `<div style="margin-bottom:12px"><div style="font-size:.78rem;font-weight:600;color:#d97706;margin-bottom:6px"><i class="fas fa-paper-plane"></i> Enviados (aguardando assinatura): ${enviados.length}</div>`, 
                 enviados.forEach(r => {
                     const [ry, rm] = (r.mesAno || "").split("-").map(Number);
-                    html += `<div style="background:#fffbeb;border-radius:6px;padding:6px 10px;margin-bottom:3px;font-size:.78rem;display:flex;justify-content:space-between;align-items:center">\n          <span>${r.nomePrestador || r.uid} — ${MESES_PT[rm - 1] || ""}/${ry}</span>\n          <span style="color:#d97706;font-size:.72rem">${r.geradoEm ? new Date(r.geradoEm).toLocaleDateString("pt-BR") : ""}</span>\n        </div>`;
+                    html += `<div style="background:#fffbeb;border-radius:6px;padding:6px 10px;margin-bottom:3px;font-size:.78rem;display:flex;justify-content:space-between;align-items:center">\n          <span>${r.nomePrestador || r.uid} — ${MESES_PT[rm - 1] || ""}/${ry}</span>\n          <div style="display:flex;align-items:center;gap:6px">\n            <span style="color:#d97706;font-size:.72rem">${r.geradoEm ? new Date(r.geradoEm).toLocaleDateString("pt-BR") : ""}</span>\n            <button class="btn btn-sm" style="background:#1e293b;color:#f1f5f9;font-size:.7rem;padding:2px 8px" onclick="_excluirRelatorio('${r.codigo}')"><i class="fas fa-trash"></i></button>\n          </div>\n        </div>`;
                 }), html += "</div>"), aprovados.length > 0 && (html += `<details style="margin-bottom:8px"><summary style="font-size:.78rem;font-weight:600;color:#065f46;cursor:pointer"><i class="fas fa-check-circle"></i> Aprovados: ${aprovados.length}</summary>`, 
                 aprovados.slice(0, 10).forEach(r => {
                     const [ry, rm] = (r.mesAno || "").split("-").map(Number);
@@ -9877,6 +9877,20 @@ var SDR = function(exports) {
             renderRelatoriosAssinados();
         } catch (e) {
             toast("Erro ao rejeitar.", "error");
+        }
+    }, window._excluirRelatorio = async function(codigo) {
+        if (confirm("Excluir o relatorio " + codigo + "?\nEsta acao nao pode ser desfeita.")) try {
+            const rel = (await db.ref("relatorios/" + codigo).once("value")).val();
+            if (rel && rel.pdfAssinadoUrl) try {
+                const storageRef = firebase.storage().refFromURL(rel.pdfAssinadoUrl);
+                await storageRef.delete();
+            } catch (se) {
+                "storage/object-not-found" !== se.code && se.message;
+            }
+            await db.ref("relatorios/" + codigo).remove(), toast("Relatorio " + codigo + " excluido.", "success"), 
+            renderRelatoriosAssinados();
+        } catch (e) {
+            toast("Erro ao excluir: " + e.message, "error"), console.error("[excluirRelatorio]", e);
         }
     }, window.corrigirPrecosDoMes = async function() {
         var _a;

@@ -572,6 +572,7 @@ async function renderRelatoriosAssinados() {
             <button class="btn btn-sm" style="background:#dbeafe;color:#1d4ed8" onclick="_verRelatorioAssinado('${r.codigo}')"><i class="fas fa-eye"></i> Ver PDF</button>
             <button class="btn btn-sm" style="background:#d1fae5;color:#065f46" onclick="_aprovarRelatorio('${r.codigo}')"><i class="fas fa-check"></i> Aprovar</button>
             <button class="btn btn-sm" style="background:#fee2e2;color:#dc2626" onclick="_rejeitarRelatorio('${r.codigo}')"><i class="fas fa-times"></i> Rejeitar</button>
+            <button class="btn btn-sm" style="background:#1e293b;color:#f1f5f9" onclick="_excluirRelatorio('${r.codigo}')"><i class="fas fa-trash"></i> Excluir</button>
           </div>
         </div>`;
       });
@@ -585,7 +586,10 @@ async function renderRelatoriosAssinados() {
         const [ry,rm] = (r.mesAno||'').split('-').map(Number);
         html += `<div style="background:#fffbeb;border-radius:6px;padding:6px 10px;margin-bottom:3px;font-size:.78rem;display:flex;justify-content:space-between;align-items:center">
           <span>${r.nomePrestador||r.uid} — ${MESES_PT[rm-1]||''}/${ry}</span>
-          <span style="color:#d97706;font-size:.72rem">${r.geradoEm ? new Date(r.geradoEm).toLocaleDateString('pt-BR') : ''}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="color:#d97706;font-size:.72rem">${r.geradoEm ? new Date(r.geradoEm).toLocaleDateString('pt-BR') : ''}</span>
+            <button class="btn btn-sm" style="background:#1e293b;color:#f1f5f9;font-size:.7rem;padding:2px 8px" onclick="_excluirRelatorio('${r.codigo}')"><i class="fas fa-trash"></i></button>
+          </div>
         </div>`;
       });
       html += '</div>';
@@ -828,9 +832,34 @@ window.enviarRelatorioWhatsApp = enviarRelatorioWhatsApp;
 window.renderBotoesTecnicos = renderBotoesTecnicos;
 window.renderBotaoTecnicoProprio = renderBotaoTecnicoProprio;
 window.renderRelatoriosAssinados = renderRelatoriosAssinados;
+async function _excluirRelatorio(codigo) {
+  if (!confirm('Excluir o relatorio ' + codigo + '?\nEsta acao nao pode ser desfeita.')) return;
+  try {
+    const snap = await db.ref('relatorios/' + codigo).once('value');
+    const rel = snap.val();
+    if (rel && rel.pdfAssinadoUrl) {
+      try {
+        const storageRef = firebase.storage().refFromURL(rel.pdfAssinadoUrl);
+        await storageRef.delete();
+      } catch(se) {
+        if (se.code !== 'storage/object-not-found') {
+          console.warn('[excluirRelatorio] Storage delete falhou:', se.message);
+        }
+      }
+    }
+    await db.ref('relatorios/' + codigo).remove();
+    toast('Relatorio ' + codigo + ' excluido.', 'success');
+    renderRelatoriosAssinados();
+  } catch(e) {
+    toast('Erro ao excluir: ' + e.message, 'error');
+    console.error('[excluirRelatorio]', e);
+  }
+}
+
 window._verRelatorioAssinado = _verRelatorioAssinado;
 window._aprovarRelatorio = _aprovarRelatorio;
 window._rejeitarRelatorio = _rejeitarRelatorio;
+window._excluirRelatorio = _excluirRelatorio;
 window.corrigirPrecosDoMes = corrigirPrecosDoMes;
 window.exportarTecnicoMes = exportarTecnicoMes;
 window._expReset = _expReset;
