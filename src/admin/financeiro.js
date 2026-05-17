@@ -1362,7 +1362,7 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
           `<thead><tr>` +
             `<th>Prestador</th>` +
             `<th>Frentes</th>` +
-            `<th style="text-align:right">Bônus Gerado</th>` +
+            `<th style="text-align:right">Honorários</th>` +
           `</tr></thead>` +
           `<tbody>${_bnsRows}</tbody>` +
         `</table>` +
@@ -1456,7 +1456,7 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
       </tr></thead>
       <tbody>
         <tr style="background:#fffbeb">
-          <td style="padding:8px 10px;font-size:.82rem;font-weight:600">Honorários Mensais Fixos — Supervisão Operacional e Controle de Estoque</td>
+          <td style="padding:8px 10px;font-size:.82rem;font-weight:600">Honorários Mensais Fixos — Acompanhamento Operacional e Controle de Estoque</td>
           <td style="padding:8px 10px;font-size:.82rem;text-align:right;font-weight:700;color:#854d0e">${fmt(totalBruto)}</td>
         </tr>
       </tbody>
@@ -1539,7 +1539,7 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     <div class="confirm-title">${_isFiscalUser ? 'Confirmação de Honorários' : 'Confirmação de Execução dos Serviços'}</div>
     <p style="font-size:.8rem;color:#166534;line-height:1.6">
       ${_isFiscalUser
-        ? `Confirmo que os serviços de supervisão operacional e controle de estoque referentes ao
+        ? `Confirmo que os serviços de acompanhamento operacional e controle de estoque referentes ao
            período de <strong>${mesLabel}</strong> foram devidamente prestados, conforme o Contrato
            de Prestação de Serviços vigente, e que os honorários acima refletem o acordado.`
         : `Confirmo que os serviços listados neste relatório, referentes ao período de
@@ -1575,7 +1575,7 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     ⚠️ <strong>Aviso:</strong> Este documento é um relatório de controle interno de ordens de serviço
     executadas em regime de <strong>prestação de serviços autônoma</strong>, sem caracterizar vínculo
     empregatício, relação de emprego ou qualquer outra forma de contrato de trabalho regido pela CLT.
-    A remuneração pelos serviços prestados é calculada com base nas ordens de serviço executadas,
+    O valor pelos serviços prestados é calculado com base nas ordens de serviço executadas,
     não configurando honorários, gratificação ou qualquer benefício trabalhista.
   </div>
 

@@ -587,7 +587,7 @@ function renderBonusV2() {
               <th style="${thS}">Profile</th>
               <th style="${thS}">Tipo</th>
               <th style="${thS};text-align:right;color:#bfdbfe">Serviços</th>
-              <th style="${thS};text-align:right;color:#fde68a">Bônus</th>
+              <th style="${thS};text-align:right;color:#fde68a">Honorários</th>
               <th style="${thS};text-align:right;color:#a7f3d0">Total</th>
             </tr>
           </thead>
@@ -618,7 +618,7 @@ function renderBonusV2() {
       </div>
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border-left:4px solid #16a34a;font-size:.85rem;display:flex;gap:20px;flex-wrap:wrap;align-items:center">
         <span><b style="color:#1f4e79"><i class="fas fa-wallet"></i> Serviços:</b> <b style="color:#1f4e79">${fmt(totalV1)}</b></span>
-        <span><b style="color:#16a34a"><i class="fas fa-star"></i> Bônus total:</b> <b style="color:#15803d">${fmt(totalBonus)}</b></span>
+        <span><b style="color:#16a34a"><i class="fas fa-star"></i> Honorários total:</b> <b style="color:#15803d">${fmt(totalBonus)}</b></span>
         <span><b style="color:#7c3aed"><i class="fas fa-coins"></i> Total apurado:</b> <b style="color:#6d28d9;font-size:1rem">${fmt(totalGeral)}</b></span>
       </div>
     `;
@@ -633,7 +633,7 @@ function renderBonusV2() {
               <th style="${thS}">Prestador</th>
               <th style="${thS}">Profile</th>
               <th style="${thS}">Tipo</th>
-              <th style="${thS};text-align:right;color:#fde68a">Bônus</th>
+              <th style="${thS};text-align:right;color:#fde68a">Honorários</th>
             </tr>
           </thead>
           <tbody>
@@ -652,14 +652,14 @@ function renderBonusV2() {
           </tbody>
           <tfoot style="background:#f1f5f9;border-top:2px solid #cbd5e1">
             <tr>
-              <td colspan="4" style="padding:9px 10px;font-weight:700;font-size:.82rem">Total Bônus</td>
+              <td colspan="4" style="padding:9px 10px;font-weight:700;font-size:.82rem">Total Honorários</td>
               <td style="padding:9px 10px;text-align:right;font-weight:800;font-size:.9rem;color:#16a34a">${fmt(totalBonus)}</td>
             </tr>
           </tfoot>
         </table>
       </div>
       <div style="margin-top:12px;padding:10px 14px;background:#f0fdf4;border-radius:8px;border-left:4px solid #16a34a;font-size:.85rem">
-        <span><b style="color:#16a34a"><i class="fas fa-star"></i> Total bônus no período:</b>
+        <span><b style="color:#16a34a"><i class="fas fa-star"></i> Total honorários no período:</b>
         <b style="color:#15803d;font-size:1rem;margin-left:8px">${fmt(totalBonus)}</b></span>
       </div>
     `;
@@ -988,7 +988,7 @@ function renderMeuDash() {
         style="color:#1f4e79;margin-top:2px;font-size:1rem;flex-shrink:0"></i>
       <div>
         <div style="font-weight:700;font-size:.84rem;color:#1e3a5f;margin-bottom:3px">
-          📋 OS aguardando validação da Gestão
+          📋 OS aguardando validação do Fiscal
         </div>
         <div style="font-size:.81rem;color:#1f4e79">
           <strong>${osPendentesValMes.length} OS</strong> pendentes · valor total:
@@ -1118,10 +1118,10 @@ function renderMeuDash() {
       ${escolhaCards}
     </div>` : ''}
 
-    <!-- Apuração de Bônus (visível apenas para V2/V3/master via renderBonusV2) -->
+    <!-- Apuração de Honorários (visível apenas para V2/V3/master via renderBonusV2) -->
     <div id="exp-bonus-v2" style="display:none">
       <div class="card">
-        <div class="card-title"><i class="fas fa-coins" style="color:#f59e0b"></i> Apuração de Bônus</div>
+        <div class="card-title"><i class="fas fa-coins" style="color:#f59e0b"></i> Apuração de Honorários</div>
         <div style="display:flex;gap:10px;margin-bottom:16px">
           <button id="bns-btn-atual" class="btn btn-primary btn-sm" onclick="setBnsMes('atual')" style="min-width:120px">
             <i class="fas fa-calendar-check"></i> Mês Atual

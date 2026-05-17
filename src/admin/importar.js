@@ -861,7 +861,7 @@ async function previewImport(files) {
   // Painel de avisos de rejeição V2 extra
   const avisoV2HTML = v2Rejeitados.length
     ? `<div style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:9px 13px;margin-bottom:12px;font-size:.82rem;color:#7f1d1d">
-        <i class="fas fa-ban"></i> <b>${v2Rejeitados.length} arquivo(s) PRESTADOR rejeitado(s)</b> — já existe uma referência PRESTADOR (apenas 1 planilha PRESTADOR é aceita como referência de preços para bônus). As demais são ignoradas:<br>
+        <i class="fas fa-ban"></i> <b>${v2Rejeitados.length} arquivo(s) PRESTADOR rejeitado(s)</b> — já existe uma referência PRESTADOR (apenas 1 planilha PRESTADOR é aceita como referência de preços para honorários). As demais são ignoradas:<br>
         <span style="font-size:.75rem">${v2Rejeitados.map(d=>d.fileName).join(', ')}</span>
        </div>` : '';
 
@@ -935,7 +935,7 @@ function _atualizarRefBadges() {
       b.textContent = 'dados'; b.style.background = '#ede9fe'; b.style.color = '#6d28d9';
     } else {
       // V2 — única referência ativa (extras foram rejeitadas)
-      b.textContent = 'ref bônus ativa'; b.style.background = '#fef3c7'; b.style.color = '#92400e';
+      b.textContent = 'ref honorários ativa'; b.style.background = '#fef3c7'; b.style.color = '#92400e';
     }
   });
   // Limpa o aviso de duplicata (não é mais necessário — extras são rejeitadas antes)

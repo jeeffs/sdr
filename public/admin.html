@@ -461,7 +461,7 @@ tbody tr:last-child{border-bottom:none}
     <div class="login-right-content">
       <div class="big-icon"><i class="fas fa-hard-hat"></i></div>
       <h2>Solução de Rua</h2>
-      <p>A plataforma completa para gestão de ordens de serviço em campo, com controle em tempo real.</p>
+      <p>A plataforma completa para controle de ordens de serviço em campo, com controle em tempo real.</p>
       <ul class="login-features">
         <li><i class="fas fa-check"></i> Lançamento de OS com GPS</li>
         <li><i class="fas fa-check"></i> Controle de técnicos</li>
@@ -864,8 +864,8 @@ tbody tr:last-child{border-bottom:none}
             Selecione a <b>pasta inteira do ano</b> (ou arquivos individuais) para importar.<br>
             Padrão do arquivo: <b>NOME PROFILE TIPO.xlsx</b> — ex: <code>CAIO FILIAL MANUTENÇÃO.xlsm</code><br>
             <b style="color:#16a34a">Planilhas Prestador</b> são a base de dados dos prestadores regulares. <b style="color:#7c3aed">Planilhas Admin</b> são a base de dados do master (Jefferson).<br>
-            Planilhas <b>PRESTADOR</b> são lidas apenas como <b>referência para cálculo do bônus</b> (não geram registros).<br>
-            <span style="font-size:.78rem;color:#64748b">Estrutura recomendada: <code>2025 / 01 / V1 / CAIO FILIAL MANUTENÇÃO.xlsm</code> (técnicos) e <code>2025 / 01 / V3 / JEFFERSON FILIAL MANUTENÇÃO.xlsm</code> (master) e <code>2025 / 01 / V2 / ...</code> (referência bônus)</span>
+            Planilhas <b>PRESTADOR</b> são lidas apenas como <b>referência para cálculo dos honorários</b> (não geram registros).<br>
+            <span style="font-size:.78rem;color:#64748b">Estrutura recomendada: <code>2025 / 01 / V1 / CAIO FILIAL MANUTENÇÃO.xlsm</code> (técnicos) e <code>2025 / 01 / V3 / JEFFERSON FILIAL MANUTENÇÃO.xlsm</code> (master) e <code>2025 / 01 / V2 / ...</code> (referência honorários)</span>
           </p>
           <!-- inputs ocultos -->
           <input type="file" id="imp-files"   multiple accept=".xlsx,.xlsm" style="display:none" onchange="previewImport(this.files)">
@@ -1871,7 +1871,7 @@ tbody tr:last-child{border-bottom:none}
                 padding:10px 18px;font-size:.83rem;font-weight:600;cursor:pointer;
                 display:flex;align-items:center;gap:8px">
                 <i class="fas fa-camera"></i>
-                Gestão Contrato OTDR
+                Contrato OTDR
                 <i class="fas fa-chevron-down" style="font-size:.7rem;opacity:.8"></i>
               </button>
               <div id="otdr-gestao-wrap" style="display:none;margin-top:14px">
@@ -4954,19 +4954,3 @@ if ('serviceWorker' in navigator) {
         try { hook(); } catch(e) { console.warn('[SDR] hook showPage erro em', pageId, e); }
       }
     };
-    console.log('[SDR] showPage hook ativo —', Object.keys(PAGE_RENDER_MAP).join(', '));
-  }
-
-  // Tentar aplicar imediatamente; se bundle ainda não carregou, esperar DOMContentLoaded
-  if (typeof window.showPage === 'function') {
-    _patchShowPage();
-  } else {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(_patchShowPage, 500));
-    window.addEventListener('load', () => setTimeout(_patchShowPage, 100));
-  }
-})();
-
-// Nota Wave 1 Firebase Auth: criarNovoUsuario é encapsulada internamente pelo
-// bundle (não exposta como global), portanto novos usuários não recebem
-// firebaseAuthLinked: false explícito. Isso é seguro: o login mobile trata
-// firebaseAuthLinked 

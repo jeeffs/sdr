@@ -285,7 +285,7 @@ function _montarCorpoTermoServicos() {
     <p style="font-weight:700;color:#1e40af;margin-top:14px">CLÁUSULA SEGUNDA — DA TABELA DE SERVIÇOS E VALORES</p>
     <p>O(A) PRESTADOR(A) declara ter pleno conhecimento dos serviços descritos na tabela abaixo, incluindo suas respectivas descrições operacionais e valores unitários vigentes para o nível <strong>${nomeNivel}</strong>:</p>
     ${tabelaServicos}
-    <p style="font-size:.78rem;color:#64748b"><em>Os valores acima poderão ser reajustados pela CONTRATANTE mediante comunicação prévia ao PRESTADOR(A), conforme cláusula contratual de remuneração.</em></p>
+    <p style="font-size:.78rem;color:#64748b"><em>Os valores acima poderão ser reajustados pela CONTRATANTE mediante comunicação prévia ao PRESTADOR(A), conforme cláusula contratual de prestação.</em></p>
 
     <p style="font-weight:700;color:#1e40af;margin-top:14px">CLÁUSULA TERCEIRA — DA VERACIDADE DAS INFORMAÇÕES</p>
     <p>O(A) PRESTADOR(A) compromete-se a registrar no sistema todas as informações referentes aos serviços executados com total veracidade, incluindo, mas não se limitando a: tipo de serviço, quantidades, localização (CTO/CEO), cidade, profile e demais dados solicitados.</p>
@@ -861,16 +861,4 @@ window.confirmarDel = confirmarDel;
 window.confirmarLimparTudo = confirmarLimparTudo;
 window.filteredRecords = filteredRecords;
 window.filtrarTabela = filtrarTabela;
-window.renderTabela = renderTabela;
-window.buildServiceRows = buildServiceRows;
-window.preencherPreco = preencherPreco;
-window.calcTotal = calcTotal;
-window.gerarCodigoOS = gerarCodigoOS;
-window.getActivePriceMap = getActivePriceMap;
-window._atualizarDropdownTecnicos = _atualizarDropdownTecnicos;
-window._atualizarDropdownCidades = _atualizarDropdownCidades;
-window.popularFiltros = popularFiltros;
-window.carregarDescontos = carregarDescontos;
-window.carregarDescontosTec = carregarDescontosTec;
-window.renderBotoesTecnicos = renderBotoesTecnicos;
-window.renderBotaoTecnicoProprio = renderBotaoTecnicoProprio;
+window.rend
