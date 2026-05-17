@@ -452,20 +452,10 @@ async function enviarRelatorioWhatsApp(uid, mesAno) {
   const totalDesc = descontosMes.reduce((s,d) => s + +(d.valor/((Number(d.parcelas)||1))).toFixed(2), 0);
   const totalLiq  = totalBruto - totalDesc;
 
-  // ── Gera codigo do relatorio e salva no Firebase ──────────────────────────
-  const _rndHex = () => Math.random().toString(16).slice(2, 6).toUpperCase();
-  const codigoRel = `RSP-${mesAno}-${(nome||'X').slice(0,3).toUpperCase()}-${_rndHex()}`;
+  // ── Delega geração do HTML + save Firebase para exportarCardTecnico ─────────
+  // (paraWhatsApp=true grava htmlContent; skipWindow=true evita o popup)
+  const codigoRel = await exportarCardTecnico(uid, mesAno, true, true);
   const linkUpload = `https://solucaoderua.web.app?relatorio=${codigoRel}`;
-  try {
-    await _dbSet('relatorios/' + codigoRel, {
-      codigo: codigoRel, uid, nomePrestador: nome, mesAno,
-      valorTotal: totalBruto, totalDescontos: totalDesc, valorLiquido: totalLiq,
-      totalOS: recs.length,
-      geradoEm: new Date().toISOString(),
-      geradoPor: currentUser?.id||'master', geradoPorNome: currentUser?.name||'Master',
-      status: 'enviado', linkUpload
-    });
-  } catch(e) { console.warn('[enviarRelatorioWhatsApp] Firebase:', e.message); }
 
   // ── Monta mensagem WhatsApp ───────────────────────────────────────────────
   const titulo = _isFiscalUser ? 'Honorarios de Gestao' : 'Relatorio de Servicos Prestados';

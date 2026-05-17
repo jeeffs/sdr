@@ -1124,7 +1124,7 @@ function renderFinanceiro() {
   _renderFinDescontos();
 }
 
-async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
+async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false, skipWindow=false) {
   const u = usersCache[uid] || {};
   const fmt = v => `<span class="money-val">R$ ${Number(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`;
   const _n  = s => (s||'').normalize('NFC').trim().toUpperCase();
@@ -1599,11 +1599,26 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
 </body>
 </html>`;
 
-  const _blobC = new Blob([html], { type: 'text/html; charset=utf-8' });
-  const _urlC = _createBlobUrl(_blobC);
-  const win = window.open(_urlC, '_blank');
-  if (!win) { const a = document.createElement('a'); a.href = _urlC; a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
-  // Fase5: Blob gerenciado por _createBlobUrl — revogado em _revokeAllBlobs()
+  // Salva no Firebase se for envio WhatsApp (htmlContent incluído para exibir no iframe)
+  if (paraWhatsApp) {
+    try {
+      await _dbSet('relatorios/' + codigoRelatorio, {
+        codigo: codigoRelatorio, uid, nomePrestador: u.name||uid, mesAno,
+        valorTotal: totalBruto, totalDescontos: totalDesc, valorLiquido: totalLiq, totalOS: recs.length,
+        geradoEm: new Date().toISOString(), geradoPor: currentUser?.id||'master', geradoPorNome: currentUser?.name||'Master',
+        status: 'enviado', linkUpload, htmlContent: html
+      });
+    } catch(e) { console.error('[exportarCardTecnico] Firebase:', e); }
+  }
+
+  if (!skipWindow) {
+    const _blobC = new Blob([html], { type: 'text/html; charset=utf-8' });
+    const _urlC = _createBlobUrl(_blobC);
+    const win = window.open(_urlC, '_blank');
+    if (!win) { const a = document.createElement('a'); a.href = _urlC; a.target = '_blank'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }
+    // Fase5: Blob gerenciado por _createBlobUrl — revogado em _revokeAllBlobs()
+  }
+  return codigoRelatorio;
 }
 
 async function adicionarDescontoFin() {
