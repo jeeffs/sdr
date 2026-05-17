@@ -1287,6 +1287,90 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     } catch(e) { console.error('[exportarCardTecnico] Firebase:', e); }
   }
 
+
+  // ── Detalhamento Honorários Extra por prestador × frente (só V2) ──────────
+  let _honExtrasDetalheSection = '';
+  if (_isV2Card && honExtrasCard > 0) {
+    const _normD = s => (s||'').normalize('NFC').trim().toUpperCase();
+    const _masterU3 = new Set(
+      Object.entries(usersCache)
+        .filter(([,ju]) => _isAdmin(ju) || _isFiscal(ju) || _isObservador(ju))
+        .map(([id]) => id)
+    );
+    const _jeffU3 = new Set(
+      Object.entries(usersCache)
+        .filter(([,ju]) => (ju.name||'').toLowerCase() === 'jefferson' && ju.role !== 'master')
+        .map(([id]) => id)
+    );
+    const _byKey = {};
+    allRecords.filter(r =>
+      (r.data||'').startsWith(mesAno) &&
+      !_masterU3.has(r.userId||'') &&
+      !_jeffU3.has(r.userId||'') &&
+      !(r.importado && (r.nivelImp||'V1') === 'V3')
+    ).forEach(r => {
+      const _nome = r.userName || r.userId || '—';
+      const _prof = _normD(r.profile) || '—';
+      const _tip  = _normD(r.tipo)    || '—';
+      const _key  = `${r.userId||''}||${_prof}||${_tip}`;
+      if (!_byKey[_key]) _byKey[_key] = { nome: _nome, prof: _prof, tip: _tip, bonus: 0 };
+      (r.servicos||[]).forEach(sv => {
+        const q = Number(sv.qtd) || 0;
+        if (r.importado && sv.valorV2 !== undefined) {
+          _byKey[_key].bonus += sv.valorV2 - (Number(sv.valor) || 0);
+        } else {
+          _byKey[_key].bonus += q * ((precosV2map[sv.tipo] || 0) - (precosV1map[sv.tipo] || 0));
+        }
+      });
+    });
+    // Agrupa por nome → total + lista de frentes
+    const _porTec = {};
+    Object.values(_byKey).forEach(x => {
+      if (!_porTec[x.nome]) _porTec[x.nome] = { total: 0, frentes: [] };
+      _porTec[x.nome].total += x.bonus;
+      if (x.bonus > 0) _porTec[x.nome].frentes.push({ prof: x.prof, tip: x.tip, bonus: x.bonus });
+    });
+    const _tecsSorted = Object.entries(_porTec)
+      .filter(([, v]) => v.total > 0)
+      .sort((a, b) => b[1].total - a[1].total);
+    let _bnsRows = '';
+    _tecsSorted.forEach(([_tnome, _tv], _ti) => {
+      const _isOwner = _tnome === (u.name || '');
+      const _bgRow   = _isOwner ? '#faf5ff' : (_ti % 2 === 0 ? '#fff' : '#f8fafc');
+      const _frentesTxt = _tv.frentes.length > 1
+        ? _tv.frentes.sort((a, b) => b.bonus - a.bonus)
+            .map(f => `${f.prof} ${f.tip}: ${fmt(f.bonus)}`).join('<br>')
+        : '—';
+      _bnsRows +=
+        `<tr style="background:${_bgRow}">` +
+        `<td style="padding:8px 10px;font-size:.82rem;font-weight:${_isOwner ? '800' : '600'};color:${_isOwner ? '#7c3aed' : '#1e293b'}">` +
+          _tnome +
+          (_isOwner
+            ? ' <span style="font-size:.65rem;background:#ede9fe;color:#7c3aed;padding:1px 6px;border-radius:4px;font-weight:700;margin-left:4px">auto-prestador</span>'
+            : '') +
+        `</td>` +
+        `<td style="padding:8px 10px;font-size:.78rem;color:#64748b">${_frentesTxt}</td>` +
+        `<td style="padding:8px 10px;font-size:.82rem;text-align:right;font-weight:700;color:#7c3aed">${fmt(_tv.total)}</td>` +
+        `</tr>`;
+    });
+    _honExtrasDetalheSection =
+      `<section style="padding-bottom:0">` +
+        `<div class="sec-title" style="color:#7c3aed">` +
+          `<span style="margin-right:4px">💜</span>Detalhamento — Honorários Extra` +
+        `</div>` +
+        `<table>` +
+          `<thead><tr>` +
+            `<th>Prestador</th>` +
+            `<th>Frentes</th>` +
+            `<th style="text-align:right">Bônus Gerado</th>` +
+          `</tr></thead>` +
+          `<tbody>${_bnsRows}</tbody>` +
+        `</table>` +
+        `<div style="margin-top:8px;padding:8px 12px;background:#f5f3ff;border-left:3px solid #a78bfa;border-radius:0 6px 6px 0;font-size:.68rem;color:#6d28d9;line-height:1.6">` +
+          `<strong>Cálculo:</strong> diferencial entre tabela V2 e V1, aplicado às OS executadas pela equipe no mês de referência.` +
+        `</div>` +
+      `</section>`;
+  }
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -1403,6 +1487,8 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
       </tbody>
     </table>
   </section>`}
+
+  \${_honExtrasDetalheSection}
 
   <!-- Resumo de valores -->
   <section>
