@@ -5,8 +5,8 @@
 // CDN assets (Leaflet, xlsx, FA, etc.) NÃO são interceptados — o browser/HTTP cache cuida deles
 // v132: supervisor financeiro — flag supervisao:true, cálculo correto V1+gestão, PDF breakdown, aditivo contratual
 
-const CACHE_NAME  = 'sdr-v173';
-const CACHE_SHELL = 'sdr-shell-v148';
+const CACHE_NAME  = 'sdr-v174';
+const CACHE_SHELL = 'sdr-shell-v149';
 
 // Assets do app shell — carregados com cache-first após primeiro acesso
 const SHELL_ASSETS = [
