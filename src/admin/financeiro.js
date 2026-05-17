@@ -1366,9 +1366,6 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
           `</tr></thead>` +
           `<tbody>${_bnsRows}</tbody>` +
         `</table>` +
-        `<div style="margin-top:8px;padding:8px 12px;background:#f5f3ff;border-left:3px solid #a78bfa;border-radius:0 6px 6px 0;font-size:.68rem;color:#6d28d9;line-height:1.6">` +
-          `<strong>Cálculo:</strong> diferencial entre tabela V2 e V1, aplicado às OS executadas pela equipe no mês de referência.` +
-        `</div>` +
       `</section>`;
   }
   const html = `<!DOCTYPE html>
