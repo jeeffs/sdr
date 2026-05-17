@@ -1488,7 +1488,7 @@ async function exportarCardTecnico(uid, mesAno, paraWhatsApp=false) {
     </table>
   </section>`}
 
-  \${_honExtrasDetalheSection}
+  ${_honExtrasDetalheSection}
 
   <!-- Resumo de valores -->
   <section>
