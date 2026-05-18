@@ -7450,51 +7450,10 @@ async function _enviarRelatorioAssinado() {
       return;
     }
 
-    // 2. Verifica conteudo: busca o codigo do relatorio dentro do PDF
-    const bytes = new Uint8Array(buffer);
-    const dec = new TextDecoder('latin1');
-    const rawPdf = dec.decode(bytes);
-    const temCodigo = rawPdf.includes(codigo);
-
-    if (!temCodigo) {
-      // Tenta nos streams descomprimidos
-      let encontrouEmStream = false;
-      try {
-        const streamStarts = [];
-        const re = /(?<!end)stream\r?\n/g;
-        let m;
-        while ((m = re.exec(rawPdf)) !== null) streamStarts.push(m.index + m[0].length);
-        for (let i = 0; i < Math.min(streamStarts.length, 40); i++) {
-          const start = streamStarts[i];
-          const endIdx = rawPdf.indexOf('endstream', start);
-          if (endIdx <= start || endIdx - start > 500000) continue;
-          let end = endIdx;
-          if (rawPdf[end-1] === '\n') end--;
-          if (rawPdf[end-1] === '\r') end--;
-          const chunk = bytes.slice(start, end);
-          try {
-            const ds = new DecompressionStream('deflate');
-            const writer = ds.writable.getWriter();
-            const reader = ds.readable.getReader();
-            writer.write(chunk).catch(()=>{}); writer.close().catch(()=>{});
-            const parts = [];
-            let safety = 0;
-            while (safety++ < 200) { const {done,value} = await reader.read(); if(done)break; parts.push(value); }
-            const totalLen = parts.reduce((s,p)=>s+p.length,0);
-            const result = new Uint8Array(totalLen); let off=0;
-            parts.forEach(p=>{result.set(p,off);off+=p.length;});
-            if (new TextDecoder('latin1').decode(result).includes(codigo)) { encontrouEmStream = true; break; }
-          } catch(_){}
-        }
-      } catch(_){}
-
-      if (!encontrouEmStream) {
-        errDiv.textContent = 'Este PDF NAO corresponde ao relatorio enviado. O codigo ' + codigo + ' nao foi encontrado no documento. Assine o PDF correto.';
-        errDiv.style.display = 'block';
-        statusDiv.innerHTML = '';
-        return;
-      }
-    }
+    // 2. [TEMP] Validacao de codigo no PDF desabilitada — Chrome/Skia
+    //          usa CID encoding e o algoritmo atual so suporta ASCII.
+    //          Admin valida visualmente o PDF antes de aprovar.
+    //          Solucao definitiva pendente (via pdf.js).
 
     // 3. Faz upload para Firebase Storage (evita base64 no Realtime Database)
     statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando PDF para o servidor...';
