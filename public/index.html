@@ -7461,10 +7461,10 @@ async function _enviarRelatorioAssinado() {
       let encontrouEmStream = false;
       try {
         const streamStarts = [];
-        const re = /stream\r?\n/g;
+        const re = /(?<!end)stream\r?\n/g;
         let m;
         while ((m = re.exec(rawPdf)) !== null) streamStarts.push(m.index + m[0].length);
-        for (let i = 0; i < Math.min(streamStarts.length, 20); i++) {
+        for (let i = 0; i < Math.min(streamStarts.length, 40); i++) {
           const start = streamStarts[i];
           const endIdx = rawPdf.indexOf('endstream', start);
           if (endIdx <= start || endIdx - start > 500000) continue;
